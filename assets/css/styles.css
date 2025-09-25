@@ -1,0 +1,64 @@
+body{font-feature-settings:"ss01" 1;}
+.hero{background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%)}
+.card img{transition:transform .3s ease}
+.card:hover img{transform:scale(1.03)}
+.card.hover-lift{transition:box-shadow .2s ease, transform .2s ease}
+.card.hover-lift:hover{box-shadow:0 1rem 2rem rgba(0,0,0,.08); transform:translateY(-2px)}
+.btn-dark{border-radius:8px}
+.navbar-brand{letter-spacing:.5px}
+#cartDrawer .offcanvas-body{min-height:200px}
+
+/* PDP sticky CTA on mobile */
+@media (max-width: 767.98px){
+  .sticky-cta{position:sticky; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e9ecef; padding:.75rem; z-index:1029}
+}
+
+/* Trust badges */
+.trust-badges .bi{font-size:1.25rem}
+
+/* Product badges - prevent overlapping */
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Search results dropdowns */
+#mobileSearchResults,
+#desktopSearchResults {
+  border-radius: 0 0 0.375rem 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border: 1px solid #dee2e6;
+  background: white;
+}
+
+#mobileSearchResults a,
+#desktopSearchResults a {
+  transition: background-color 0.15s ease-in-out;
+}
+
+#mobileSearchResults a:hover,
+#desktopSearchResults a:hover {
+  background-color: #f8f9fa;
+}
+
+/* Mobile search results */
+@media (max-width: 767.98px) {
+  #mobileSearchResults {
+    border-radius: 0 0 0.375rem 0.375rem;
+  }
+}
+
+
+/* Skeleton loaders */
+/* Modern polish */
+.card{ border:0; border-radius:14px; }
+.card-img-top{ border-top-left-radius:14px; border-top-right-radius:14px; object-fit:cover; }
+.ratio.ratio-1x1{ border-radius:14px; }
+.container{ max-width:1140px; }
+
+.skeleton{ position:relative; overflow:hidden; background:#e9ecef; border-radius:.5rem; }
+.skeleton::after{ content:""; position:absolute; inset:0; transform:translateX(-100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+  animation: shimmer 1.2s infinite; }
+@keyframes shimmer { 100%{ transform:translateX(100%);} }

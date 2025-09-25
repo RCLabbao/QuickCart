@@ -1,0 +1,38 @@
+RewriteEngine On
+
+# Redirect to installer if not configured
+RewriteCond %{REQUEST_URI} !^/installer
+RewriteCond %{DOCUMENT_ROOT}/config/config.php !-f
+RewriteRule ^.*$ /installer/ [L]
+
+# Serve existing files directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Route everything else through index.php
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# Enable gzip compression when available
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/plain text/html text/xml text/css application/json application/javascript application/xml image/svg+xml
+</IfModule>
+
+# Cache static assets and uploads aggressively
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/jpeg "access plus 30 days"
+  ExpiresByType image/png "access plus 30 days"
+  ExpiresByType image/webp "access plus 30 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType image/x-icon "access plus 30 days"
+</IfModule>
+
+# Far-future cache for uploads; rely on unique filenames
+<IfModule mod_headers.c>
+  <FilesMatch "\.(?:jpg|jpeg|png|webp|svg|css|js)$">
+    Header set Cache-Control "public, max-age=2592000, immutable"
+  </FilesMatch>
+</IfModule>
