@@ -6,7 +6,7 @@ body{font-feature-settings:"ss01" 1;}
 .card.hover-lift:hover{box-shadow:0 1rem 2rem rgba(0,0,0,.08); transform:translateY(-2px)}
 .btn-dark{border-radius:8px}
 .navbar-brand{letter-spacing:.5px}
-#cartDrawer .offcanvas-body{min-height:200px}
+#cartDrawer .offcanvas-body{min-height:200px; overflow-x:hidden}
 
 /* PDP sticky CTA on mobile */
 @media (max-width: 767.98px){
@@ -62,3 +62,12 @@ body{font-feature-settings:"ss01" 1;}
   background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
   animation: shimmer 1.2s infinite; }
 @keyframes shimmer { 100%{ transform:translateX(100%);} }
+
+
+/* Responsive tweaks for cart/checkout/success */
+@media (max-width: 991.98px){
+  .position-sticky{ position: static !important; }
+  .form-control-lg{ padding:.5rem .75rem; font-size:1rem; }
+  .h3{ font-size:1.35rem; }
+  .card-header, .card-body{ padding:1rem; }
+}

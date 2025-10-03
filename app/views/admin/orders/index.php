@@ -6,6 +6,9 @@
     <p class="text-muted mb-0">Track and manage all customer orders</p>
   </div>
   <div class="d-flex gap-2">
+    <a class="btn btn-success" href="/admin/orders/create">
+      <i class="bi bi-plus-circle me-2"></i>Create Manual Order
+    </a>
     <a class="btn btn-primary" href="/admin/orders/today">
       <i class="bi bi-calendar-day me-2"></i>Today's Orders
     </a>
@@ -46,7 +49,7 @@ $completedOrders = $stats['completed_orders'] ?? 0;
 $totalRevenue = $stats['total_revenue'] ?? 0;
 ?>
 <div class="row g-4 mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -57,8 +60,8 @@ $totalRevenue = $stats['total_revenue'] ?? 0;
       </div>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm h-100">
+  <div class="col-6 col-md-3">
+    <a href="/admin/orders?status=pending" class="card border-0 shadow-sm h-100 text-decoration-none text-dark">
       <div class="card-body text-center">
         <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
           <i class="bi bi-clock fs-4 text-warning"></i>
@@ -66,10 +69,10 @@ $totalRevenue = $stats['total_revenue'] ?? 0;
         <h3 class="h4 mb-1"><?= number_format($pendingOrders) ?></h3>
         <p class="text-muted mb-0">Pending Orders</p>
       </div>
-    </div>
+    </a>
   </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm h-100">
+  <div class="col-6 col-md-3">
+    <a href="/admin/orders?status=completed" class="card border-0 shadow-sm h-100 text-decoration-none text-dark">
       <div class="card-body text-center">
         <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
           <i class="bi bi-check-circle fs-4 text-success"></i>
@@ -77,9 +80,9 @@ $totalRevenue = $stats['total_revenue'] ?? 0;
         <h3 class="h4 mb-1"><?= number_format($completedOrders) ?></h3>
         <p class="text-muted mb-0">Completed Orders</p>
       </div>
-    </div>
+    </a>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -245,10 +248,10 @@ $totalRevenue = $stats['total_revenue'] ?? 0;
               </td>
               <td class="text-end">
                 <div class="btn-group btn-group-sm">
-                  <a class="btn btn-outline-primary" href="/admin/orders/<?= (int)$o['id'] ?>" title="View Details">
+                  <a class="btn btn-outline-primary btn-icon" href="/admin/orders/<?= (int)$o['id'] ?>" title="View Details">
                     <i class="bi bi-eye"></i>
                   </a>
-                  <a class="btn btn-outline-info" href="/admin/orders/<?= (int)$o['id'] ?>/invoice" title="Invoice">
+                  <a class="btn btn-outline-info btn-icon" href="/admin/orders/<?= (int)$o['id'] ?>/invoice" title="Invoice">
                     <i class="bi bi-file-earmark-text"></i>
                   </a>
                 </div>
@@ -292,6 +295,10 @@ $totalRevenue = $stats['total_revenue'] ?? 0;
   font-size: 0.75em;
 }
 
+/* Equal-size square action buttons */
+.btn-icon { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.btn-group-sm .btn-icon { width: 32px; height: 32px; }
+
 @media (max-width: 768px) {
   .table-responsive {
     font-size: 0.875rem;
@@ -300,6 +307,12 @@ $totalRevenue = $stats['total_revenue'] ?? 0;
   .btn-group-sm .btn {
     padding: 0.125rem 0.25rem;
   }
+}
+</style>
+<style>
+@media (max-width: 576px) {
+  .row.g-4 .card .rounded-circle { width: 44px !important; height: 44px !important; }
+  .row.g-4 .card h3 { font-size: 1.25rem; }
 }
 </style>
 

@@ -20,8 +20,20 @@ class AdminProductsController extends Controller
             $params[] = (int)$_GET['collection_id'];
         }
         if (!empty($_GET['q'])) {
-            $where[] = 'title LIKE ?';
-            $params[] = '%'.$_GET['q'].'%';
+            $q = trim((string)$_GET['q']);
+            // Detect optional SKU/barcode columns
+            $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'sku'")->rowCount() > 0;
+            $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+            if (ctype_digit($q)) {
+                $where[] = 'id = ?';
+                $params[] = (int)$q;
+            }
+            $like = '%'.$q.'%';
+            $titleCond = 'title LIKE ?';
+            if ($hasSku && $hasBarcode) { $where[] = "($titleCond OR sku LIKE ? OR barcode LIKE ?)"; $params[]=$like; $params[]=$like; $params[]=$like; }
+            elseif ($hasSku) { $where[] = "($titleCond OR sku LIKE ?)"; $params[]=$like; $params[]=$like; }
+            elseif ($hasBarcode) { $where[] = "($titleCond OR barcode LIKE ?)"; $params[]=$like; $params[]=$like; }
+            else { $where[] = $titleCond; $params[]=$like; }
         }
         if (!empty($_GET['low'])) {
             $where[] = 'COALESCE(stock,0) <= 3';
@@ -48,7 +60,13 @@ class AdminProductsController extends Controller
         ];
 
         // Get products for current page
-        $sql = 'SELECT id, title, price, status, COALESCE(stock,0) AS stock, collection_id FROM products WHERE ' . implode(' AND ', $where) . ' ORDER BY created_at DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
+        // Include SKU/barcode columns when available for display
+        $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'sku'")->rowCount() > 0;
+        $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+        $cols = ['id','title','price','status','COALESCE(stock,0) AS stock','collection_id'];
+        if ($hasSku) { $cols[] = 'sku'; }
+        if ($hasBarcode) { $cols[] = 'barcode'; }
+        $sql = 'SELECT '.implode(',', $cols).' FROM products WHERE ' . implode(' AND ', $where) . ' ORDER BY created_at DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
         $st = $pdo->prepare($sql);
         $st->execute($params);
         $rows = $st->fetchAll();
@@ -92,15 +110,42 @@ class AdminProductsController extends Controller
         $price = (float)($_POST['price'] ?? 0); $status = $_POST['status'] ?? 'active';
         $stock = max(0, (int)($_POST['stock'] ?? 0));
         $collection_id = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
-        $stmt = DB::pdo()->prepare('INSERT INTO products (title, slug, description, price, status, stock, collection_id, created_at) VALUES (?,?,?,?,?,?,?,NOW())');
-        $stmt->execute([$title,$slug,$_POST['description'] ?? '',$price,$status,$stock,$collection_id]);
-        $pid = (int)DB::pdo()->lastInsertId();
+
+        // Optional SKU/Barcode + duplicate checks
+        $pdo = DB::pdo();
+        $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'sku'")->rowCount() > 0;
+        $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+        $sku = trim((string)($_POST['sku'] ?? '')) ?: null;
+        $barcode = trim((string)($_POST['barcode'] ?? '')) ?: null;
+        if ($hasSku && $sku) {
+            $chk = $pdo->prepare('SELECT id FROM products WHERE sku=? LIMIT 1'); $chk->execute([$sku]);
+            if ($chk->fetch()) { $_SESSION['error'] = 'SKU already exists.'; $this->redirect('/admin/products/create'); }
+        }
+        if ($hasBarcode && $barcode) {
+            $chk = $pdo->prepare('SELECT id FROM products WHERE barcode=? LIMIT 1'); $chk->execute([$barcode]);
+            if ($chk->fetch()) { $_SESSION['error'] = 'Barcode already exists.'; $this->redirect('/admin/products/create'); }
+        }
+
+        if ($hasSku || $hasBarcode) {
+            $cols = ['title','slug','description','price','status','stock','collection_id','created_at'];
+            $vals = [$title,$slug,$_POST['description'] ?? '',$price,$status,$stock,$collection_id];
+            $placeholders = '?,?,?,?,?,?,?,NOW()';
+            if ($hasBarcode) { array_unshift($cols,'barcode'); array_unshift($vals,$barcode); $placeholders = '?,'.$placeholders; }
+            if ($hasSku) { array_unshift($cols,'sku'); array_unshift($vals,$sku); $placeholders = '?,'.$placeholders; }
+            $stmt = $pdo->prepare('INSERT INTO products ('.implode(',',$cols).') VALUES ('.$placeholders.')');
+            $stmt->execute($vals);
+        } else {
+            $stmt = $pdo->prepare('INSERT INTO products (title, slug, description, price, status, stock, collection_id, created_at) VALUES (?,?,?,?,?,?,?,NOW())');
+            $stmt->execute([$title,$slug,$_POST['description'] ?? '',$price,$status,$stock,$collection_id]);
+        }
+        $pid = (int)$pdo->lastInsertId();
+
         // Try to set sale fields if supported
         try {
             $sale_price = ($_POST['sale_price'] === '' ? null : (float)$_POST['sale_price']);
             $sale_start = ($_POST['sale_start'] === '' ? null : $_POST['sale_start']);
             $sale_end   = ($_POST['sale_end'] === '' ? null : $_POST['sale_end']);
-            DB::pdo()->prepare('UPDATE products SET sale_price=?, sale_start=?, sale_end=? WHERE id=?')->execute([$sale_price,$sale_start,$sale_end,$pid]);
+            $pdo->prepare('UPDATE products SET sale_price=?, sale_start=?, sale_end=? WHERE id=?')->execute([$sale_price,$sale_start,$sale_end,$pid]);
         } catch (\Throwable $e) {}
         // Update tags
         if (isset($_POST['tags'])) { $this->updateTags($pid, (string)$_POST['tags']); }
@@ -139,6 +184,28 @@ class AdminProductsController extends Controller
         $collection_id = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
         DB::pdo()->prepare('UPDATE products SET title=?, slug=?, description=?, price=?, status=?, stock=?, collection_id=? WHERE id=?')
             ->execute([$title,$slug,$_POST['description'] ?? '',$price,$status,$stock,$collection_id,$params['id']]);
+        // Optional: SKU / Barcode with duplicate check
+        try {
+            $pdo = DB::pdo();
+            $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'sku'")->rowCount() > 0;
+            $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+            $sku = trim((string)($_POST['sku'] ?? '')) ?: null;
+            $barcode = trim((string)($_POST['barcode'] ?? '')) ?: null;
+            if ($hasSku && $sku) {
+                $chk = $pdo->prepare('SELECT id FROM products WHERE sku=? AND id<>? LIMIT 1'); $chk->execute([$sku,(int)$params['id']]);
+                if ($chk->fetch()) { $_SESSION['error'] = 'SKU already exists.'; $this->redirect('/admin/products/'.(int)$params['id'].'/edit'); }
+            }
+            if ($hasBarcode && $barcode) {
+                $chk = $pdo->prepare('SELECT id FROM products WHERE barcode=? AND id<>? LIMIT 1'); $chk->execute([$barcode,(int)$params['id']]);
+                if ($chk->fetch()) { $_SESSION['error'] = 'Barcode already exists.'; $this->redirect('/admin/products/'.(int)$params['id'].'/edit'); }
+            }
+            if ($hasSku || $hasBarcode) {
+                $set = [];$vals=[];
+                if ($hasSku) { $set[]='sku=?'; $vals[]=$sku; }
+                if ($hasBarcode) { $set[]='barcode=?'; $vals[]=$barcode; }
+                if ($set) { $pdo->prepare('UPDATE products SET '.implode(',', $set).' WHERE id=?')->execute(array_merge($vals, [(int)$params['id']])); }
+            }
+        } catch (\Throwable $e) { /* ignore */ }
         // Try to set sale fields if supported
         try {
             $sale_price = ($_POST['sale_price'] === '' ? null : (float)$_POST['sale_price']);
@@ -355,12 +422,23 @@ class AdminProductsController extends Controller
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename=products.csv');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['ID','Title','Price','Status','Stock','Collection']);
-        $sql = 'SELECT p.id,p.title,p.price,p.status,COALESCE(p.stock,0) stock,c.title AS collection
-                FROM products p LEFT JOIN collections c ON c.id=p.collection_id ORDER BY p.id DESC';
-        $stmt = DB::pdo()->query($sql);
+        // Detect optional columns
+        $pdo = DB::pdo();
+        $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'sku'")->rowCount() > 0;
+        $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+        $headers = ['ID','Title','SKU','Barcode','Price','Status','Stock','Collection'];
+        fputcsv($out, $headers);
+        $cols = ['p.id','p.title'];
+        if ($hasSku) { $cols[] = 'p.sku'; } else { $cols[] = "'' AS sku"; }
+        if ($hasBarcode) { $cols[] = 'p.barcode'; } else { $cols[] = "'' AS barcode"; }
+        $cols[] = 'p.price';
+        $cols[] = 'p.status';
+        $cols[] = 'COALESCE(p.stock,0) AS stock';
+        $cols[] = 'c.title AS collection';
+        $sql = 'SELECT '.implode(',', $cols).' FROM products p LEFT JOIN collections c ON c.id=p.collection_id ORDER BY p.id DESC';
+        $stmt = $pdo->query($sql);
         while ($row = $stmt->fetch()) {
-            fputcsv($out, [$row['id'],$row['title'],$row['price'],$row['status'],$row['stock'],$row['collection']]);
+            fputcsv($out, [$row['id'],$row['title'],$row['sku'] ?? '',$row['barcode'] ?? '',$row['price'],$row['status'],$row['stock'],$row['collection']]);
         }
         fclose($out); exit;
     }
@@ -418,6 +496,72 @@ class AdminProductsController extends Controller
         $this->redirect('/admin/products');
     }
 
+    public function search(): void
+    {
+        // Admin JSON search for scan/typeahead
+        header('Content-Type: application/json');
+        $q = trim((string)($_GET['q'] ?? ''));
+        if ($q === '') { echo json_encode(['items'=>[]]); return; }
+        $pdo = DB::pdo();
+        $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'sku'")->rowCount() > 0;
+        $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+        $where = [];$params = [];
+        if (ctype_digit($q)) { $where[]='p.id=?'; $params[]=(int)$q; }
+        $like = '%'.$q.'%';
+        $titleCond = 'p.title LIKE ?';
+        if ($hasSku && $hasBarcode) { $where[] = "($titleCond OR p.sku LIKE ? OR p.barcode LIKE ?)"; $params[]=$like; $params[]=$like; $params[]=$like; }
+        elseif ($hasSku) { $where[] = "($titleCond OR p.sku LIKE ?)"; $params[]=$like; $params[]=$like; }
+        elseif ($hasBarcode) { $where[] = "($titleCond OR p.barcode LIKE ?)"; $params[]=$like; $params[]=$like; }
+        else { $where[] = $titleCond; $params[]=$like; }
+        $cols = ['p.id','p.title','p.price','COALESCE(p.stock,0) AS stock'];
+        if ($hasSku) { $cols[]='p.sku'; }
+        if ($hasBarcode) { $cols[]='p.barcode'; }
+        $sql = 'SELECT '.implode(',', $cols).' FROM products p WHERE '.implode(' AND ',$where).' ORDER BY p.id DESC LIMIT 20';
+        $st=$pdo->prepare($sql); $st->execute($params);
+        $items = [];
+        while ($r = $st->fetch()) {
+            $items[] = [
+                'id'=>(int)$r['id'],
+                'title'=>$r['title'],
+                'sku'=>$r['sku'] ?? '',
+                'barcode'=>$r['barcode'] ?? '',
+                'price'=>(float)$r['price'],
+                'stock'=>(int)$r['stock']
+            ];
+        }
+        echo json_encode(['items'=>$items]);
+    }
+
+    public function duplicates(): void
+    {
+        $pdo = DB::pdo();
+        // Find duplicate SKUs
+        $skuGroups = [];
+        try {
+            $rs = $pdo->query("SELECT sku, COUNT(*) c FROM products WHERE sku IS NOT NULL AND sku<>'' GROUP BY sku HAVING c>1 ORDER BY c DESC, sku");
+            $skuGroups = $rs ? $rs->fetchAll() : [];
+        } catch (\Throwable $e) { $skuGroups = []; }
+        // Find duplicate barcodes
+        $barcodeGroups = [];
+        try {
+            $rs = $pdo->query("SELECT barcode, COUNT(*) c FROM products WHERE barcode IS NOT NULL AND barcode<>'' GROUP BY barcode HAVING c>1 ORDER BY c DESC, barcode");
+            $barcodeGroups = $rs ? $rs->fetchAll() : [];
+        } catch (\Throwable $e) { $barcodeGroups = []; }
+        // Fetch items for each group (capped)
+        $itemsByKey = ['sku'=>[], 'barcode'=>[]];
+        $fetch = function(string $col, string $val) use ($pdo){
+            $st = $pdo->prepare("SELECT id,title,sku,barcode,price,COALESCE(stock,0) stock FROM products WHERE $col=? ORDER BY id DESC LIMIT 50");
+            $st->execute([$val]); return $st->fetchAll();
+        };
+        foreach ($skuGroups as $g) { $itemsByKey['sku'][$g['sku']] = $fetch('sku',$g['sku']); }
+        foreach ($barcodeGroups as $g) { $itemsByKey['barcode'][$g['barcode']] = $fetch('barcode',$g['barcode']); }
+        $this->adminView('admin/products/duplicates', [
+            'title' => 'Duplicate SKU/Barcodes',
+            'skuGroups' => $skuGroups,
+            'barcodeGroups' => $barcodeGroups,
+            'itemsByKey' => $itemsByKey,
+        ]);
+    }
 
 }
 

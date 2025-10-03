@@ -1,4 +1,4 @@
-<?php use function App\Core\e; ?>
+<?php use function App\Core\e; $cartCount = array_sum($_SESSION['cart'] ?? []); ?>
 <nav class="navbar navbar-expand-lg bg-light border-bottom sticky-top">
   <div class="container">
     <!-- Mobile search bar - always visible on top -->
@@ -21,7 +21,7 @@
       <div class="d-lg-none ms-auto d-flex align-items-center gap-2">
         <button class="btn btn-dark position-relative" id="openCart" aria-label="Open cart">
           <i class="bi bi-bag"></i>
-          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="cartCount">0</span>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="cartCount"><?= (int)$cartCount ?></span>
         </button>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
       </div>
@@ -38,7 +38,7 @@
         </form>
         <button class="btn btn-dark position-relative d-none d-lg-block" id="openCartDesktop" aria-label="Open cart">
           <i class="bi bi-bag"></i>
-          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="cartCountDesktop">0</span>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="cartCountDesktop"><?= (int)$cartCount ?></span>
         </button>
       </div>
     </div>

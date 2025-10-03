@@ -46,3 +46,41 @@ function thumb_url(?string $url): string {
     return is_file($path) ? $thumb : $url;
 }
 
+
+
+// Application secret for signing links (falls back to DB pass if no app_key)
+function app_secret(): string {
+    if (defined('CONFIG') && isset(\CONFIG['app_key']) && \CONFIG['app_key']) { return (string)\CONFIG['app_key']; }
+    if (defined('CONFIG') && isset(\CONFIG['db']['pass'])) { return hash('sha256', (string)\CONFIG['db']['pass']); }
+    return hash('sha256', __FILE__);
+}
+
+// Deterministic token for public order links (no DB column needed)
+// Use only immutable fields to keep the link stable even if admin edits email
+function order_public_token_from_row(array $order): string {
+    $id = (string)($order['id'] ?? '');
+    $created = (string)($order['created_at'] ?? '');
+    $payload = $id.'|'.$created;
+    // 32-hex chars from HMAC-SHA256 provides strong security while being URL-friendly
+    return substr(hash_hmac('sha256', $payload, app_secret()), 0, 32);
+}
+
+// Base64url helpers
+function b64url_encode(string $s): string { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
+function b64url_decode(string $s): string { return (string)base64_decode(strtr($s, '-_', '+/')); }
+
+// Build opaque slug for public order links: base64url("<id>:<token>")
+function order_public_slug_from_row(array $order): string {
+    $id = (string)($order['id'] ?? '');
+    $token = order_public_token_from_row($order);
+    return b64url_encode($id . ':' . $token);
+}
+
+// Parse slug back to [id, token]
+function order_public_parts_from_slug(string $slug): array {
+    $raw = b64url_decode($slug);
+    $parts = explode(':', $raw, 2);
+    if (count($parts) !== 2) return [null, null];
+    return [$parts[0], $parts[1]];
+}
+

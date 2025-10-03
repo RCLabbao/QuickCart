@@ -1,4 +1,3 @@
-<?php include BASE_PATH . '/app/views/admin/_nav.php'; ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h4 m-0">Coupons</h1>
   <a href="/admin/coupons/create" class="btn btn-dark">New Coupon</a>

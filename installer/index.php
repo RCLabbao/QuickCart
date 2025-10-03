@@ -38,8 +38,22 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       $permIds = $pdo->query('SELECT id FROM permissions')->fetchAll(PDO::FETCH_COLUMN);
       $insRp = $pdo->prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (1, ?)');
       foreach ($permIds as $pid) { $insRp->execute([$pid]); }
-      // Settings (store name, currency, pickup location)
-      $pdo->prepare('INSERT INTO settings (`key`,`value`) VALUES ("store_name",?), ("currency","PHP"), ("pickup_location","Main Store - Set in Admin")')->execute(['QuickCart']);
+      // Settings defaults (store, currency, pickup, shipping, brand color, checkout field toggles)
+      $pdo->prepare('INSERT INTO settings (`key`,`value`) VALUES
+        ("store_name",?),
+        ("currency","PHP"),
+        ("pickup_location","Main Store - Set in Admin"),
+        ("shipping_fee_cod","0"),
+        ("shipping_fee_pickup","0"),
+        ("brand_color", "#212529"),
+        ("checkout_enable_phone","1"),
+        ("checkout_enable_region","1"),
+        ("checkout_enable_province","1"),
+        ("checkout_enable_city","1"),
+        ("checkout_enable_barangay","1"),
+        ("checkout_enable_street","1"),
+        ("checkout_enable_postal","1")
+      ')->execute(['QuickCart']);
       // Seed collections (several categories)
       $pdo->exec("INSERT INTO collections (title,slug,description) VALUES
         ('New Arrivals','new','Fresh picks'),
@@ -84,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
           // Seed demo addresses for users
           $insAddr = $pdo->prepare('INSERT INTO addresses (user_id,name,phone,region,province,city,barangay,street,postal_code) VALUES (?,?,?,?,?,?,?,?,?)');
           foreach ($userIds as $uid => $email) {
-            $insAddr->execute([$uid,'Demo '.$uid,'09'.rand(100000000,999999999),'NCR','Metro Manila','Quezon City','Bagumbayan','123 Demo St','1100']);
+            $insAddr->execute([$uid,'Demo '.$uid,'09'.rand(100000000,999999999),'Region II','Cagayan','Aparri City','Bagumbayan','123 Demo St','1100']);
           }
 
           // Seed demo orders with items (last 30 days, including today)
@@ -134,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
               }
             }
             // shipping address snapshot
-            $insShip->execute([$oid,'Customer','09'.rand(100000000,999999999),'NCR','Metro Manila','Pasig','San Antonio','456 Sample Rd','1600']);
+            $insShip->execute([$oid,'Customer','09'.rand(100000000,999999999),'Region II','Cagayan','Aparri','San Antonio','456 Sample Rd','1600']);
           }
 
       // Save config
@@ -143,17 +157,22 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     } catch (Throwable $e){ $err = $e->getMessage(); }
   }
 }
-?><!doctype html>
+?>
+<?php $pct = [1=>10,2=>40,3=>85,4=>100][$step] ?? 10; ?>
+<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <title>QuickCart Installer</title></head>
 <body class="bg-light">
 <div class="container py-5" style="max-width:720px">
-  <div class="card shadow-sm">
-    <div class="card-body p-4">
+  <div class="card shadow-sm border-0 rounded-4">
+    <div class="card-body p-4 p-md-5">
       <h1 class="h4 mb-3">QuickCart Setup</h1>
-      <ol class="breadcrumb">
+      <div class="progress mb-3" style="height:6px;">
+        <div class="progress-bar bg-dark" role="progressbar" style="width: <?= (int)$pct ?>%" aria-valuenow="<?= (int)$pct ?>" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+      <ol class="breadcrumb small mb-4">
         <li class="breadcrumb-item<?= $step===1?' active':'' ?>">Welcome</li>
         <li class="breadcrumb-item<?= $step===2?' active':'' ?>">Database</li>
         <li class="breadcrumb-item<?= $step===3?' active':'' ?>">Install</li>
@@ -161,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       </ol>
       <?php if (!empty($err)): ?><div class="alert alert-danger"><?= h($err) ?></div><?php endif; ?>
       <?php if ($step===1): ?>
-        <p>Welcome to QuickCart! Before we begin, please ensure you have a MySQL database ready. Click Continue to proceed.</p>
+        <p class="text-muted">Welcome to QuickCart! Before we begin, please ensure you have a MySQL database ready.</p>
         <a href="?step=2" class="btn btn-dark">Continue</a>
       <?php elseif ($step===2): ?>
         <form method="post" class="row g-3">
@@ -172,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
           <div class="col-12"><button class="btn btn-dark">Continue</button></div>
         </form>
       <?php elseif ($step===3): ?>
-        <p>Configure your main admin account.</p>
+        <p class="text-muted">Configure your main admin account.</p>
         <form method="post" class="row g-3">
           <div class="col-md-6"><label class="form-label">Admin Name</label><input class="form-control" name="admin_name" required></div>
           <div class="col-md-6"><label class="form-label">Admin Email</label><input class="form-control" type="email" name="admin_email" required></div>

@@ -52,7 +52,7 @@ $avgOrderValue = $totalOrders > 0 ? $totalRevenue / $totalOrders : 0;
 $daysInRange = count($salesByDay ?? []);
 ?>
 <div class="row g-4 mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -66,7 +66,7 @@ $daysInRange = count($salesByDay ?? []);
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -80,7 +80,7 @@ $daysInRange = count($salesByDay ?? []);
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -94,7 +94,7 @@ $daysInRange = count($salesByDay ?? []);
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -504,4 +504,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 }
 </style>
+<style>
+@media (max-width: 576px) {
+  .row.g-4 .card .rounded-circle { width: 44px !important; height: 44px !important; }
+  .row.g-4 .card h3 { font-size: 1.25rem; }
+}
+</style>
+
 

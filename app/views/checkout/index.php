@@ -1,15 +1,12 @@
 <?php use function App\Core\csrf_field; ?>
 
-<div class="container-fluid">
-  <div class="row justify-content-center">
-    <div class="col-lg-8">
-      <!-- Checkout Header -->
-      <div class="d-flex align-items-center mb-4">
-        <a href="/cart" class="btn btn-outline-secondary me-3">
-          <i class="bi bi-arrow-left"></i> Back to Cart
-        </a>
-        <h1 class="h3 mb-0">Secure Checkout</h1>
-      </div>
+<!-- Checkout Header -->
+<div class="d-flex align-items-center mb-4">
+  <a href="/cart" class="btn btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left"></i> Back to Cart
+  </a>
+  <h1 class="h3 mb-0">Secure Checkout</h1>
+</div>
 
       <!-- Progress Steps -->
       <div class="row mb-4">
@@ -39,6 +36,25 @@
         </div>
       </div>
 
+      <!-- Error/Success Messages -->
+      <?php if (isset($_SESSION['checkout_error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          <?= htmlspecialchars($_SESSION['checkout_error']) ?>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <?php unset($_SESSION['checkout_error']); ?>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['checkout_success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <i class="bi bi-check-circle me-2"></i>
+          <?= htmlspecialchars($_SESSION['checkout_success']) ?>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <?php unset($_SESSION['checkout_success']); ?>
+      <?php endif; ?>
+
       <form method="post" action="/checkout" id="checkoutForm">
         <?= csrf_field() ?>
 
@@ -55,16 +71,18 @@
                 <div class="row g-3">
                   <div class="col-md-6">
                     <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
-                    <input class="form-control form-control-lg" name="name" required placeholder="Enter your full name">
+                    <input class="form-control form-control-lg" name="name" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>" required placeholder="Enter your full name">
                   </div>
                   <div class="col-md-6">
                     <label class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
-                    <input class="form-control form-control-lg" type="email" name="email" required placeholder="your@email.com">
+                    <input class="form-control form-control-lg" type="email" name="email" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required placeholder="your@email.com">
                   </div>
+                  <?php if ((bool)\App\Core\setting('checkout_enable_phone', 1)): ?>
                   <div class="col-md-6">
                     <label class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
-                    <input class="form-control form-control-lg" name="phone" required placeholder="+63 9XX XXX XXXX">
+                    <input class="form-control form-control-lg" name="phone" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>" required placeholder="+63 9XX XXX XXXX">
                   </div>
+                  <?php endif; ?>
                 </div>
               </div>
             </div>
@@ -80,7 +98,7 @@
                 <div class="row g-3">
                   <div class="col-12">
                     <div class="form-check form-check-card">
-                      <input class="form-check-input" type="radio" name="shipping_method" id="cod" value="cod" checked>
+                      <input class="form-check-input" type="radio" name="shipping_method" id="cod" value="cod" <?= ($_POST['shipping_method'] ?? 'cod') === 'cod' ? 'checked' : '' ?>>
                       <label class="form-check-label w-100" for="cod">
                         <div class="card">
                           <div class="card-body d-flex align-items-center">
@@ -99,7 +117,7 @@
                   </div>
                   <div class="col-12">
                     <div class="form-check form-check-card">
-                      <input class="form-check-input" type="radio" name="shipping_method" id="pickup" value="pickup">
+                      <input class="form-check-input" type="radio" name="shipping_method" id="pickup" value="pickup" <?= ($_POST['shipping_method'] ?? '') === 'pickup' ? 'checked' : '' ?>>
                       <label class="form-check-label w-100" for="pickup">
                         <div class="card">
                           <div class="card-body d-flex align-items-center">
@@ -128,31 +146,43 @@
                 </h5>
               </div>
               <div class="card-body">
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label class="form-label fw-semibold">Region</label>
-                    <input class="form-control" name="region" placeholder="e.g., NCR">
+                <div class="address-grid">
+                  <?php if ((bool)\App\Core\setting('checkout_enable_region', 1)): ?>
+                  <div>
+                    <label class="form-label fw-semibold">Region <span class="text-danger address-required">*</span></label>
+                    <input class="form-control" name="region" value="<?= htmlspecialchars($_POST['region'] ?? '') ?>" placeholder="e.g., Region II">
                   </div>
-                  <div class="col-md-6">
-                    <label class="form-label fw-semibold">Province</label>
-                    <input class="form-control" name="province" placeholder="e.g., Metro Manila">
+                  <?php endif; ?>
+                  <?php if ((bool)\App\Core\setting('checkout_enable_province', 1)): ?>
+                  <div>
+                    <label class="form-label fw-semibold">Province <span class="text-danger address-required">*</span></label>
+                    <input class="form-control" name="province" value="<?= htmlspecialchars($_POST['province'] ?? '') ?>" placeholder="e.g., Cagayan">
                   </div>
-                  <div class="col-md-6">
-                    <label class="form-label fw-semibold">City/Municipality</label>
-                    <input class="form-control" name="city" placeholder="e.g., Quezon City">
+                  <?php endif; ?>
+                  <?php if ((bool)\App\Core\setting('checkout_enable_city', 1)): ?>
+                  <div>
+                    <label class="form-label fw-semibold">City/Municipality <span class="text-danger address-required">*</span></label>
+                    <input class="form-control" name="city" value="<?= htmlspecialchars($_POST['city'] ?? '') ?>" placeholder="e.g., Aparri City">
                   </div>
-                  <div class="col-md-6">
-                    <label class="form-label fw-semibold">Barangay</label>
-                    <input class="form-control" name="barangay" placeholder="e.g., Barangay 123">
+                  <?php endif; ?>
+                  <?php if ((bool)\App\Core\setting('checkout_enable_barangay', 1)): ?>
+                  <div>
+                    <label class="form-label fw-semibold">Barangay <span class="text-danger address-required">*</span></label>
+                    <input class="form-control" name="barangay" value="<?= htmlspecialchars($_POST['barangay'] ?? '') ?>" placeholder="e.g., Barangay 123">
                   </div>
-                  <div class="col-md-9">
-                    <label class="form-label fw-semibold">Street Address</label>
-                    <input class="form-control" name="street" placeholder="House/Unit No., Street Name">
-                  </div>
-                  <div class="col-md-3">
+                  <?php endif; ?>
+                  <?php if ((bool)\App\Core\setting('checkout_enable_postal', 1)): ?>
+                  <div>
                     <label class="form-label fw-semibold">Postal Code</label>
-                    <input class="form-control" name="postal" placeholder="1100">
+                    <input class="form-control" name="postal" value="<?= htmlspecialchars($_POST['postal'] ?? '') ?>" placeholder="1100">
                   </div>
+                  <?php endif; ?>
+                  <?php if ((bool)\App\Core\setting('checkout_enable_street', 1)): ?>
+                  <div class="grid-span-2">
+                    <label class="form-label fw-semibold">Street Address <span class="text-danger address-required">*</span></label>
+                    <input class="form-control" name="street" value="<?= htmlspecialchars($_POST['street'] ?? '') ?>" placeholder="House/Unit No., Street Name">
+                  </div>
+                  <?php endif; ?>
                 </div>
               </div>
             </div>
@@ -166,7 +196,7 @@
               </div>
               <div class="card-body">
                 <div class="input-group">
-                  <input class="form-control" name="coupon" placeholder="Enter coupon code">
+                  <input class="form-control" name="coupon" value="<?= htmlspecialchars($_POST['coupon'] ?? '') ?>" placeholder="Enter coupon code">
                   <button class="btn btn-outline-secondary" type="button" onclick="applyCoupon()">Apply</button>
                 </div>
                 <small class="text-muted">Have a discount code? Enter it here to save on your order.</small>
@@ -211,13 +241,26 @@
                   </div>
                   <?php endforeach; ?>
 
+                  <?php
+                    $codFee = (float)\App\Core\setting('shipping_fee_cod', 0.00);
+                    $pickupFee = (float)\App\Core\setting('shipping_fee_pickup', 0.00);
+                    $selectedMethod = (($_POST['shipping_method'] ?? 'cod') === 'pickup') ? 'pickup' : 'cod';
+                    $shippingFee = $selectedMethod === 'cod' ? $codFee : $pickupFee;
+                    $initialTotal = max(0.0, $subtotal - 0.0) + $shippingFee;
+                  ?>
+                  <input type="hidden" id="subtotalValue" value="<?= number_format($subtotal,2,'.','') ?>">
+                  <input type="hidden" id="discountValue" value="0">
                   <div class="d-flex justify-content-between mb-2">
                     <span>Subtotal:</span>
                     <span>₱<?= number_format($subtotal, 2) ?></span>
                   </div>
                   <div class="d-flex justify-content-between mb-2">
                     <span>Shipping:</span>
-                    <span class="text-success">Free</span>
+                    <span id="shippingAmount"
+                          data-cod-fee="<?= number_format($codFee,2,'.','') ?>"
+                          data-pickup-fee="<?= number_format($pickupFee,2,'.','') ?>">
+                      <?= $shippingFee > 0 ? '₱'.number_format($shippingFee, 2) : 'Free' ?>
+                    </span>
                   </div>
                   <div class="d-flex justify-content-between mb-3">
                     <span>Discount:</span>
@@ -226,7 +269,7 @@
                   <hr>
                   <div class="d-flex justify-content-between mb-4">
                     <span class="h5">Total:</span>
-                    <span class="h5 text-primary" id="totalAmount">₱<?= number_format($subtotal, 2) ?></span>
+                    <span class="h5 text-primary" id="totalAmount">₱<?= number_format($initialTotal, 2) ?></span>
                   </div>
                 <?php else: ?>
                   <div class="text-center py-4">
@@ -252,9 +295,6 @@
           </div>
         </div>
       </form>
-    </div>
-  </div>
-</div>
 
 <style>
 .form-check-card .form-check-input:checked + .form-check-label .card {
@@ -290,6 +330,7 @@
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0,0,0,0.1);
 }
+.address-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}.address-grid .grid-span-2{grid-column:1 / -1}
 </style>
 
 <script>
@@ -315,6 +356,63 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   }
+
+  codRadio.addEventListener('change', toggleAddressFields);
+  pickupRadio.addEventListener('change', toggleAddressFields);
+
+  // Initialize
+  toggleAddressFields();
+
+  // Update order summary (shipping + total) when method changes
+  async function fetchFeeAndUpdate() {
+    const shipEl = document.getElementById('shippingAmount');
+    if (!shipEl) return;
+    const pickupFee = parseFloat(shipEl.dataset.pickupFee || '0');
+    const subtotal = parseFloat(document.getElementById('subtotalValue')?.value || '0');
+    const discount = parseFloat(document.getElementById('discountValue')?.value || '0');
+    const method = (document.getElementById('pickup')?.checked) ? 'pickup' : 'cod';
+
+    let fee = pickupFee; // default for pickup
+    if (method === 'cod') {
+      const cityInput = document.querySelector('input[name="city"]');
+      const city = cityInput ? cityInput.value.trim() : '';
+      try {
+        const url = '/api/shipping-fee?method=cod&city=' + encodeURIComponent(city);
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.fee === 'number') fee = data.fee;
+          else fee = parseFloat(shipEl.dataset.codFee || '0');
+        } else {
+          fee = parseFloat(shipEl.dataset.codFee || '0');
+        }
+      } catch (e) {
+        fee = parseFloat(shipEl.dataset.codFee || '0');
+      }
+    }
+
+    shipEl.textContent = fee > 0 ? '₱' + Number(fee).toFixed(2) : 'Free';
+    const total = Math.max(0, subtotal - discount) + Number(fee);
+    const totalEl = document.getElementById('totalAmount');
+    if (totalEl) totalEl.textContent = '₱' + total.toFixed(2);
+  }
+
+  const updateSummary = () => fetchFeeAndUpdate();
+
+  codRadio.addEventListener('change', updateSummary);
+  pickupRadio.addEventListener('change', updateSummary);
+  updateSummary();
+  // Recalculate when city changes (debounced)
+  const cityInput = document.querySelector('input[name="city"]');
+  let debounceTimer;
+  if (cityInput) {
+    cityInput.addEventListener('input', function(){
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(updateSummary, 300);
+    });
+    cityInput.addEventListener('blur', updateSummary);
+  }
+
 
   codRadio.addEventListener('change', toggleAddressFields);
   pickupRadio.addEventListener('change', toggleAddressFields);

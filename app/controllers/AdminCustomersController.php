@@ -6,9 +6,27 @@ class AdminCustomersController extends Controller
 {
     public function index(): void
     {
-        $sql = "SELECT email, COUNT(*) as orders, COALESCE(SUM(total),0) as spent FROM orders WHERE email IS NOT NULL AND email <> '' GROUP BY email ORDER BY spent DESC LIMIT 200";
-        $rows = DB::pdo()->query($sql)->fetchAll();
-        $this->adminView('admin/customers/index', ['title' => 'Customers', 'customers'=>$rows]);
+        $pdo = DB::pdo();
+        $q = trim((string)($_GET['q'] ?? ''));
+        $params = [];
+        $where = "WHERE o.email IS NOT NULL AND o.email <> ''";
+        if ($q !== '') {
+            $where .= " AND (o.email LIKE ? OR o.email IN (SELECT DISTINCT o2.email FROM orders o2 JOIN addresses a2 ON a2.order_id=o2.id WHERE a2.name LIKE ?))";
+            $like = "%$q%"; $params[] = $like; $params[] = $like;
+        }
+        $sql = "SELECT o.email,
+                       COALESCE(cp.name, (SELECT a.name FROM addresses a WHERE a.order_id = (SELECT id FROM orders i WHERE i.email=o.email AND i.shipping_method='cod' ORDER BY id DESC LIMIT 1) LIMIT 1)) AS name,
+                       COUNT(*) AS orders,
+                       COALESCE(SUM(o.total),0) AS spent
+                FROM orders o
+                LEFT JOIN customer_profiles cp ON cp.email = o.email
+                $where
+                GROUP BY o.email
+                ORDER BY spent DESC
+                LIMIT 200";
+        $st = $pdo->prepare($sql); $st->execute($params);
+        $rows = $st->fetchAll();
+        $this->adminView('admin/customers/index', ['title' => 'Customers', 'customers'=>$rows, 'q'=>$q]);
     }
     public function export(): void
     {
@@ -31,6 +49,23 @@ class AdminCustomersController extends Controller
         $st->execute([$email]); $stats = $st->fetch();
         $orders = $pdo->prepare('SELECT id,total,status,created_at FROM orders WHERE email=? ORDER BY id DESC');
         $orders->execute([$email]); $orders = $orders->fetchAll();
-        $this->adminView('admin/customers/show', ['title' => 'Customer Details', 'email' => $email, 'stats' => $stats, 'orders' => $orders]);
+        $prof = $pdo->prepare('SELECT email,name,phone FROM customer_profiles WHERE email=?');
+        try { $prof->execute([$email]); $profile = $prof->fetch(); } catch (\Throwable $e) { $profile = null; }
+        $this->adminView('admin/customers/show', ['title' => 'Customer Details', 'email' => $email, 'stats' => $stats, 'orders' => $orders, 'profile' => $profile]);
+    }
+
+    public function updateProfile(): void
+    {
+        if (!isset($_POST['_token']) || !\App\Core\CSRF::check($_POST['_token'])) { $this->redirect('/admin/customers'); }
+        $email = trim((string)($_POST['email'] ?? ''));
+        if ($email==='') { $this->redirect('/admin/customers'); }
+        $name = trim((string)($_POST['name'] ?? ''));
+        $phone = trim((string)($_POST['phone'] ?? ''));
+        $pdo = DB::pdo();
+        try {
+            $stmt = $pdo->prepare('INSERT INTO customer_profiles (email,name,phone,created_at,updated_at) VALUES (?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE name=VALUES(name), phone=VALUES(phone), updated_at=NOW()');
+            $stmt->execute([$email,$name,$phone,date('Y-m-d H:i:s')]);
+        } catch (\Throwable $e) {}
+        $this->redirect('/admin/customers/view?email='.urlencode($email));
     }
 }

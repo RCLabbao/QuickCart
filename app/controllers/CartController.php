@@ -4,6 +4,12 @@ use App\Core\Controller; use App\Core\CSRF; use App\Core\DB;
 
 class CartController extends Controller
 {
+    public function index(): void
+    {
+        $cart = $_SESSION['cart'] ?? [];
+        $this->view('cart/index', compact('cart'));
+    }
+
     public function summary(): void
     {
         $cart = $_SESSION['cart'] ?? [];
@@ -43,6 +49,11 @@ class CartController extends Controller
         if ($max <= 0) { $this->json(['ok'=>true,'count'=>array_sum($_SESSION['cart'])]); return; }
         $new = min($current + $qty, $max);
         $_SESSION['cart'][$id] = $new;
+
+        // Debug: Log cart addition
+        error_log('Cart add - Product ID: ' . $id . ', Quantity: ' . $new . ', Session ID: ' . session_id());
+        error_log('Cart add - Full cart: ' . json_encode($_SESSION['cart']));
+
         $this->json(['ok'=>true,'count'=>array_sum($_SESSION['cart'])]);
     }
 

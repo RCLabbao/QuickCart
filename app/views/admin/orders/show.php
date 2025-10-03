@@ -1,6 +1,47 @@
 <?php use function App\Core\csrf_field; ?>
-<?php include BASE_PATH . '/app/views/admin/_nav.php'; ?>
-<h1 class="h4 mb-3">Order #<?= (int)$order['id'] ?></h1>
+
+<!-- Order Detail Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">Order #<?= (int)$order['id'] ?></h1>
+    <p class="text-muted mb-0">
+      <i class="bi bi-calendar me-2"></i><?= date('F j, Y \a\t g:i A', strtotime($order['created_at'])) ?>
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="/admin/orders">
+      <i class="bi bi-arrow-left me-2"></i>Back to Orders
+    </a>
+    <a class="btn btn-outline-info" href="/admin/orders/<?= (int)$order['id'] ?>/invoice">
+      <i class="bi bi-file-earmark-text me-2"></i>View Invoice
+    </a>
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="bi bi-gear me-2"></i>Actions
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><h6 class="dropdown-header">Order Actions</h6></li>
+        <li>
+          <form method="post" action="/admin/orders/<?= (int)$order['id'] ?>/fulfill" class="dropdown-item p-0">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-link text-decoration-none text-start w-100 p-3">
+              <i class="bi bi-check-circle me-2"></i>Mark as Fulfilled
+            </button>
+          </form>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <form method="post" action="/admin/orders/<?= (int)$order['id'] ?>/delete" class="dropdown-item p-0" onsubmit="return confirm('Delete this order?')">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-link text-decoration-none text-danger text-start w-100 p-3">
+              <i class="bi bi-trash me-2"></i>Delete Order
+            </button>
+          </form>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
 <div class="row g-3">
   <div class="col-lg-8">
     <div class="card">

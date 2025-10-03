@@ -63,6 +63,7 @@ $router->get('/search', 'ProductController@search');
 $router->get('/api/search', 'ProductController@searchApi');
 
 // Cart
+$router->get('/cart', 'CartController@index');
 $router->get('/cart/summary', 'CartController@summary');
 $router->post('/cart/add', 'CartController@add');
 $router->post('/cart/update', 'CartController@update');
@@ -72,6 +73,8 @@ $router->post('/cart/remove', 'CartController@remove');
 $router->get('/checkout', 'CheckoutController@index');
 $router->post('/checkout', 'CheckoutController@placeOrder');
 $router->get('/checkout/success', 'CheckoutController@success');
+
+$router->get('/checkout/success/(?P<slug>[A-Za-z0-9_-]+)', 'CheckoutController@successSlug');
 
 // Admin (hidden link)
 $router->get('/admin/login', 'AuthController@login');
@@ -83,11 +86,19 @@ $router->get('/admin', 'AdminController@dashboard', ['auth' => 'admin']);
 // Admin Settings
 $router->get('/admin/settings', 'AdminSettingsController@index', ['perm' => 'settings.write']);
 $router->post('/admin/settings', 'AdminSettingsController@update', ['perm' => 'settings.write']);
+$router->post('/admin/settings/fees', 'AdminSettingsController@addCityFee', ['perm' => 'settings.write']);
+$router->post('/admin/settings/fees/(?P<id>\d+)/delete', 'AdminSettingsController@deleteCityFee', ['perm' => 'settings.write']);
+
+// Public API
+$router->get('/api/shipping-fee', 'CheckoutController@fee');
 
 // Admin Users
 $router->get('/admin/users', 'AdminUsersController@index', ['perm' => 'users.read']);
 $router->get('/admin/users/create', 'AdminUsersController@create', ['perm' => 'users.write']);
 $router->post('/admin/users', 'AdminUsersController@store', ['perm' => 'users.write']);
+$router->get('/admin/users/(?P<id>\d+)/edit', 'AdminUsersController@edit', ['perm' => 'users.write']);
+$router->post('/admin/users/(?P<id>\d+)', 'AdminUsersController@update', ['perm' => 'users.write']);
+$router->post('/admin/users/(?P<id>\d+)/delete', 'AdminUsersController@destroy', ['perm' => 'users.write']);
 
 // Admin Roles & Permissions
 $router->get('/admin/roles', 'AdminRolesController@index', ['perm' => 'roles.write']);
@@ -99,8 +110,8 @@ $router->post('/admin/roles/(?P<id>\d+)', 'AdminRolesController@update', ['perm'
 
 // Admin Customers
 $router->get('/admin/customers', 'AdminCustomersController@index', ['perm' => 'users.read']);
-
 $router->get('/admin/customers/view', 'AdminCustomersController@show', ['perm' => 'users.read']);
+$router->post('/admin/customers/profile', 'AdminCustomersController@updateProfile', ['perm' => 'users.write']);
 
 // Admin Collections
 $router->get('/admin/collections', 'AdminCollectionsController@index', ['perm' => 'collections.write']);
@@ -128,6 +139,10 @@ $router->post('/admin/products/(?P<id>\d+)/images/sort', 'AdminProductsControlle
 $router->post('/admin/products/quick-update', 'AdminProductsController@quickUpdate', ['perm' => 'products.write']);
 $router->post('/admin/products/import-stock', 'AdminProductsController@importStock', ['perm' => 'products.write']);
 $router->post('/admin/products/adjust-prices', 'AdminProductsController@adjustPrices', ['perm' => 'products.write']);
+$router->get('/admin/products/search', 'AdminProductsController@search', ['perm' => 'products.read']);
+$router->get('/admin/products/duplicates', 'AdminProductsController@duplicates', ['perm' => 'products.read']);
+
+
 
 
 
@@ -140,6 +155,9 @@ $router->post('/admin/orders/bulk-status', 'AdminOrdersController@bulkStatus', [
 $router->post('/admin/orders/(?P<id>\d+)/delete', 'AdminOrdersController@delete', ['perm' => 'orders.write']);
 $router->post('/admin/orders/(?P<id>\d+)/fulfill', 'AdminOrdersController@fulfill', ['perm' => 'orders.write']);
 $router->post('/admin/orders/(?P<id>\d+)/note', 'AdminOrdersController@note', ['perm' => 'orders.write']);
+
+$router->get('/admin/orders/create', 'AdminOrdersController@createManual', ['perm' => 'orders.write']);
+$router->post('/admin/orders/manual', 'AdminOrdersController@storeManual', ['perm' => 'orders.write']);
 
 $router->get('/admin/orders/(?P<id>\d+)', 'AdminOrdersController@show', ['perm' => 'orders.read']);
 $router->get('/admin/orders/export', 'AdminOrdersController@export', ['perm' => 'orders.read']);
@@ -166,10 +184,16 @@ $router->get('/admin/orders/(?P<id>\d+)/invoice', 'AdminOrdersController@invoice
 
 $router->post('/admin/orders/(?P<id>\d+)/status', 'AdminOrdersController@updateStatus', ['perm' => 'orders.write']);
 $router->post('/admin/products/(?P<id>\d+)/duplicate', 'AdminProductsController@duplicate', ['perm' => 'products.write']);
+$router->get('/orders/(?P<slug>[A-Za-z0-9_-]+)', 'OrdersController@showSlug');
+
+
+$router->get('/orders/(?P<id>\d+)/(?P<token>[A-Za-z0-9]+)', 'OrdersController@show');
 
 // Collections (storefront)
 $router->get('/collections', 'CollectionsController@index');
 $router->get('/collections/(?P<slug>[a-z0-9\-]+)', 'CollectionsController@show');
+
+$router->get('/collections/(?P<slug>[a-z0-9\-]+)/load', 'CollectionsController@loadMore');
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], strtok($_SERVER['REQUEST_URI'], '?'));
 

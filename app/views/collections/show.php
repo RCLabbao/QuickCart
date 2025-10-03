@@ -8,7 +8,9 @@
 <?php if (!empty($collection['description'])): ?>
   <p class="text-muted"><?= nl2br(e($collection['description'])) ?></p>
 <?php endif; ?>
-<div class="row g-3">
+<div class="row g-3" id="productGrid">
   <?php foreach ($products as $p) { include BASE_PATH . '/app/views/products/_card.php'; } ?>
 </div>
+<div class="text-center py-4" id="loadMoreWrap"><div class="spinner-border" role="status" id="loader" style="display:none"></div></div>
+<script>window.INF_SCROLL = { page: 1, busy: false, hasMore: true, url: '/collections/<?= e($collection['slug']) ?>/load' };</script>
 

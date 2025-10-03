@@ -37,7 +37,7 @@ $todayCompleted = $stats['today_completed'] ?? 0;
 $todayRevenue = $stats['today_revenue'] ?? 0;
 ?>
 <div class="row g-4 mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -48,7 +48,7 @@ $todayRevenue = $stats['today_revenue'] ?? 0;
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -59,7 +59,7 @@ $todayRevenue = $stats['today_revenue'] ?? 0;
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -70,7 +70,7 @@ $todayRevenue = $stats['today_revenue'] ?? 0;
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -200,24 +200,24 @@ $todayRevenue = $stats['today_revenue'] ?? 0;
               </td>
               <td class="text-end">
                 <div class="btn-group btn-group-sm">
-                  <a class="btn btn-outline-primary" href="/admin/orders/<?= (int)$o['id'] ?>" title="View Details">
+                  <a class="btn btn-outline-primary btn-icon" href="/admin/orders/<?= (int)$o['id'] ?>" title="View Details">
                     <i class="bi bi-eye"></i>
                   </a>
                   <?php if ($o['status'] !== 'completed'): ?>
                     <form method="post" action="/admin/orders/<?= (int)$o['id'] ?>/fulfill" class="d-inline fulfill-form" data-order-id="<?= (int)$o['id'] ?>">
                       <?= csrf_field() ?>
-                      <button class="btn btn-success" title="Mark as Fulfilled">
+                      <button class="btn btn-success btn-icon" title="Mark as Fulfilled">
                         <i class="bi bi-check-circle"></i>
                       </button>
                     </form>
                   <?php else: ?>
-                    <span class="badge bg-success">
-                      <i class="bi bi-check-circle me-1"></i>Fulfilled
-                    </span>
+                    <button class="btn btn-success btn-icon" title="Fulfilled" disabled>
+                      <i class="bi bi-check-circle"></i>
+                    </button>
                   <?php endif; ?>
                   <form method="post" action="/admin/orders/<?= (int)$o['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Delete this order?')">
                     <?= csrf_field() ?>
-                    <button class="btn btn-outline-danger" title="Delete Order">
+                    <button class="btn btn-outline-danger btn-icon" title="Delete Order">
                       <i class="bi bi-trash"></i>
                     </button>
                   </form>
@@ -262,6 +262,10 @@ $todayRevenue = $stats['today_revenue'] ?? 0;
   font-size: 0.75em;
 }
 
+/* Equal-size square action buttons */
+.btn-icon { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.btn-group-sm .btn-icon { width: 32px; height: 32px; }
+
 @media (max-width: 768px) {
   .table-responsive {
     font-size: 0.875rem;
@@ -272,6 +276,13 @@ $todayRevenue = $stats['today_revenue'] ?? 0;
   }
 }
 </style>
+<style>
+@media (max-width: 576px) {
+  .row.g-4 .card .rounded-circle { width: 44px !important; height: 44px !important; }
+  .row.g-4 .card h3 { font-size: 1.25rem; }
+}
+</style>
+
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -370,11 +381,7 @@ document.addEventListener('DOMContentLoaded', function() {
           `;
 
           // Replace fulfill button with fulfilled badge
-          this.outerHTML = `
-            <span class="badge bg-success">
-              <i class="bi bi-check-circle me-1"></i>Fulfilled
-            </span>
-          `;
+          this.outerHTML = `<button class=\"btn btn-success btn-icon\" title=\"Fulfilled\" disabled><i class=\"bi bi-check-circle\"></i></button>`;
 
           // Show success message
           showNotification('Order #' + orderId + ' marked as fulfilled!', 'success');
@@ -422,15 +429,28 @@ function showNotification(message, type = 'info') {
   }, 5000);
 }
 
-// Update today's statistics
+// Update today's statistics without using unsupported :contains()
 function updateTodayStats() {
-  // This would typically fetch updated stats from the server
-  // For now, we'll just update the completed count
-  const completedCard = document.querySelector('.card-body h3:contains("Completed")');
-  if (completedCard) {
-    const currentCount = parseInt(completedCard.textContent) || 0;
-    completedCard.textContent = (currentCount + 1).toLocaleString();
-  }
+  try {
+    const statCards = document.querySelectorAll('.row.g-4 .card .card-body');
+    let completedH3 = null, pendingH3 = null;
+    statCards.forEach(body => {
+      const label = body.querySelector('p.text-muted');
+      const value = body.querySelector('h3');
+      if (!label || !value) return;
+      const t = (label.textContent || '').trim().toLowerCase();
+      if (t === 'completed') completedH3 = value;
+      if (t === 'pending') pendingH3 = value;
+    });
+    if (completedH3) {
+      const n = parseInt((completedH3.textContent || '0').replace(/,/g,''), 10) || 0;
+      completedH3.textContent = (n + 1).toLocaleString();
+    }
+    if (pendingH3) {
+      const n = parseInt((pendingH3.textContent || '0').replace(/,/g,''), 10) || 0;
+      pendingH3.textContent = Math.max(0, n - 1).toLocaleString();
+    }
+  } catch (e) { /* noop */ }
 }
 </script>
 

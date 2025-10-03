@@ -1,4 +1,3 @@
-<?php include BASE_PATH . '/app/views/admin/_nav.php'; ?>
 <h1 class="h4 mb-3">Edit Coupon</h1>
 <form method="post" action="/admin/coupons/<?= (int)$coupon['id'] ?>">
   <?= App\Core\csrf_field() ?>

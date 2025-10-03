@@ -1,6 +1,6 @@
-<div class="container-fluid">
-  <div class="row justify-content-center">
-    <div class="col-lg-6">
+<?php use function App\Core\e; ?>
+
+<div>
       <!-- Progress Steps -->
       <div class="row mb-4">
         <div class="col-12">
@@ -47,14 +47,43 @@
             <p class="mb-0 text-muted">You will receive an email confirmation shortly.</p>
           </div>
 
+          <?php
+            $slug = $slug ?? null;
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $orderPath = $slug ? '/orders/' . e($slug) : '/orders/' . ((int)$orderId) . '/' . e($token ?? '');
+            $orderUrl = $scheme . '://' . $host . $orderPath;
+          ?>
           <div class="d-flex gap-3 justify-content-center flex-wrap">
             <a class="btn btn-primary btn-lg" href="/products">
               <i class="bi bi-arrow-left me-2"></i>Continue Shopping
             </a>
-            <a class="btn btn-outline-secondary btn-lg" href="/admin/orders/<?= (int)$orderId ?>" target="_blank">
+            <a class="btn btn-outline-secondary btn-lg" href="<?= e($orderPath) ?>" target="_blank">
               <i class="bi bi-receipt me-2"></i>View Order
             </a>
+            <button type="button" id="copyLinkBtn" class="btn btn-outline-secondary btn-lg">
+              <i class="bi bi-clipboard me-2"></i><span id="copyLinkText">Copy order link</span>
+            </button>
           </div>
+          <script>
+            (function(){
+              const btn = document.getElementById('copyLinkBtn');
+              if (!btn) return;
+              const label = document.getElementById('copyLinkText');
+              const urlToCopy = <?= json_encode($orderUrl) ?>;
+              btn.addEventListener('click', async function(){
+                try {
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(urlToCopy);
+                  } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = urlToCopy; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+                  }
+                  if (label) { const prev = label.textContent; label.textContent = 'Copied!'; setTimeout(()=> label.textContent = prev, 1500); }
+                } catch(e){ console.error('Copy failed', e); }
+              });
+            })();
+          </script>
 
           <div class="mt-4 pt-4 border-top">
             <h6 class="text-muted mb-3">What happens next?</h6>
@@ -96,7 +125,5 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
 </div>
 

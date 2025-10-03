@@ -57,16 +57,25 @@ class AdminOrdersController extends Controller
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename=orders.csv');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['ID','Email','Method','Subtotal','Discount','Shipping Fee','Total','Status','Created At']);
+        // Detect optional columns
+        $pdo = DB::pdo();
+        $hasDiscount = $pdo->query("SHOW COLUMNS FROM orders LIKE 'discount'")->rowCount() > 0;
+        $headers = ['ID','Email','Method','Subtotal'];
+        if ($hasDiscount) { $headers[] = 'Discount'; }
+        $headers = array_merge($headers, ['Shipping Fee','Total','Status','Created At']);
+        fputcsv($out, $headers);
         $where=[]; $params=[];
         if (!empty($_GET['from'])) { $where[]='created_at >= ?'; $params[]=$_GET['from'].' 00:00:00'; }
         if (!empty($_GET['to'])) { $where[]='created_at <= ?'; $params[]=$_GET['to'].' 23:59:59'; }
-        $sql = 'SELECT id,email,shipping_method,subtotal,discount,shipping_fee,total,status,created_at FROM orders';
+        $sql = 'SELECT id,email,shipping_method,subtotal'.($hasDiscount?',discount':'').',shipping_fee,total,status,created_at FROM orders';
         if ($where) { $sql .= ' WHERE '.implode(' AND ',$where); }
         $sql .= ' ORDER BY id DESC';
-        $st = DB::pdo()->prepare($sql); $st->execute($params);
+        $st = $pdo->prepare($sql); $st->execute($params);
         while ($row = $st->fetch()) {
-            fputcsv($out, [$row['id'],$row['email'],$row['shipping_method'],$row['subtotal'],$row['discount'],$row['shipping_fee'],$row['total'],$row['status'],$row['created_at']]);
+            $data = [$row['id'],$row['email'],$row['shipping_method'],$row['subtotal']];
+            if ($hasDiscount) { $data[] = $row['discount']; }
+            $data = array_merge($data, [$row['shipping_fee'],$row['total'],$row['status'],$row['created_at']]);
+            fputcsv($out, $data);
         }
         fclose($out);
         exit;
@@ -130,13 +139,47 @@ class AdminOrdersController extends Controller
             return;
         }
 
+        $pdo = DB::pdo();
         $oid = (int)$params['id'];
-        DB::pdo()->prepare('UPDATE orders SET status="completed" WHERE id=?')->execute([$oid]);
-
+        $pdo->beginTransaction();
         try {
-            DB::pdo()->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
-                ->execute([$oid, Auth::userId(), 'status', 'Marked as fulfilled']);
-        } catch (\Throwable $e) {}
+            $st = $pdo->prepare('SELECT status FROM orders WHERE id=? FOR UPDATE');
+            $st->execute([$oid]);
+            $status = $st->fetchColumn();
+            if ($status === false) { throw new \RuntimeException('Order not found'); }
+            if ($status === 'completed') { $pdo->commit(); $this->redirect('/admin/orders/'.$oid); return; }
+
+            if ($status === 'draft') {
+                // Decrement stock now (conversion from draft)
+                $it = $pdo->prepare('SELECT product_id, quantity, title FROM order_items WHERE order_id=?');
+                $it->execute([$oid]);
+                $items = $it->fetchAll();
+                if (!$items) { throw new \RuntimeException('No items to fulfill'); }
+                foreach ($items as $row) {
+                    $pid = (int)$row['product_id']; $qty = (int)$row['quantity'];
+                    if ($pid) {
+                        $u = $pdo->prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND COALESCE(stock,0) >= ?');
+                        $u->execute([$qty, $pid, $qty]);
+                        if ($u->rowCount() === 0) { throw new \RuntimeException('Insufficient stock for product ID '.$pid); }
+                        try { $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())')
+                                ->execute([$pid, Auth::userId(), -$qty, 'fulfill order #'.$oid]); } catch (\Throwable $e) {}
+                    }
+                }
+            }
+
+            // Mark completed
+            $pdo->prepare('UPDATE orders SET status="completed" WHERE id=?')->execute([$oid]);
+            try {
+                $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
+                    ->execute([$oid, Auth::userId(), 'status', 'Marked as fulfilled']);
+            } catch (\Throwable $e) {}
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            $_SESSION['error'] = 'Failed to fulfill order: '.$e->getMessage();
+            $this->redirect('/admin/orders/'.$oid);
+            return;
+        }
 
         // Check if request came from today's orders page
         $referer = $_SERVER['HTTP_REFERER'] ?? '';
@@ -195,6 +238,70 @@ class AdminOrdersController extends Controller
         $it = $pdo->prepare('SELECT * FROM order_items WHERE order_id=?'); $it->execute([$oid]); $items = $it->fetchAll();
         $this->view('admin/orders/invoice', compact('order','items'));
     }
+    public function createManual(): void
+    {
+        $this->adminView('admin/orders/create_manual', ['title' => 'Create Manual Order']);
+    }
+
+    public function storeManual(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/orders'); }
+        $email = trim((string)($_POST['email'] ?? ''));
+        $shipping_method = in_array(($_POST['shipping_method'] ?? 'pickup'), ['pickup','cod']) ? $_POST['shipping_method'] : 'pickup';
+        $name = trim((string)($_POST['name'] ?? ''));
+        $phone = trim((string)($_POST['phone'] ?? ''));
+        $address1 = trim((string)($_POST['address1'] ?? ''));
+        $city = trim((string)($_POST['city'] ?? ''));
+        $items = $_POST['items'] ?? [];
+        if (!$items || !is_array($items)) { $_SESSION['error']='Add at least one item.'; $this->redirect('/admin/orders/create'); }
+        $pdo = DB::pdo();
+        $pdo->beginTransaction();
+        try {
+            $subtotal = 0.0; $lineItems = [];
+            $get = $pdo->prepare('SELECT id,title,price,COALESCE(stock,0) AS stock FROM products WHERE id=?');
+            foreach ($items as $it) {
+                $pid = (int)($it['product_id'] ?? 0); $qty = max(1, (int)($it['quantity'] ?? 1));
+                if ($pid<=0) continue;
+                $get->execute([$pid]); $p = $get->fetch(); if(!$p){ continue; }
+                if ((int)$p['stock'] < $qty) { throw new \Exception('Insufficient stock for product ID '.$pid); }
+                $unit = (float)$p['price']; $subtotal += $unit * $qty;
+                $lineItems[] = ['product_id'=>$pid,'title'=>$p['title'],'unit_price'=>$unit,'quantity'=>$qty];
+            }
+            if (!$lineItems) { throw new \Exception('No valid items'); }
+            // Shipping fee
+            $ship = 0.0;
+            try {
+                $ship = (float)\App\Core\setting($shipping_method==='cod'?'shipping_fee_cod':'shipping_fee_pickup', 0.0);
+            } catch (\Throwable $e) { $ship = 0.0; }
+            $total = $subtotal + $ship;
+            // Insert order
+            $ins = $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, shipping_fee, total, status, notes, created_at) VALUES (?,?,?,?,?,?,?,NOW())');
+            $ins->execute([$email ?: 'manual@local', $shipping_method, $subtotal, $ship, $total, 'draft', 'Manual draft order']);
+            $oid = (int)$pdo->lastInsertId();
+            // Items
+            $insItem = $pdo->prepare('INSERT INTO order_items (order_id, product_id, title, unit_price, quantity) VALUES (?,?,?,?,?)');
+            foreach ($lineItems as $li) {
+                $insItem->execute([$oid, $li['product_id'], $li['title'], $li['unit_price'], $li['quantity']]);
+            }
+            // Address (optional)
+            if ($shipping_method === 'cod' && ($address1 || $city || $name)) {
+                try {
+                    $pdo->prepare('INSERT INTO addresses (order_id,name,phone,city,street) VALUES (?,?,?,?,?)')
+                        ->execute([$oid, $name, $phone, $city, $address1]);
+                } catch (\Throwable $e) {}
+            }
+            // Event
+            try { $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
+                    ->execute([$oid, Auth::userId(), 'create', 'Manual order created']); } catch (\Throwable $e) {}
+            $pdo->commit();
+            $this->redirect('/admin/orders/'.$oid);
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            $_SESSION['error'] = 'Failed to create order: '.$e->getMessage();
+            $this->redirect('/admin/orders/create');
+        }
+    }
+
 
 }
 

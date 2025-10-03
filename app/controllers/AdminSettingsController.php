@@ -10,27 +10,83 @@ class AdminSettingsController extends Controller
         $stmt = $pdo->query("SELECT `key`,`value` FROM settings");
         $settings = [];
         foreach ($stmt->fetchAll() as $row) { $settings[$row['key']] = $row['value']; }
-        $this->adminView('admin/settings/index', ['title' => 'Settings', 'settings' => $settings]);
+        $fees = [];
+        try { $fees = $pdo->query('SELECT id, city, fee FROM delivery_fees ORDER BY city')->fetchAll(); } catch (\Throwable $e) { $fees = []; }
+        $activeTab = $_GET['tab'] ?? 'general';
+        $flash = $_SESSION['settings_flash'] ?? null; if ($flash) { unset($_SESSION['settings_flash']); }
+        $this->adminView('admin/settings/index', ['title' => 'Settings', 'settings' => $settings, 'fees' => $fees, 'activeTab' => $activeTab, 'flash' => $flash]);
     }
 
     public function update(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/settings'); }
         $pdo = DB::pdo();
-        $pairs = [
-            'store_name' => $_POST['store_name'] ?? 'QuickCart',
-            'currency' => $_POST['currency'] ?? 'PHP',
-            'pickup_location' => $_POST['pickup_location'] ?? '',
-            'shipping_fee_cod' => $_POST['shipping_fee_cod'] ?? '0',
-            'shipping_fee_pickup' => $_POST['shipping_fee_pickup'] ?? '0',
-            'brand_color' => $_POST['brand_color'] ?? '#212529',
-        ];
+        $scope = $_POST['scope'] ?? 'general';
+        $pairs = [];
+        if ($scope === 'general') {
+            $pairs = [
+                'store_name' => $_POST['store_name'] ?? 'QuickCart',
+                'currency' => $_POST['currency'] ?? 'PHP',
+                'pickup_location' => $_POST['pickup_location'] ?? '',
+                'brand_color' => $_POST['brand_color'] ?? '#212529',
+            ];
+        } elseif ($scope === 'checkout') {
+            $pairs = [
+                'checkout_enable_phone' => isset($_POST['checkout_enable_phone']) ? '1' : '0',
+                'checkout_enable_region' => isset($_POST['checkout_enable_region']) ? '1' : '0',
+                'checkout_enable_province' => isset($_POST['checkout_enable_province']) ? '1' : '0',
+                'checkout_enable_city' => isset($_POST['checkout_enable_city']) ? '1' : '0',
+                'checkout_enable_barangay' => isset($_POST['checkout_enable_barangay']) ? '1' : '0',
+                'checkout_enable_street' => isset($_POST['checkout_enable_street']) ? '1' : '0',
+                'checkout_enable_postal' => isset($_POST['checkout_enable_postal']) ? '1' : '0',
+            ];
+        } elseif ($scope === 'shipping') {
+            $pairs = [
+                'shipping_fee_cod' => $_POST['shipping_fee_cod'] ?? '0',
+                'shipping_fee_pickup' => $_POST['shipping_fee_pickup'] ?? '0',
+            ];
+        }
         foreach ($pairs as $k=>$v){
             $stmt = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
             $stmt->execute([$k, $v]);
         }
         if (function_exists('apcu_delete')) { @apcu_delete('settings'); }
-        $this->redirect('/admin/settings');
+        $_SESSION['settings_flash'] = 'Settings saved successfully.';
+        $tab = $scope;
+        if (!in_array($tab, ['general','checkout','shipping'], true)) { $tab = 'general'; }
+        $this->redirect('/admin/settings?tab=' . $tab);
+    }
+
+    public function addCityFee(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/settings'); }
+        $city = trim($_POST['city'] ?? '');
+        $fee = (float)($_POST['fee'] ?? 0);
+        if ($city !== '') {
+            $pdo = DB::pdo();
+            try {
+                $pdo->exec('CREATE TABLE IF NOT EXISTS delivery_fees (id INT AUTO_INCREMENT PRIMARY KEY, city VARCHAR(191) NOT NULL UNIQUE, fee DECIMAL(10,2) NOT NULL DEFAULT 0.00) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            } catch (\Throwable $e) {}
+            try {
+                $stmt = $pdo->prepare('INSERT INTO delivery_fees (city, fee) VALUES (?, ?) ON DUPLICATE KEY UPDATE fee=VALUES(fee)');
+                $stmt->execute([$city, $fee]);
+            } catch (\Throwable $e) {}
+        }
+        $_SESSION['settings_flash'] = 'City fee saved.';
+        $this->redirect('/admin/settings?tab=shipping');
+    }
+
+    public function deleteCityFee(array $params): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/settings'); }
+        $id = (int)($params['id'] ?? 0);
+        if ($id > 0) {
+            $pdo = DB::pdo();
+            try { $pdo->exec('CREATE TABLE IF NOT EXISTS delivery_fees (id INT AUTO_INCREMENT PRIMARY KEY, city VARCHAR(191) NOT NULL UNIQUE, fee DECIMAL(10,2) NOT NULL DEFAULT 0.00) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'); } catch (\Throwable $e) {}
+            try { $pdo->prepare('DELETE FROM delivery_fees WHERE id=?')->execute([$id]); } catch (\Throwable $e) {}
+        }
+        $_SESSION['settings_flash'] = 'City fee deleted.';
+        $this->redirect('/admin/settings?tab=shipping');
     }
 }
 

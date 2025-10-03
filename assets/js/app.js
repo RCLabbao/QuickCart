@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Handle both mobile and desktop cart buttons
   openBtn?.addEventListener('click',()=>offcanvas.show());
   openBtnDesktop?.addEventListener('click',()=>offcanvas.show());
+  // Initial load of cart drawer and count
+  reloadCart();
+
 
   // Add to cart forms (delegation)
   document.body.addEventListener('submit', async (e)=>{
@@ -91,7 +94,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       // add skeletons
       const placeholders = Array.from({length: 8}).map(()=>`<div class=\"col-6 col-md-4 col-lg-3\"><div class=\"card h-100\"><div class=\"ratio ratio-1x1 skeleton\"></div><div class=\"card-body\"><div class=\"skeleton\" style=\"height:14px; width:70%\"></div><div class=\"skeleton mt-2\" style=\"height:24px; width:40%\"></div></div></div></div>`).join('');
       grid.insertAdjacentHTML('beforeend', placeholders);
-      const res = await fetch(`/products/load?page=${next}`);
+      const url = window.INF_SCROLL.url || '/products/load';
+      const res = await fetch(`${url}?page=${next}`);
       const json = await res.json();
       // remove skeletons
       grid.querySelectorAll('.skeleton').forEach(el=>el.closest('.col-6, .col-md-4, .col-lg-3')?.remove());

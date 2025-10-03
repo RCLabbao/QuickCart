@@ -6,7 +6,7 @@ class AdminCollectionsController extends Controller
 {
     public function index(): void
     {
-        $rows = DB::pdo()->query('SELECT id, title, slug FROM collections ORDER BY id DESC')->fetchAll();
+        $rows = DB::pdo()->query('SELECT id, title, slug, image_url FROM collections ORDER BY id DESC')->fetchAll();
         $this->adminView('admin/collections/index', ['title' => 'Collections', 'collections'=>$rows]);
     }
     public function create(): void { $this->adminView('admin/collections/form', ['title' => 'Create Collection']); }

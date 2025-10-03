@@ -48,6 +48,10 @@ class Auth
         $stmt = $pdo->prepare('SELECT r.slug FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?');
         $stmt->execute([self::user()['id']]);
         foreach ($stmt->fetchAll() as $r) if ($r['slug'] === 'superadmin') return true;
+        // check direct user permissions
+        $du = $pdo->prepare('SELECT 1 FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE up.user_id = ? AND p.slug = ? LIMIT 1');
+        $du->execute([self::user()['id'], $perm]);
+        if ($du->fetchColumn()) return true;
         // check role permissions
         $sql = 'SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id JOIN user_roles ur ON ur.role_id = rp.role_id WHERE ur.user_id = ? AND p.slug = ? LIMIT 1';
         $st = $pdo->prepare($sql); $st->execute([self::user()['id'], $perm]);

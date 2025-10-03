@@ -10,6 +10,10 @@
     <a class="btn btn-primary" href="/admin/products/create">
       <i class="bi bi-plus-circle me-2"></i>Add Product
     </a>
+    <a class="btn btn-outline-warning" href="/admin/products/duplicates">
+      <i class="bi bi-exclamation-diamond me-2"></i>Find Duplicates
+    </a>
+
     <div class="btn-group">
       <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
         <i class="bi bi-download me-2"></i>Export
@@ -42,7 +46,7 @@ $lowStockProducts = $stats['low_stock_products'] ?? 0;
 $draftProducts = $stats['draft_products'] ?? 0;
 ?>
 <div class="row g-4 mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -53,7 +57,7 @@ $draftProducts = $stats['draft_products'] ?? 0;
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -64,7 +68,7 @@ $draftProducts = $stats['draft_products'] ?? 0;
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -75,7 +79,7 @@ $draftProducts = $stats['draft_products'] ?? 0;
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body text-center">
         <div class="rounded-circle bg-secondary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
@@ -95,7 +99,7 @@ $draftProducts = $stats['draft_products'] ?? 0;
         <label class="form-label fw-semibold">Search Products</label>
         <div class="input-group">
           <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input class="form-control" type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>" placeholder="Search by title...">
+          <input class="form-control" type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>" placeholder="Search by title, SKU, or barcode (scan to search)..." autofocus>
         </div>
       </div>
       <div class="col-md-2">
@@ -276,6 +280,12 @@ $draftProducts = $stats['draft_products'] ?? 0;
                   </div>
                   <div>
                     <h6 class="mb-1"><?= htmlspecialchars($p['title']) ?></h6>
+                    <?php if (!empty($p['sku']) || !empty($p['barcode'])): ?>
+                      <div class="small text-muted mb-1">
+                        <?php if (!empty($p['sku'])): ?><span class="me-2"><i class="bi bi-upc-scan me-1"></i>SKU: <?= htmlspecialchars($p['sku']) ?></span><?php endif; ?>
+                        <?php if (!empty($p['barcode'])): ?><span class="me-2"><i class="bi bi-upc me-1"></i><?= htmlspecialchars($p['barcode']) ?></span><?php endif; ?>
+                      </div>
+                    <?php endif; ?>
                     <small class="text-muted">
                       <?php if (!empty($p['collection_id'])): ?>
                         <?php

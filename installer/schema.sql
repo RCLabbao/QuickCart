@@ -36,10 +36,27 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS user_permissions (
+  user_id INT NOT NULL,
+  permission_id INT NOT NULL,
+  PRIMARY KEY(user_id, permission_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS settings (
   id INT AUTO_INCREMENT PRIMARY KEY,
   `key` VARCHAR(191) NOT NULL UNIQUE,
   `value` TEXT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Optional customer profiles for editing customer name/phone by email
+CREATE TABLE IF NOT EXISTS customer_profiles (
+  email VARCHAR(191) NOT NULL PRIMARY KEY,
+  name VARCHAR(191) NULL,
+  phone VARCHAR(64) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS collections (
@@ -55,13 +72,18 @@ CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(191) NOT NULL,
   slug VARCHAR(191) NOT NULL UNIQUE,
+  sku VARCHAR(64) NULL UNIQUE,
+  barcode VARCHAR(64) NULL UNIQUE,
   description TEXT,
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   status ENUM('active','draft') NOT NULL DEFAULT 'active',
   stock INT NOT NULL DEFAULT 0,
   collection_id INT NULL,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL
+  FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL,
+  INDEX idx_products_title (title),
+  INDEX idx_products_sku (sku),
+  INDEX idx_products_barcode (barcode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS product_images (
@@ -80,7 +102,7 @@ CREATE TABLE IF NOT EXISTS orders (
   subtotal DECIMAL(10,2) NOT NULL,
   shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   total DECIMAL(10,2) NOT NULL,
-  status ENUM('pending','processing','shipped','completed','cancelled') NOT NULL DEFAULT 'pending',
+  status ENUM('draft','pending','processing','shipped','completed','cancelled') NOT NULL DEFAULT 'draft',
   notes TEXT NULL,
   created_at DATETIME NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -128,6 +150,13 @@ CREATE TABLE IF NOT EXISTS coupons (
   expires_at DATETIME NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Delivery fees per city
+CREATE TABLE IF NOT EXISTS delivery_fees (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  city VARCHAR(191) NOT NULL UNIQUE,
+  fee DECIMAL(10,2) NOT NULL DEFAULT 0.00
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Optional fulltext

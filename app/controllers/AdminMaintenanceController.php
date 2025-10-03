@@ -33,6 +33,8 @@ class AdminMaintenanceController extends Controller
             'orders.notes' => $this->columnExists($pdo, 'orders', 'notes'),
             'coupons table' => $this->tableExists($pdo, 'coupons'),
             'order_events table' => $this->tableExists($pdo, 'order_events'),
+            'delivery_fees table' => $this->tableExists($pdo, 'delivery_fees'),
+            'customer_profiles table' => $this->tableExists($pdo, 'customer_profiles'),
         ];
 
         $this->adminView('admin/maintenance/index', [
@@ -73,7 +75,10 @@ class AdminMaintenanceController extends Controller
             'CREATE TABLE tags (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, slug VARCHAR(120) NOT NULL UNIQUE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
         $this->ensureTable($pdo, 'product_tags',
             'CREATE TABLE product_tags (product_id INT NOT NULL, tag_id INT NOT NULL, PRIMARY KEY(product_id, tag_id), FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-
+        $this->ensureTable($pdo, 'delivery_fees',
+            'CREATE TABLE delivery_fees (id INT AUTO_INCREMENT PRIMARY KEY, city VARCHAR(191) NOT NULL UNIQUE, fee DECIMAL(10,2) NOT NULL DEFAULT 0.00) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $this->ensureTable($pdo, 'customer_profiles',
+            'CREATE TABLE customer_profiles (email VARCHAR(191) NOT NULL PRIMARY KEY, name VARCHAR(191) NULL, phone VARCHAR(64) NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
         // Indexes (best effort)
         $this->tryExec($pdo, 'CREATE INDEX idx_products_status_created ON products (status, created_at)');

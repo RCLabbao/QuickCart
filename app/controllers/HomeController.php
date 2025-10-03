@@ -23,11 +23,14 @@ class HomeController extends Controller
                                LIMIT 12
                              ) t ON t.product_id = p.id
                              WHERE p.status="active"')->fetchAll();
+        // Featured collections with images
+        $feat = $pdo->query('SELECT id,title,slug,image_url FROM collections WHERE image_url IS NOT NULL AND image_url <> "" ORDER BY id DESC LIMIT 8')->fetchAll();
         $this->view('home/index', [
             'title' => 'QuickCart - Modern Shopping',
             'sale_items' => $sale,
             'new_arrivals' => $new,
             'best_sellers' => $best,
+            'featured_collections' => $feat,
         ]);
     }
 }
