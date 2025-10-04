@@ -12,9 +12,14 @@ if (file_exists($configPath)) {
     if (!$dbc || empty($dbc['host']) || empty($dbc['name']) || empty($dbc['user'])) {
       throw new RuntimeException('Config found but database settings are incomplete.');
     }
-    // Attempt a quick connection test
-    new PDO('mysql:host='.$dbc['host'].';dbname='.$dbc['name'].';charset=utf8mb4', $dbc['user'], (string)($dbc['pass'] ?? ''), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
-    echo '<meta http-equiv="refresh" content="0;url=/" />Installed'; exit;
+    if (!extension_loaded('pdo_mysql')) { throw new RuntimeException('PHP PDO MySQL driver (pdo_mysql) is not enabled.'); }
+
+    // Attempt a quick connection test and ensure schema exists
+    $pdo = new PDO('mysql:host='.$dbc['host'].';dbname='.$dbc['name'].';charset=utf8mb4', $dbc['user'], (string)($dbc['pass'] ?? ''), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+    $hasUsers = $pdo->query("SHOW TABLES LIKE 'users'")->fetch();
+    if ($hasUsers) { echo '<meta http-equiv="refresh" content="0;url=/" />Installed'; exit; }
+    // Schema not present yet; continue to installer step 3
+    $_SESSION['db'] = $dbc; $step = 3;
   } catch (Throwable $e) {
     // Stay on the installer with a clear message and prefill the DB form
     $err = 'Config found but database connection failed: '.htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8').

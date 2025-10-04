@@ -3,8 +3,8 @@ const CONFIG = array (
   'db' => 
   array (
     'host' => 'localhost',
-    'name' => 'quickcart',
-    'user' => 'rclabbao',
-    'pass' => 'DHVmuHy)rvk3NCpW',
+    'name' => 'ecommer2_quickcart',
+    'user' => 'ecommer2_quickcartadmin',
+    'pass' => 'fw*8U(EkYuj,QVRq',
   ),
 );
