@@ -25,6 +25,46 @@ define('CONFIG_PATH', BASE_PATH . '/config');
 // Composer autoload (optional for libraries like PHPMailer)
 if (file_exists(BASE_PATH . '/vendor/autoload.php')) { require BASE_PATH . '/vendor/autoload.php'; }
 
+// Debug/error handling
+if (!function_exists('qc_is_debug')) {
+    function qc_is_debug(): bool {
+        $env = strtolower((string)getenv('QUICKCART_DEBUG'));
+        if (in_array($env, ['1','true','on','yes'], true)) return true;
+        if (defined('CONFIG') && isset(\CONFIG['debug']) && \CONFIG['debug']) return true;
+        // Try DB-backed setting if available (safe: Helpers::settings() already catches failures)
+        try { return (string)\App\Core\setting('debug', '0') === '1'; } catch (\Throwable $e) { return false; }
+    }
+    function qc_render_exception(\Throwable $e): void {
+        http_response_code(500);
+        if (!qc_is_debug()) { echo '<h1>500 - Server Error</h1><p>Something went wrong.</p>'; return; }
+        $title = htmlspecialchars(get_class($e).': '.$e->getMessage());
+        $file = htmlspecialchars($e->getFile()); $line = (int)$e->getLine();
+        $trace = htmlspecialchars($e->getTraceAsString());
+        echo '<div style="font-family:system-ui,Segoe UI,Roboto,Arial; padding:20px">'
+           . '<h1 style="margin:0 0 10px 0">'.$title.'</h1>'
+           . '<div style="color:#666">'.$file.':'.$line.'</div>'
+           . '<pre style="background:#f8f9fa; padding:12px; border:1px solid #eee; overflow:auto">'.$trace.'</pre>'
+           . '</div>';
+    }
+    set_error_handler(function (int $severity, string $message, string $file = '', int $line = 0): bool {
+        // Respect @-silence
+        if (!(error_reporting() & $severity)) { return false; }
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    });
+    set_exception_handler(function ($e) { if ($e instanceof \Throwable) { qc_render_exception($e); } else { echo 'Unhandled exception'; } });
+    register_shutdown_function(function () {
+
+        $err = error_get_last();
+        if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+            qc_render_exception(new ErrorException($err['message'] ?? 'Fatal error', 0, $err['type'] ?? 0, $err['file'] ?? 'unknown', $err['line'] ?? 0));
+        }
+    });
+    error_reporting(E_ALL);
+    ini_set('display_errors', qc_is_debug() ? '1' : '0');
+    ini_set('log_errors', '1');
+}
+
+
 // Autoload minimal core
 require_once APP_PATH . '/core/Helpers.php';
 require_once APP_PATH . '/core/Router.php';
@@ -55,6 +95,9 @@ if (file_exists($configFile)) {
 }
 
 use App\Core\Router;
+// Re-evaluate debug after DB/settings are available
+if (function_exists('qc_is_debug')) { ini_set('display_errors', qc_is_debug() ? '1' : '0'); }
+
 
 $router = new Router();
 
