@@ -22,6 +22,9 @@ define('BASE_PATH', __DIR__);
 define('APP_PATH', BASE_PATH . '/app');
 define('CONFIG_PATH', BASE_PATH . '/config');
 
+// Composer autoload (optional for libraries like PHPMailer)
+if (file_exists(BASE_PATH . '/vendor/autoload.php')) { require BASE_PATH . '/vendor/autoload.php'; }
+
 // Autoload minimal core
 require_once APP_PATH . '/core/Helpers.php';
 require_once APP_PATH . '/core/Router.php';
@@ -30,6 +33,7 @@ require_once APP_PATH . '/core/View.php';
 require_once APP_PATH . '/core/DB.php';
 require_once APP_PATH . '/core/Auth.php';
 require_once APP_PATH . '/core/CSRF.php';
+require_once APP_PATH . '/core/Mailer.php';
 
 // Simple autoloader for controllers
 spl_autoload_register(function ($class) {
@@ -110,6 +114,7 @@ $router->post('/admin/roles/(?P<id>\d+)', 'AdminRolesController@update', ['perm'
 
 // Admin Customers
 $router->get('/admin/customers', 'AdminCustomersController@index', ['perm' => 'users.read']);
+$router->get('/admin/customer', 'AdminCustomersController@index', ['perm' => 'users.read']); // alias for singular path
 $router->get('/admin/customers/view', 'AdminCustomersController@show', ['perm' => 'users.read']);
 $router->post('/admin/customers/profile', 'AdminCustomersController@updateProfile', ['perm' => 'users.write']);
 
@@ -164,6 +169,10 @@ $router->get('/admin/orders/export', 'AdminOrdersController@export', ['perm' => 
 $router->get('/admin/customers/export', 'AdminCustomersController@export', ['perm' => 'users.read']);
 // Admin Maintenance
 $router->get('/admin/maintenance', 'AdminMaintenanceController@index', ['perm' => 'settings.read']);
+$router->post('/admin/maintenance/optimize', 'AdminMaintenanceController@optimize', ['perm' => 'settings.write']);
+$router->post('/admin/maintenance/seed-demo', 'AdminMaintenanceController@seedDemo', ['perm' => 'settings.write']);
+$router->post('/admin/maintenance/wipe', 'AdminMaintenanceController@wipe', ['perm' => 'settings.write']);
+$router->post('/admin/maintenance/wipe-demo', 'AdminMaintenanceController@wipeDemo', ['perm' => 'settings.write']);
 
 // Admin Coupons
 $router->get('/admin/coupons', 'AdminCouponsController@index', ['perm' => 'settings.read']);
@@ -172,9 +181,6 @@ $router->post('/admin/coupons', 'AdminCouponsController@store', ['perm' => 'sett
 $router->get('/admin/coupons/(?P<id>\d+)/edit', 'AdminCouponsController@edit', ['perm' => 'settings.write']);
 $router->post('/admin/coupons/(?P<id>\d+)', 'AdminCouponsController@update', ['perm' => 'settings.write']);
 $router->post('/admin/coupons/(?P<id>\d+)/delete', 'AdminCouponsController@delete', ['perm' => 'settings.write']);
-
-$router->post('/admin/maintenance/optimize', 'AdminMaintenanceController@optimize', ['perm' => 'settings.write']);
-$router->post('/admin/maintenance/seed-demo', 'AdminMaintenanceController@seedDemo', ['perm' => 'settings.write']);
 
 
 // Order quick actions

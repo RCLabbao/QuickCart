@@ -105,17 +105,49 @@ class AdminOrdersController extends Controller
     public function today(): void
     {
         $pdo = DB::pdo();
-        $rows = $pdo->query('SELECT id, email, shipping_method, total, status, created_at FROM orders WHERE DATE(created_at)=CURDATE() ORDER BY id DESC')->fetchAll();
+        // Determine rolling window based on cutoff time
+        $cutoff = (string)\App\Core\setting('today_cutoff', '00:00');
+        if (!preg_match('/^\d{2}:\d{2}$/', $cutoff)) { $cutoff = '00:00'; }
+        $now = new \DateTime('now');
+        $todayCutoff = new \DateTime(date('Y-m-d') . ' ' . $cutoff);
+        if ($now < $todayCutoff) {
+            $start = (new \DateTime('yesterday ' . $cutoff));
+            $end = $todayCutoff;
+        } else {
+            $start = $todayCutoff;
+            $end = (new \DateTime('tomorrow ' . $cutoff));
+        }
+        $startStr = $start->format('Y-m-d H:i:s');
+        $endStr = $end->format('Y-m-d H:i:s');
 
-        // Get today's statistics
+        $st = $pdo->prepare('SELECT id, email, shipping_method, total, status, created_at FROM orders WHERE created_at >= ? AND created_at < ? ORDER BY id DESC');
+        $st->execute([$startStr, $endStr]);
+        $rows = $st->fetchAll();
+
+        $st2 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ?');
+        $st2->execute([$startStr, $endStr]);
+        $today_orders = (int)$st2->fetchColumn();
+
+        $st3 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ? AND status = "pending"');
+        $st3->execute([$startStr, $endStr]);
+        $today_pending = (int)$st3->fetchColumn();
+
+        $st4 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ? AND status = "completed"');
+        $st4->execute([$startStr, $endStr]);
+        $today_completed = (int)$st4->fetchColumn();
+
+        $st5 = $pdo->prepare('SELECT COALESCE(SUM(total),0) FROM orders WHERE created_at >= ? AND created_at < ? AND status = "completed"');
+        $st5->execute([$startStr, $endStr]);
+        $today_revenue = (float)$st5->fetchColumn();
+
         $stats = [
-            'today_orders' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE DATE(created_at)=CURDATE()')->fetchColumn(),
-            'today_pending' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE DATE(created_at)=CURDATE() AND status = "pending"')->fetchColumn(),
-            'today_completed' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE DATE(created_at)=CURDATE() AND status = "completed"')->fetchColumn(),
-            'today_revenue' => (float)$pdo->query('SELECT COALESCE(SUM(total), 0) FROM orders WHERE DATE(created_at)=CURDATE() AND status = "completed"')->fetchColumn()
+            'today_orders' => $today_orders,
+            'today_pending' => $today_pending,
+            'today_completed' => $today_completed,
+            'today_revenue' => $today_revenue,
         ];
 
-        $this->adminView('admin/orders/today', ['title' => 'Today\'s Orders', 'orders'=>$rows, 'stats'=>$stats]);
+        $this->adminView('admin/orders/today', ['title' => 'Today\'s Orders', 'orders'=>$rows, 'stats'=>$stats, 'window_start'=>$startStr, 'window_end'=>$endStr]);
     }
 
     public function delete(array $params): void

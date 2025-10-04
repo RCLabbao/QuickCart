@@ -90,7 +90,7 @@
       </div>
     </div>
   </div>
-  
+
   <div class="col-lg-6">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-white border-bottom">
@@ -152,7 +152,7 @@
       </div>
     </div>
   </div>
-  
+
   <div class="col-lg-6">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-white border-bottom">
@@ -179,6 +179,52 @@
       </div>
     </div>
   </div>
+
+<!-- Dangerous: Wipe Data -->
+<div class="row g-4 mt-1">
+  <div class="col-lg-12">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-trash3 me-2"></i>Wipe Catalog & Orders
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="text-danger">This permanently deletes all products, images, collections, orders, addresses, coupons, delivery fees, and customer profiles. Users and settings are preserved.</p>
+        <form method="post" action="/admin/maintenance/wipe" onsubmit="return confirm('This will permanently DELETE all catalog and order data. Are you absolutely sure?');">
+          <?= csrf_field() ?>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>Delete All Catalog & Orders
+          </button>
+        </form>
+      </div>
+    </div>
+
+<!-- Wipe Demo Data -->
+<div class="row g-4 mt-1">
+  <div class="col-lg-12">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-eraser me-2"></i>Remove Demo Data Only
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted">Removes products named "Demo Product ..." and seeded test orders. Real data remains.</p>
+        <form method="post" action="/admin/maintenance/wipe-demo" onsubmit="return confirm('Remove demo data added by the seeder?');">
+          <?= csrf_field() ?>
+          <button type="submit" class="btn btn-outline-danger">
+            <i class="bi bi-eraser me-2"></i>Remove Demo Data
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div>
+</div>
+
 </div>
 
 <!-- System Information -->

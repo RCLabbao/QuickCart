@@ -14,6 +14,7 @@
   <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='general'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-general" type="button" role="tab">General</button></li>
   <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='checkout'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-checkout" type="button" role="tab">Checkout</button></li>
   <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='shipping'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-shipping" type="button" role="tab">Shipping</button></li>
+  <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='email'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-email" type="button" role="tab">Email</button></li>
 </ul>
 <div class="tab-content mt-3">
 <div class="tab-pane fade <?= $activeTab==='general'?'show active':'' ?>" id="tab-general" role="tabpanel">
@@ -36,6 +37,11 @@
   <div class="col-md-6">
     <label class="form-label">Brand Color</label>
     <input class="form-control form-control-color" type="color" name="brand_color" value="<?= htmlspecialchars($settings['brand_color'] ?? '#212529') ?>">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Today's Orders Cutoff Time</label>
+    <input class="form-control" type="time" name="today_cutoff" value="<?= htmlspecialchars($settings['today_cutoff'] ?? '00:00') ?>">
+    <small class="text-muted">Orders placed after this time will appear in the next day's "Today" view.</small>
   </div>
   <div class="col-12">
     <button class="btn btn-dark">Save General</button>
@@ -164,6 +170,8 @@
                   <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                 </form>
               </td>
+
+
             </tr>
           <?php endforeach; ?>
         </tbody>
@@ -172,6 +180,74 @@
   </div>
 </div>
 
+
+
+<div class="tab-pane fade <?= $activeTab==='email'?'show active':'' ?>" id="tab-email" role="tabpanel">
+  <form method="post" action="/admin/settings" class="row g-3">
+    <?= csrf_field() ?>
+    <input type="hidden" name="scope" value="email">
+    <div class="col-12">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" name="smtp_enabled" id="smtp_enabled" <?= !empty($settings['smtp_enabled']) && $settings['smtp_enabled']=='1' ? 'checked' : '' ?>>
+        <label class="form-check-label" for="smtp_enabled">Enable SMTP (uses PHPMailer if installed)</label>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">SMTP Host</label>
+      <input class="form-control" name="smtp_host" value="<?= htmlspecialchars($settings['smtp_host'] ?? '') ?>">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">SMTP Port</label>
+      <input class="form-control" name="smtp_port" value="<?= htmlspecialchars($settings['smtp_port'] ?? '587') ?>">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Security</label>
+      <select class="form-select" name="smtp_secure">
+        <?php $secure = strtolower($settings['smtp_secure'] ?? 'tls'); ?>
+        <option value="tls" <?= $secure==='tls'?'selected':'' ?>>TLS</option>
+        <option value="ssl" <?= $secure==='ssl'?'selected':'' ?>>SSL</option>
+        <option value="none" <?= $secure==='none'?'selected':'' ?>>None</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">SMTP Username</label>
+      <input class="form-control" name="smtp_user" value="<?= htmlspecialchars($settings['smtp_user'] ?? '') ?>">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">SMTP Password</label>
+      <input class="form-control" type="password" name="smtp_pass" value="<?= htmlspecialchars($settings['smtp_pass'] ?? '') ?>">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">From Name</label>
+      <input class="form-control" name="smtp_from_name" value="<?= htmlspecialchars($settings['smtp_from_name'] ?? ($settings['store_name'] ?? 'QuickCart')) ?>">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">From Email</label>
+      <input class="form-control" name="smtp_from_email" value="<?= htmlspecialchars($settings['smtp_from_email'] ?? '') ?>">
+    </div>
+
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom"><strong>Order Confirmation Email Template</strong></div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Subject</label>
+            <input class="form-control" name="email_order_subject" value="<?= htmlspecialchars($settings['email_order_subject'] ?? 'Your order {{order_id}} at {{store_name}}') ?>">
+          </div>
+          <label class="form-label">HTML Template</label>
+          <textarea class="form-control" name="email_order_template" rows="10"><?php
+          echo htmlspecialchars($settings['email_order_template'] ?? '<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width:640px; margin:0 auto;">\n  <div style="padding:16px; background:#f8f9fa; border:1px solid #eee; border-bottom:0;">\n    <h2 style=\"margin:0; color:#212529;\">{{store_name}}</h2>\n  </div>\n  <div style="padding:16px; border:1px solid #eee;">\n    <p>Hi {{customer_name}},</p>\n    <p>Thanks for your order <strong>#{{order_id}}</strong>. Here are the details:</p>\n    <div>{{order_items_html}}</div>\n    <p><strong>Total:</strong> {{total}}</p>\n    <p>We will notify you when your order status changes.</p>\n  </div>\n  <div style="padding:12px; color:#888; font-size:12px; text-align:center;">\n    This is an automated message from {{store_name}}.\n  </div>\n</div>');
+          ?></textarea>
+          <div class="small text-muted mt-2">Available variables: {{store_name}}, {{customer_name}}, {{order_id}}, {{total}}, {{order_items_html}}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <button class="btn btn-primary">Save Email Settings</button>
+    </div>
+  </form>
+</div>
 
 </div>
 </div>

@@ -162,12 +162,5 @@ CREATE TABLE IF NOT EXISTS delivery_fees (
 -- Optional fulltext
 -- ALTER TABLE products ADD FULLTEXT(title, description);
 
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_products_status_created ON products (status, created_at);
-CREATE INDEX IF NOT EXISTS idx_products_slug ON products (slug);
-CREATE INDEX IF NOT EXISTS idx_orders_created ON orders (created_at);
-CREATE INDEX IF NOT EXISTS idx_orders_email ON orders (email);
-CREATE INDEX IF NOT EXISTS idx_product_images_pid_order ON product_images (product_id, sort_order);
-CREATE INDEX IF NOT EXISTS idx_collections_slug ON collections (slug);
-
-
+-- Indexes for performance (created conditionally by installer for compatibility with MariaDB/MySQL 5.7)
+-- The installer will attempt to create these indexes with plain CREATE INDEX and ignore 'already exists' errors.

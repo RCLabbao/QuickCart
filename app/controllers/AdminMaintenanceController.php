@@ -146,6 +146,70 @@ class AdminMaintenanceController extends Controller
         echo '<div style="padding:20px;font-family:system-ui">Seeded demo data. <a href="/admin">Back to admin</a></div>';
     }
 
+    public function wipe(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+        $pdo = DB::pdo();
+        $tables = [
+            'order_items','addresses','orders',
+            'product_images','product_tags','product_stock_events','products',
+            'tags','collections',
+            'coupons','delivery_fees',
+            'customer_profiles'
+        ];
+        $pdo->beginTransaction();
+        try {
+            foreach ($tables as $t) {
+                try { $pdo->exec('SET FOREIGN_KEY_CHECKS=0'); } catch (\Throwable $e) {}
+                try { $pdo->exec('TRUNCATE TABLE `'.$t.'`'); } catch (\Throwable $e) {}
+                try { $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); } catch (\Throwable $e) {}
+            }
+            $pdo->commit();
+            echo '<div style="padding:20px;font-family:system-ui">All catalog and order data wiped. <a href="/admin">Back to admin</a></div>';
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            echo '<div style="padding:20px;font-family:system-ui">Failed to wipe data: '.htmlspecialchars($e->getMessage()).' <a href="/admin">Back to admin</a></div>';
+        }
+
+    }
+
+    public function wipeDemo(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+        $pdo = DB::pdo();
+        $pdo->beginTransaction();
+        try {
+            // Delete demo orders (seeded via seedDemo)
+            try {
+                $ids = $pdo->query("SELECT id FROM orders WHERE notes='Seed order'")->fetchAll(\PDO::FETCH_COLUMN);
+                if ($ids) {
+                    $in = implode(',', array_fill(0, count($ids), '?'));
+                    $st = $pdo->prepare("DELETE FROM order_items WHERE order_id IN ($in)"); $st->execute($ids);
+                    $st = $pdo->prepare("DELETE FROM addresses WHERE order_id IN ($in)"); $st->execute($ids);
+                    $st = $pdo->prepare("DELETE FROM orders WHERE id IN ($in)"); $st->execute($ids);
+                }
+            } catch (\Throwable $e) {}
+            // Delete demo products and their images (title starts with 'Demo Product ')
+            $pids = $pdo->query("SELECT id FROM products WHERE title LIKE 'Demo Product %'")->fetchAll(\PDO::FETCH_COLUMN);
+            if ($pids) {
+                $in = implode(',', array_fill(0, count($pids), '?'));
+                try { $pdo->prepare("DELETE FROM product_images WHERE product_id IN ($in)")->execute($pids); } catch (\Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM product_tags WHERE product_id IN ($in)")->execute($pids); } catch (\Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM product_stock_events WHERE product_id IN ($in)")->execute($pids); } catch (\Throwable $e) {}
+                $pdo->prepare("DELETE FROM products WHERE id IN ($in)")->execute($pids);
+            }
+            $pdo->commit();
+            echo '<div style="padding:20px;font-family:system-ui">Demo data removed. <a href="/admin">Back to admin</a></div>';
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            echo '<div style="padding:20px;font-family:system-ui">Failed to wipe demo data: '.htmlspecialchars($e->getMessage()).' <a href="/admin">Back to admin</a></div>';
+        }
+
+
+    }
+
+
+
     private function ensureColumn(\PDO $pdo, string $table, string $column, string $alterSql): void
     {
         $st = $pdo->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');

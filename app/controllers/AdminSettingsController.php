@@ -29,6 +29,7 @@ class AdminSettingsController extends Controller
                 'currency' => $_POST['currency'] ?? 'PHP',
                 'pickup_location' => $_POST['pickup_location'] ?? '',
                 'brand_color' => $_POST['brand_color'] ?? '#212529',
+                'today_cutoff' => $_POST['today_cutoff'] ?? '00:00',
             ];
         } elseif ($scope === 'checkout') {
             $pairs = [
@@ -45,6 +46,19 @@ class AdminSettingsController extends Controller
                 'shipping_fee_cod' => $_POST['shipping_fee_cod'] ?? '0',
                 'shipping_fee_pickup' => $_POST['shipping_fee_pickup'] ?? '0',
             ];
+        } elseif ($scope === 'email') {
+            $pairs = [
+                'smtp_enabled' => isset($_POST['smtp_enabled']) ? '1' : '0',
+                'smtp_host' => trim($_POST['smtp_host'] ?? ''),
+                'smtp_port' => trim($_POST['smtp_port'] ?? '587'),
+                'smtp_user' => trim($_POST['smtp_user'] ?? ''),
+                'smtp_pass' => trim($_POST['smtp_pass'] ?? ''),
+                'smtp_secure' => in_array(strtolower($_POST['smtp_secure'] ?? 'tls'), ['tls','ssl','none'], true) ? strtolower($_POST['smtp_secure']) : 'tls',
+                'smtp_from_email' => trim($_POST['smtp_from_email'] ?? ''),
+                'smtp_from_name' => trim($_POST['smtp_from_name'] ?? ''),
+                'email_order_subject' => trim($_POST['email_order_subject'] ?? 'Your order {{order_id}} at {{store_name}}'),
+                'email_order_template' => (string)($_POST['email_order_template'] ?? ''),
+            ];
         }
         foreach ($pairs as $k=>$v){
             $stmt = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
@@ -53,7 +67,7 @@ class AdminSettingsController extends Controller
         if (function_exists('apcu_delete')) { @apcu_delete('settings'); }
         $_SESSION['settings_flash'] = 'Settings saved successfully.';
         $tab = $scope;
-        if (!in_array($tab, ['general','checkout','shipping'], true)) { $tab = 'general'; }
+        if (!in_array($tab, ['general','checkout','shipping','email'], true)) { $tab = 'general'; }
         $this->redirect('/admin/settings?tab=' . $tab);
     }
 

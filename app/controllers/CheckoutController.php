@@ -149,6 +149,45 @@ class CheckoutController extends Controller
                     ->execute([$orderId,$name,$phone,$region,$province,$city,$barangay,$street,$postal]);
             }
             $pdo->commit();
+            // Send order email (best-effort)
+            try {
+                // Load email settings
+                $s = $pdo->query("SELECT `key`,`value` FROM settings")->fetchAll();
+                $settings = []; foreach($s as $r){ $settings[$r['key']]=$r['value']; }
+                $subjectTpl = $settings['email_order_subject'] ?? 'Your order {{order_id}} at {{store_name}}';
+                $tmpl = $settings['email_order_template'] ?? '';
+                if ($tmpl === '') {
+                    $tmpl = '<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width:640px; margin:0 auto;">'
+                          .'<div style="padding:16px; background:#f8f9fa; border:1px solid #eee; border-bottom:0;"><h2 style="margin:0; color:#212529;">{{store_name}}</h2></div>'
+                          .'<div style="padding:16px; border:1px solid #eee;">'
+                          .'<p>Hi {{customer_name}},</p><p>Thanks for your order <strong>#{{order_id}}</strong>.</p>'
+                          .'{{order_items_html}}'
+                          .'<p><strong>Total:</strong> {{total}}</p>'
+                          .'</div></div>';
+                }
+                // Build items HTML
+                $itemsHtml = '<table style="width:100%; border-collapse:collapse">';
+                $itemsHtml .= '<tr><th style="text-align:left; padding:6px; border-bottom:1px solid #eee">Item</th><th style="text-align:right; padding:6px; border-bottom:1px solid #eee">Qty</th><th style="text-align:right; padding:6px; border-bottom:1px solid #eee">Line</th></tr>';
+                foreach ($items as [$p,$qty,$line,$unit]) {
+                    $itemsHtml .= '<tr>'
+                                 .'<td style="padding:6px;">'.htmlspecialchars($p['title']).'</td>'
+                                 .'<td style="padding:6px; text-align:right;">'.(int)$qty.'</td>'
+                                 .'<td style="padding:6px; text-align:right;">'.number_format((float)$line,2).'</td>'
+                                 .'</tr>';
+                }
+                $itemsHtml .= '</table>';
+                $vars = [
+                    'store_name' => $settings['store_name'] ?? 'QuickCart',
+                    'customer_name' => $name ?: 'Customer',
+                    'order_id' => (string)$orderId,
+                    'total' => number_format((float)$total, 2),
+                    'order_items_html' => $itemsHtml,
+                ];
+                $subject = \App\Core\Mailer::renderTemplate($subjectTpl, $vars);
+                $body = \App\Core\Mailer::renderTemplate($tmpl, $vars);
+                \App\Core\Mailer::send($email, $subject, $body);
+            } catch (\Throwable $e) { /* ignore mail errors */ }
+
             // Only clear cart after successful order placement
             $_SESSION['cart'] = [];
             $_SESSION['checkout_success'] = 'Order placed successfully!';

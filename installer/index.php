@@ -15,7 +15,18 @@ if (file_exists($configPath)) {
     if (!extension_loaded('pdo_mysql')) { throw new RuntimeException('PHP PDO MySQL driver (pdo_mysql) is not enabled.'); }
 
     // Attempt a quick connection test and ensure schema exists
-    $pdo = new PDO('mysql:host='.$dbc['host'].';dbname='.$dbc['name'].';charset=utf8mb4', $dbc['user'], (string)($dbc['pass'] ?? ''), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+    try {
+      $pdo = new PDO('mysql:host='.$dbc['host'].';dbname='.$dbc['name'].';charset=utf8mb4', $dbc['user'], (string)($dbc['pass'] ?? ''), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+    } catch (Throwable $eConn) {
+      $msg = $eConn->getMessage();
+      if (strpos($msg,'Unknown database')!==false || strpos($msg,'1049')!==false) {
+        // Create DB if it does not exist
+        $pdoTmp = new PDO('mysql:host='.$dbc['host'].';charset=utf8mb4', $dbc['user'], (string)($dbc['pass'] ?? ''), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+        $dbName = str_replace('`','``', (string)$dbc['name']);
+        $pdoTmp->exec('CREATE DATABASE IF NOT EXISTS `'.$dbName.'` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci');
+        $pdo = new PDO('mysql:host='.$dbc['host'].';dbname='.$dbc['name'].';charset=utf8mb4', $dbc['user'], (string)($dbc['pass'] ?? ''), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+      } else { throw $eConn; }
+    }
     $hasUsers = $pdo->query("SHOW TABLES LIKE 'users'")->fetch();
     if ($hasUsers) { echo '<meta http-equiv="refresh" content="0;url=/" />Installed'; exit; }
     // Schema not present yet; continue to installer step 3
@@ -43,10 +54,31 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
   if ($step===3){
     $db = $_SESSION['db'] ?? null; if(!$db){ header('Location:?step=1'); exit; }
     try {
-      $pdo = new PDO('mysql:host='.$db['host'].';dbname='.$db['name'].';charset=utf8mb4', $db['user'], $db['pass'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+      // Connect to DB; create database if it does not exist
+      try {
+        $pdo = new PDO('mysql:host='.$db['host'].';dbname='.$db['name'].';charset=utf8mb4', $db['user'], $db['pass'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+      } catch (Throwable $eConn) {
+        $msg = $eConn->getMessage();
+        if (strpos($msg,'Unknown database')!==false || strpos($msg,'1049')!==false) {
+          $pdoTmp = new PDO('mysql:host='.$db['host'].';charset=utf8mb4', $db['user'], $db['pass'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+          $dbName = str_replace('`','``', (string)$db['name']);
+          $pdoTmp->exec('CREATE DATABASE IF NOT EXISTS `'.$dbName.'` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci');
+          $pdo = new PDO('mysql:host='.$db['host'].';dbname='.$db['name'].';charset=utf8mb4', $db['user'], $db['pass'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+        } else { throw $eConn; }
+      }
       // Create schema
       $schema = file_get_contents(__DIR__.'/schema.sql');
       $pdo->exec($schema);
+      // Create performance indexes (ignore if they already exist)
+      $indexes = [
+        "CREATE INDEX idx_products_status_created ON products (status, created_at)",
+        "CREATE INDEX idx_products_slug ON products (slug)",
+        "CREATE INDEX idx_orders_created ON orders (created_at)",
+        "CREATE INDEX idx_orders_email ON orders (email)",
+        "CREATE INDEX idx_product_images_pid_order ON product_images (product_id, sort_order)",
+        "CREATE INDEX idx_collections_slug ON collections (slug)",
+      ];
+      foreach ($indexes as $ix) { try { $pdo->exec($ix); } catch (Throwable $e) { /* ignore if exists */ } }
       // Seed admin and products
       $name = trim($_POST['admin_name']); $email = trim($_POST['admin_email']); $pass = password_hash($_POST['admin_pass'], PASSWORD_DEFAULT);
       $pdo->prepare('INSERT INTO users (name,email,password_hash,created_at) VALUES (?,?,?,NOW())')->execute([$name,$email,$pass]);
