@@ -7,6 +7,8 @@ class AdminCustomersController extends Controller
     public function index(): void
     {
         $pdo = DB::pdo();
+        // Ensure customer_profiles exists (avoid 500s on older databases)
+        try { $pdo->exec('CREATE TABLE IF NOT EXISTS customer_profiles (email VARCHAR(191) NOT NULL PRIMARY KEY, name VARCHAR(191) NULL, phone VARCHAR(64) NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'); } catch (\Throwable $e) {}
         $q = trim((string)($_GET['q'] ?? ''));
         $params = [];
         $where = "WHERE o.email IS NOT NULL AND o.email <> ''";
@@ -45,6 +47,8 @@ class AdminCustomersController extends Controller
         $email = trim((string)($_GET['email'] ?? ''));
         if ($email==='') { $this->redirect('/admin/customers'); }
         $pdo = DB::pdo();
+        // Ensure customer_profiles exists before queries
+        try { $pdo->exec('CREATE TABLE IF NOT EXISTS customer_profiles (email VARCHAR(191) NOT NULL PRIMARY KEY, name VARCHAR(191) NULL, phone VARCHAR(64) NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'); } catch (\Throwable $e) {}
         $st = $pdo->prepare('SELECT COUNT(*) orders, COALESCE(SUM(total),0) spent, MAX(created_at) last_order FROM orders WHERE email=?');
         $st->execute([$email]); $stats = $st->fetch();
         $orders = $pdo->prepare('SELECT id,total,status,created_at FROM orders WHERE email=? ORDER BY id DESC');
@@ -63,6 +67,8 @@ class AdminCustomersController extends Controller
         $phone = trim((string)($_POST['phone'] ?? ''));
         $pdo = DB::pdo();
         try {
+            // Ensure table exists before upsert
+            try { $pdo->exec('CREATE TABLE IF NOT EXISTS customer_profiles (email VARCHAR(191) NOT NULL PRIMARY KEY, name VARCHAR(191) NULL, phone VARCHAR(64) NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'); } catch (\Throwable $e) {}
             $stmt = $pdo->prepare('INSERT INTO customer_profiles (email,name,phone,created_at,updated_at) VALUES (?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE name=VALUES(name), phone=VALUES(phone), updated_at=NOW()');
             $stmt->execute([$email,$name,$phone,date('Y-m-d H:i:s')]);
         } catch (\Throwable $e) {}
