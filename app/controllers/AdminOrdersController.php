@@ -47,9 +47,14 @@ class AdminOrdersController extends Controller
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/orders'); }
         $status = $_POST['status'] ?? 'pending';
         $oid = (int)$params['id'];
-        DB::pdo()->prepare('UPDATE orders SET status=? WHERE id=?')->execute([$status, $oid]);
+        $pdo = DB::pdo();
+        $pdo->prepare('UPDATE orders SET status=? WHERE id=?')->execute([$status, $oid]);
         // log event (best-effort)
-        try { DB::pdo()->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')->execute([$oid, Auth::userId(), 'status', 'Status changed to '. $status,]); } catch (\Throwable $e) {}
+        try {
+            $this->ensureOrderEvents($pdo);
+            $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
+                ->execute([$oid, Auth::userId(), 'status', 'Status changed to '. $status]);
+        } catch (\Throwable $e) {}
         $this->redirect('/admin/orders/'.$params['id']);
     }
     public function export(): void
@@ -89,7 +94,9 @@ class AdminOrdersController extends Controller
             $st = DB::pdo()->prepare("UPDATE orders SET status=? WHERE id IN ($in)");
             $params = array_merge([$status], $ids); $st->execute($params);
             try {
-                $evt = DB::pdo()->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())');
+                $pdo = DB::pdo();
+                $this->ensureOrderEvents($pdo);
+                $evt = $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())');
                 foreach ($ids as $oid) { $evt->execute([$oid, Auth::userId(), 'status', 'Bulk status set to '.$status]); }
             } catch (\Throwable $e) {}
         }
@@ -202,6 +209,7 @@ class AdminOrdersController extends Controller
             // Mark completed
             $pdo->prepare('UPDATE orders SET status="completed" WHERE id=?')->execute([$oid]);
             try {
+                $this->ensureOrderEvents($pdo);
                 $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
                     ->execute([$oid, Auth::userId(), 'status', 'Marked as fulfilled']);
             } catch (\Throwable $e) {}
@@ -251,15 +259,16 @@ class AdminOrdersController extends Controller
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/orders'); }
         $oid = (int)$params['id'];
         // Simple refund: mark cancelled (placeholder)
-        DB::pdo()->prepare('UPDATE orders SET status="cancelled" WHERE id=?')->execute([$oid]);
-        try { DB::pdo()->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')->execute([$oid, Auth::userId(), 'refund', 'Order refunded (placeholder)']); } catch (\Throwable $e) {}
+        $pdo = DB::pdo();
+        $pdo->prepare('UPDATE orders SET status="cancelled" WHERE id=?')->execute([$oid]);
+        try { $this->ensureOrderEvents($pdo); $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')->execute([$oid, Auth::userId(), 'refund', 'Order refunded (placeholder)']); } catch (\Throwable $e) {}
         $this->redirect('/admin/orders/'.$oid);
     }
     public function resendEmail(array $params): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/orders'); }
         $oid = (int)$params['id'];
-        try { DB::pdo()->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')->execute([$oid, Auth::userId(), 'email', 'Order email re-sent (placeholder)']); } catch (\Throwable $e) {}
+        try { $pdo = DB::pdo(); $this->ensureOrderEvents($pdo); $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')->execute([$oid, Auth::userId(), 'email', 'Order email re-sent (placeholder)']); } catch (\Throwable $e) {}
         $this->redirect('/admin/orders/'.$oid);
     }
     public function invoice(array $params): void
@@ -323,7 +332,7 @@ class AdminOrdersController extends Controller
                 } catch (\Throwable $e) {}
             }
             // Event
-            try { $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
+            try { $this->ensureOrderEvents($pdo); $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
                     ->execute([$oid, Auth::userId(), 'create', 'Manual order created']); } catch (\Throwable $e) {}
             $pdo->commit();
             $this->redirect('/admin/orders/'.$oid);
@@ -333,6 +342,24 @@ class AdminOrdersController extends Controller
             $this->redirect('/admin/orders/create');
         }
     }
+
+    // Ensure order_events table exists (used by various actions)
+    private function ensureOrderEvents(\PDO $pdo): void
+    {
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS order_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NOT NULL,
+                user_id INT NULL,
+                type VARCHAR(64) NOT NULL,
+                message VARCHAR(255) NOT NULL,
+                created_at DATETIME NOT NULL,
+                CONSTRAINT fk_order_events_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                CONSTRAINT fk_order_events_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } catch (\Throwable $e) { /* ignore */ }
+    }
+
 
 
 }
