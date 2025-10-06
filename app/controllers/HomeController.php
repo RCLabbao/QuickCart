@@ -7,21 +7,29 @@ class HomeController extends Controller
     public function index(): void
     {
         $pdo = DB::pdo();
+        $hidden = \App\Core\hidden_collection_ids();
+        $exSql = '';
+        $exParams = [];
+        if (!empty($hidden)) { $exSql = ' AND (p.collection_id IS NULL OR p.collection_id NOT IN ('.implode(',', array_fill(0, count($hidden), '?')).'))'; $exParams = $hidden; }
         // On Sale now (fallback if sale columns are missing)
         try {
-            $sale = $pdo->query('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active" AND sale_price IS NOT NULL AND sale_price < price AND (sale_start IS NULL OR sale_start <= NOW()) AND (sale_end IS NULL OR sale_end >= NOW()) ORDER BY created_at DESC LIMIT 12')->fetchAll();
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active" AND sale_price IS NOT NULL AND sale_price < price AND (sale_start IS NULL OR sale_start <= NOW()) AND (sale_end IS NULL OR sale_end >= NOW())' . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st->execute($exParams); $sale = $st->fetchAll();
         } catch (\Throwable $e) {
-            $sale = $pdo->query('SELECT p.id,p.title,p.slug,p.price,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active" ORDER BY created_at DESC LIMIT 12')->fetchAll();
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st->execute($exParams); $sale = $st->fetchAll();
         }
         // New Arrivals
         try {
-            $new = $pdo->query('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active" ORDER BY created_at DESC LIMIT 12')->fetchAll();
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st->execute($exParams); $new = $st->fetchAll();
         } catch (\Throwable $e) {
-            $new = $pdo->query('SELECT p.id,p.title,p.slug,p.price,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active" ORDER BY created_at DESC LIMIT 12')->fetchAll();
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st->execute($exParams); $new = $st->fetchAll();
         }
         // Best Sellers (last 30 days)
         try {
-            $best = $pdo->query('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
                                  FROM products p
                                  JOIN (
                                    SELECT i.product_id, SUM(i.quantity) qty
@@ -31,9 +39,10 @@ class HomeController extends Controller
                                    ORDER BY qty DESC
                                    LIMIT 12
                                  ) t ON t.product_id = p.id
-                                 WHERE p.status="active"')->fetchAll();
+                                 WHERE p.status="active"' . $exSql);
+            $st->execute($exParams); $best = $st->fetchAll();
         } catch (\Throwable $e) {
-            $best = $pdo->query('SELECT p.id,p.title,p.slug,p.price,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,COALESCE(p.stock,0) AS stock,p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
                                  FROM products p
                                  JOIN (
                                    SELECT i.product_id, SUM(i.quantity) qty
@@ -43,7 +52,8 @@ class HomeController extends Controller
                                    ORDER BY qty DESC
                                    LIMIT 12
                                  ) t ON t.product_id = p.id
-                                 WHERE p.status="active"')->fetchAll();
+                                 WHERE p.status="active"' . $exSql);
+            $st->execute($exParams); $best = $st->fetchAll();
         }
         // Featured collections with images
         $feat = $pdo->query('SELECT id,title,slug,image_url FROM collections WHERE image_url IS NOT NULL AND image_url <> "" ORDER BY id DESC LIMIT 8')->fetchAll();

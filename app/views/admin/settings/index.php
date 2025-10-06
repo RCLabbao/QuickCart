@@ -15,6 +15,7 @@
   <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='checkout'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-checkout" type="button" role="tab">Checkout</button></li>
   <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='shipping'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-shipping" type="button" role="tab">Shipping</button></li>
   <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='email'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-email" type="button" role="tab">Email</button></li>
+  <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='catalog'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-catalog" type="button" role="tab">Catalog</button></li>
 </ul>
 <div class="tab-content mt-3">
 <div class="tab-pane fade <?= $activeTab==='general'?'show active':'' ?>" id="tab-general" role="tabpanel">
@@ -265,6 +266,22 @@
     </div>
   </form>
 </div>
+
+<div class="tab-pane fade <?= $activeTab==='catalog'?'show active':'' ?>" id="tab-catalog" role="tabpanel">
+  <form method="post" action="/admin/settings" class="row g-3">
+    <?= csrf_field() ?>
+    <input type="hidden" name="scope" value="catalog">
+    <div class="col-12">
+      <label class="form-label">Hidden Collections (IDs or slugs)</label>
+      <textarea class="form-control" name="hidden_collections" rows="4" placeholder="e.g. 3, clearance, archived&#10;One per line or comma-separated"><?php echo htmlspecialchars($settings['hidden_collections'] ?? ''); ?></textarea>
+      <small class="text-muted">Collections listed here (and all products inside them) will be hidden sitewide: not listed, not searchable, and visiting their URLs returns 404.</small>
+    </div>
+    <div class="col-12">
+      <button class="btn btn-primary">Save Catalog Settings</button>
+    </div>
+  </form>
+</div>
+
 
 </div>
 </div>

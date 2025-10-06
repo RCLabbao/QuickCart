@@ -259,6 +259,8 @@ class AdminMaintenanceController extends Controller
         }
         $this->redirect('/admin/maintenance?tab=actions');
 
+    }
+
 
 
     public function wipeDemo(): void

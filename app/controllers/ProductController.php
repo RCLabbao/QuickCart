@@ -36,7 +36,11 @@ class ProductController extends Controller
         $stmt = $pdo->prepare('SELECT * FROM products WHERE slug = ? AND status = "active"');
         $stmt->execute([$params['slug']]);
         $product = $stmt->fetch();
-        if (!$product) { http_response_code(404); $this->view('errors/404'); return; }
+        // Hide if product belongs to a hidden collection
+        $hidden = \App\Core\hidden_collection_ids();
+        if (!$product || (!empty($hidden) && !empty($product['collection_id']) && in_array((int)$product['collection_id'], $hidden, true))) {
+            http_response_code(404); $this->view('errors/404'); return;
+        }
         $images = $pdo->prepare('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order');
         $images->execute([$product['id']]);
         $gallery = $images->fetchAll();
@@ -51,9 +55,14 @@ class ProductController extends Controller
         $pdo = DB::pdo();
         if ($q === '') { $products = []; $count = 0; }
         else {
-            $stmt = $pdo->prepare('SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?) ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset);
             $like = "%$q%";
-            $stmt->execute([$like,$like]);
+            $hidden = \App\Core\hidden_collection_ids();
+            $exSql = '';
+            $exParams = [];
+            if (!empty($hidden)) { $exSql = ' AND (p.collection_id IS NULL OR p.collection_id NOT IN ('.implode(',', array_fill(0, count($hidden), '?')).'))'; $exParams = $hidden; }
+            $sql = 'SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute(array_merge([$like,$like], $exParams));
             $products = $stmt->fetchAll();
             $count = (int)$pdo->query('SELECT FOUND_ROWS()')->fetchColumn();
         }
@@ -72,18 +81,22 @@ class ProductController extends Controller
         }
 
         $like = "%$q%";
+        $hidden = \App\Core\hidden_collection_ids();
+        $exSql = '';
+        $exParams = [];
+        if (!empty($hidden)) { $exSql = ' AND (p.collection_id IS NULL OR p.collection_id NOT IN ('.implode(',', array_fill(0, count($hidden), '?')).'))'; $exParams = $hidden; }
         try {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC LIMIT ' . $limit);
-            $stmt->execute([$like, $like]);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt->execute(array_merge([$like, $like], $exParams));
         } catch (\Throwable $e) {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC LIMIT ' . $limit);
-            $stmt->execute([$like, $like]);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt->execute(array_merge([$like, $like], $exParams));
         }
         $products = $stmt->fetchAll();
 
         // Get total count for the query
-        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)');
-        $countStmt->execute([$like, $like]);
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql);
+        $countStmt->execute(array_merge([$like, $like], $exParams));
         $count = (int)$countStmt->fetchColumn();
 
         $this->json(['products' => $products, 'count' => $count, 'query' => $q]);
@@ -111,6 +124,11 @@ class ProductController extends Controller
         if (isset($q['min_price']) && $q['min_price'] !== '') { $where .= ' AND p.price >= ?'; $params[] = (float)$q['min_price']; }
         if (isset($q['max_price']) && $q['max_price'] !== '') { $where .= ' AND p.price <= ?'; $params[] = (float)$q['max_price']; }
         if (isset($q['collection_id']) && $q['collection_id'] !== '') { $where .= ' AND p.collection_id = ?'; $params[] = (int)$q['collection_id']; }
+        $hidden = \App\Core\hidden_collection_ids();
+        if (!empty($hidden)) {
+            $where .= ' AND (p.collection_id IS NULL OR p.collection_id NOT IN ('.implode(',', array_fill(0, count($hidden), '?')).'))';
+            foreach ($hidden as $hid) { $params[] = (int)$hid; }
+        }
         return [$where, $params];
     }
 

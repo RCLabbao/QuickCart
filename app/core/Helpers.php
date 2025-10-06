@@ -2,7 +2,7 @@
 namespace App\Core;
 
 function asset(string $path): string { return '/assets/' . ltrim($path, '/'); }
-function e(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+function e(?string $s): string { return htmlspecialchars((string)($s ?? ''), ENT_QUOTES, 'UTF-8'); }
 function price(float $p): string { return '₱' . number_format($p, 2); }
 function csrf_field(): string { return '<input type="hidden" name="_token" value="' . CSRF::token() . '">'; }
 
@@ -36,6 +36,31 @@ function settings(): array {
 }
 function setting(string $key, $default = '') {
     $s = settings(); return $s[$key] ?? $default;
+}
+
+// List of hidden collection IDs from settings (comma/newline-separated list of IDs or slugs)
+function hidden_collection_ids(): array {
+    static $cache = null; if ($cache !== null) return $cache;
+    $raw = (string)setting('hidden_collections','');
+    if ($raw === '') { return $cache = []; }
+    $parts = preg_split('/[\s,]+/u', $raw, -1, PREG_SPLIT_NO_EMPTY);
+    $ids = []; $slugs = [];
+    foreach ($parts as $p) {
+        $p = trim($p);
+        if ($p === '') continue;
+        if (ctype_digit($p)) { $ids[] = (int)$p; }
+        else { $slugs[] = $p; }
+    }
+    if ($slugs) {
+        try {
+            $in = implode(',', array_fill(0, count($slugs), '?'));
+            $st = DB::pdo()->prepare("SELECT id FROM collections WHERE slug IN ($in)");
+            $st->execute($slugs);
+            foreach ($st->fetchAll(\PDO::FETCH_COLUMN) as $cid) { $ids[] = (int)$cid; }
+        } catch (\Throwable $e) {}
+    }
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    return $cache = $ids;
 }
 
 function thumb_url(?string $url): string {

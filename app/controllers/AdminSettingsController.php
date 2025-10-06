@@ -62,6 +62,10 @@ class AdminSettingsController extends Controller
                 'email_order_subject' => trim($_POST['email_order_subject'] ?? 'Your order {{order_id}} at {{store_name}}'),
                 'email_order_template' => (string)($_POST['email_order_template'] ?? ''),
             ];
+        } elseif ($scope === 'catalog') {
+            $pairs = [
+                'hidden_collections' => trim((string)($_POST['hidden_collections'] ?? '')),
+            ];
         }
         foreach ($pairs as $k=>$v){
             $stmt = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
@@ -70,7 +74,7 @@ class AdminSettingsController extends Controller
         if (function_exists('apcu_delete')) { @apcu_delete('settings'); }
         $_SESSION['settings_flash'] = 'Settings saved successfully.';
         $tab = $scope;
-        if (!in_array($tab, ['general','checkout','shipping','email'], true)) { $tab = 'general'; }
+        if (!in_array($tab, ['general','checkout','shipping','email','catalog'], true)) { $tab = 'general'; }
         $this->redirect('/admin/settings?tab=' . $tab);
     }
 
