@@ -288,18 +288,14 @@ class AdminMaintenanceController extends Controller
                 try { $pdo->prepare("DELETE FROM product_stock_events WHERE product_id IN ($in)")->execute($pids); } catch (\Throwable $e) {}
                 $pdo->prepare("DELETE FROM products WHERE id IN ($in)")->execute($pids);
             }
-            $_SESSION['success'] = 'Demo data removed.';
-        } catch (\Throwable $e) {
-            $_SESSION['error'] = 'Failed to wipe demo data: '.$e->getMessage();
-        }
-        $this->redirect('/admin/maintenance?tab=actions');
+                $_SESSION['success'] = 'Demo data removed.';
+            } catch (\Throwable $e) {
+                $_SESSION['error'] = 'Failed to wipe demo data: '.$e->getMessage();
+            }
+                $this->redirect('/admin/maintenance?tab=actions');
+            }
 
-
-
-
-
-
-    private function ensureColumn(\PDO $pdo, string $table, string $column, string $alterSql): void
+private function ensureColumn(\PDO $pdo, string $table, string $column, string $alterSql): void
     {
         $st = $pdo->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
         $st->execute([$table,$column]);
