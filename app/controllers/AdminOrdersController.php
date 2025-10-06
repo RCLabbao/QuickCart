@@ -10,11 +10,20 @@ class AdminOrdersController extends Controller
         if (!empty($_GET['status'])) { $where[]='status=?'; $params[]=$_GET['status']; }
         if (!empty($_GET['from'])) { $where[]='created_at >= ?'; $params[]=$_GET['from'].' 00:00:00'; }
         if (!empty($_GET['to'])) { $where[]='created_at <= ?'; $params[]=$_GET['to'].' 23:59:59'; }
-        $sql = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), cp.name, \'\') AS customer_name, COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS phone FROM orders o LEFT JOIN customer_profiles cp ON cp.email = o.email';
+        $sql = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS customer_name, COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS phone FROM orders o';
         if ($where) { $sql .= ' WHERE '.implode(' AND ',$where); }
         $sql .= ' ORDER BY o.id DESC LIMIT 200';
-        $st = $pdo->prepare($sql); $st->execute($params);
-        $rows = $st->fetchAll();
+        try {
+            $st = $pdo->prepare($sql); $st->execute($params);
+            $rows = $st->fetchAll();
+        } catch (\Throwable $e) {
+            // Fallback if addresses table is missing or query fails
+            $sql2 = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, \'\' AS customer_name, \'\' AS phone FROM orders o';
+            if ($where) { $sql2 .= ' WHERE '.implode(' AND ', $where); }
+            $sql2 .= ' ORDER BY o.id DESC LIMIT 200';
+            $st = $pdo->prepare($sql2); $st->execute($params);
+            $rows = $st->fetchAll();
+        }
 
         // Get overall statistics (not filtered)
         $stats = [
@@ -128,9 +137,15 @@ class AdminOrdersController extends Controller
         $startStr = $start->format('Y-m-d H:i:s');
         $endStr = $end->format('Y-m-d H:i:s');
 
-        $st = $pdo->prepare('SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), cp.name, \'\') AS customer_name, COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS phone FROM orders o LEFT JOIN customer_profiles cp ON cp.email = o.email WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC');
-        $st->execute([$startStr, $endStr]);
-        $rows = $st->fetchAll();
+        try {
+            $st = $pdo->prepare('SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS customer_name, COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS phone FROM orders o WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC');
+            $st->execute([$startStr, $endStr]);
+            $rows = $st->fetchAll();
+        } catch (\Throwable $e) {
+            $sql2 = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, '''' AS customer_name, '''' AS phone FROM orders o WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC';
+            $st = $pdo->prepare($sql2); $st->execute([$startStr, $endStr]);
+            $rows = $st->fetchAll();
+        }
 
         $st2 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ?');
         $st2->execute([$startStr, $endStr]);

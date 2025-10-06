@@ -26,8 +26,15 @@ class AdminCustomersController extends Controller
                 GROUP BY o.email
                 ORDER BY spent DESC
                 LIMIT 200";
-        $st = $pdo->prepare($sql); $st->execute($params);
-        $rows = $st->fetchAll();
+        try {
+            $st = $pdo->prepare($sql); $st->execute($params);
+            $rows = $st->fetchAll();
+        } catch (\Throwable $e) {
+            // Fallback without addresses subqueries
+            $sql2 = "SELECT o.email, COALESCE(MAX(cp.name),'') AS name, COUNT(*) AS orders, COALESCE(SUM(o.total),0) AS spent FROM orders o LEFT JOIN customer_profiles cp ON cp.email=o.email $where GROUP BY o.email ORDER BY spent DESC LIMIT 200";
+            $st = $pdo->prepare($sql2); $st->execute($params);
+            $rows = $st->fetchAll();
+        }
         $this->adminView('admin/customers/index', ['title' => 'Customers', 'customers'=>$rows, 'q'=>$q]);
     }
     public function export(): void
