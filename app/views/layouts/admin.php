@@ -73,11 +73,15 @@
                 <i class="bi bi-speedometer2"></i>Dashboard
               </a>
             </li>
+            <?php if (\App\Core\Auth::hasPermission('products.read') || \App\Core\Auth::hasPermission('products.write')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/products') === 0 ? 'active' : '' ?>" href="/admin/products">
                 <i class="bi bi-box"></i>Products
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('orders.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/orders') === 0 ? 'active' : '' ?>" href="/admin/orders">
                 <i class="bi bi-receipt"></i>Orders
@@ -97,51 +101,79 @@
               </ul>
               <?php endif; ?>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('users.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/customers') === 0 ? 'active' : '' ?>" href="/admin/customers">
                 <i class="bi bi-people"></i>Customers
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('collections.write')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/collections') === 0 ? 'active' : '' ?>" href="/admin/collections">
                 <i class="bi bi-grid"></i>Collections
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('settings.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/coupons') === 0 ? 'active' : '' ?>" href="/admin/coupons">
                 <i class="bi bi-tag"></i>Coupons
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('orders.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/reports') === 0 ? 'active' : '' ?>" href="/admin/reports">
                 <i class="bi bi-graph-up"></i>Reports
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('products.write')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/sync') === 0 ? 'active' : '' ?>" href="/admin/sync">
                 <i class="bi bi-arrow-repeat"></i>Sync
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('users.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/users') === 0 ? 'active' : '' ?>" href="/admin/users">
                 <i class="bi bi-person-gear"></i>Admin Users
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('roles.write')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/roles') === 0 ? 'active' : '' ?>" href="/admin/roles">
                 <i class="bi bi-shield-check"></i>Roles
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('settings.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/settings') === 0 ? 'active' : '' ?>" href="/admin/settings">
                 <i class="bi bi-gear"></i>Settings
               </a>
             </li>
+            <?php endif; ?>
+
+            <?php if (\App\Core\Auth::hasPermission('settings.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/maintenance') === 0 ? 'active' : '' ?>" href="/admin/maintenance">
                 <i class="bi bi-tools"></i>Maintenance
               </a>
             </li>
+            <?php endif; ?>
           </ul>
 
           <hr>

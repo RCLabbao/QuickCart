@@ -139,7 +139,7 @@ $router->get('/admin/logout', 'AuthController@logout');
 $router->get('/admin', 'AdminController@dashboard', ['auth' => 'admin']);
 
 // Admin Settings
-$router->get('/admin/settings', 'AdminSettingsController@index', ['perm' => 'settings.write']);
+$router->get('/admin/settings', 'AdminSettingsController@index', ['perm' => 'settings.read']);
 $router->post('/admin/settings', 'AdminSettingsController@update', ['perm' => 'settings.write']);
 $router->post('/admin/settings/fees', 'AdminSettingsController@addCityFee', ['perm' => 'settings.write']);
 $router->post('/admin/settings/fees/(?P<id>\d+)/delete', 'AdminSettingsController@deleteCityFee', ['perm' => 'settings.write']);
