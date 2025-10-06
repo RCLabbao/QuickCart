@@ -229,7 +229,7 @@ class AdminSyncController extends Controller
                     while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($slugTitle))->fetchColumn() > 0) {
                         $slugTitle = $baseSlug.'-'.$suffix++; if ($suffix>1000) break; // safety
                     }
-                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,'"active"',?,?,NOW())')
+                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,\'active\',?, ?, NOW())')
                         ->execute([$title,$slugTitle,$fsc,$price,$stock,$collectionId]);
                     $created++;
                 } else {

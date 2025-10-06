@@ -72,10 +72,7 @@
           </div>
           <div class="mt-3 d-flex gap-2">
             <button class="btn btn-primary" type="submit"><i class="bi bi-save me-2"></i>Save Settings</button>
-            <form method="post" action="/admin/sync/test" class="d-inline">
-              <?= csrf_field() ?>
-              <button class="btn btn-outline-secondary" type="submit" <?= !$capabilities['sqlsrv_available'] ? 'disabled' : '' ?>><i class="bi bi-plug me-2"></i>Test Connection</button>
-            </form>
+            <button class="btn btn-outline-secondary" type="submit" formaction="/admin/sync/test" formmethod="post" <?= !$capabilities['sqlsrv_available'] ? 'disabled' : '' ?>><i class="bi bi-plug me-2"></i>Test Connection</button>
           </div>
           <?php if (!$capabilities['sqlsrv_available']): ?>
             <div class="alert alert-warning mt-3"><i class="bi bi-exclamation-triangle me-2"></i>SQL Server PHP driver (pdo_sqlsrv/sqlsrv) is not available on this server. Use CSV import below or install the driver.</div>

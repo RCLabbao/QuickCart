@@ -76,7 +76,6 @@ class AdminMaintenanceController extends Controller
             $hasFsc = $this->columnExists($pdo, 'products', 'fsc');
             if ($hasSku && !$hasFsc) {
                 $pdo->exec("ALTER TABLE products CHANGE COLUMN sku fsc VARCHAR(64) NULL");
-                // Refresh unique index name to be consistent (best-effort)
                 try { $pdo->exec('ALTER TABLE products DROP INDEX idx_products_sku'); } catch (\Throwable $e) { /* ignore */ }
                 try { $pdo->exec('ALTER TABLE products ADD UNIQUE INDEX idx_products_fsc (fsc)'); } catch (\Throwable $e) { /* ignore */ }
             }
@@ -106,7 +105,8 @@ class AdminMaintenanceController extends Controller
         $this->tryExec($pdo, 'CREATE INDEX idx_orders_email ON orders (email)');
         $this->tryExec($pdo, 'CREATE INDEX idx_collections_slug ON collections (slug)');
 
-        echo '<div style="padding:20px;font-family:system-ui">Optimization complete. <a href="/admin">Back to admin</a></div>';
+        $_SESSION['success'] = 'Optimization complete.';
+        $this->redirect('/admin/maintenance?tab=actions');
     }
 
     public function seedDemo(): void
@@ -245,27 +245,27 @@ class AdminMaintenanceController extends Controller
             'coupons','delivery_fees',
             'customer_profiles'
         ];
-        $pdo->beginTransaction();
+        // TRUNCATE causes implicit commits; do not use transactions here
         try {
+            try { $pdo->exec('SET FOREIGN_KEY_CHECKS=0'); } catch (\Throwable $e) {}
             foreach ($tables as $t) {
-                try { $pdo->exec('SET FOREIGN_KEY_CHECKS=0'); } catch (\Throwable $e) {}
                 try { $pdo->exec('TRUNCATE TABLE `'.$t.'`'); } catch (\Throwable $e) {}
-                try { $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); } catch (\Throwable $e) {}
             }
-            $pdo->commit();
-            echo '<div style="padding:20px;font-family:system-ui">All catalog and order data wiped. <a href="/admin">Back to admin</a></div>';
+            try { $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); } catch (\Throwable $e) {}
+            $_SESSION['success'] = 'All catalog and order data wiped.';
         } catch (\Throwable $e) {
-            $pdo->rollBack();
-            echo '<div style="padding:20px;font-family:system-ui">Failed to wipe data: '.htmlspecialchars($e->getMessage()).' <a href="/admin">Back to admin</a></div>';
+            try { $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); } catch (\Throwable $e2) {}
+            $_SESSION['error'] = 'Failed to wipe data: '.$e->getMessage();
         }
+        $this->redirect('/admin/maintenance?tab=actions');
 
-    }
+
 
     public function wipeDemo(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
         $pdo = DB::pdo();
-        $pdo->beginTransaction();
+        // No transaction needed here
         try {
             // Delete demo orders (seeded via seedDemo)
             try {
@@ -286,15 +286,14 @@ class AdminMaintenanceController extends Controller
                 try { $pdo->prepare("DELETE FROM product_stock_events WHERE product_id IN ($in)")->execute($pids); } catch (\Throwable $e) {}
                 $pdo->prepare("DELETE FROM products WHERE id IN ($in)")->execute($pids);
             }
-            $pdo->commit();
-            echo '<div style="padding:20px;font-family:system-ui">Demo data removed. <a href="/admin">Back to admin</a></div>';
+            $_SESSION['success'] = 'Demo data removed.';
         } catch (\Throwable $e) {
-            $pdo->rollBack();
-            echo '<div style="padding:20px;font-family:system-ui">Failed to wipe demo data: '.htmlspecialchars($e->getMessage()).' <a href="/admin">Back to admin</a></div>';
+            $_SESSION['error'] = 'Failed to wipe demo data: '.$e->getMessage();
         }
+        $this->redirect('/admin/maintenance?tab=actions');
 
 
-    }
+
 
 
 

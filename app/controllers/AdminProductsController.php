@@ -319,6 +319,7 @@ class AdminProductsController extends Controller
         if ($action === 'activate' || $action === 'draft') {
             $st = DB::pdo()->prepare("UPDATE products SET status=? WHERE id IN ($in)");
             $params = array_merge([$action], $ids); $st->execute($params);
+            $_SESSION['success'] = 'Updated '.count($ids).' product(s).';
         } elseif ($action === 'delete') {
             $pdo = DB::pdo();
             // Find products that are referenced by order_items and skip them (preserve order history)
@@ -345,6 +346,9 @@ class AdminProductsController extends Controller
             $cid = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
             $st = DB::pdo()->prepare("UPDATE products SET collection_id=? WHERE id IN ($in)");
             $params = array_merge([$cid], $ids); $st->execute($params);
+            $_SESSION['success'] = 'Assigned '.count($ids).' product(s) to collection.';
+        } else {
+            $_SESSION['error'] = 'Unknown bulk action.';
         }
         $this->redirect('/admin/products');
     }
