@@ -120,8 +120,8 @@
                 <tbody>
                   <?php foreach (array_slice($table_sizes, 0, 8) as $table): ?>
                     <tr>
-                      <td><?= htmlspecialchars($table['table_name']) ?></td>
-                      <td class="text-end"><span class="badge bg-light text-dark"><?= $table['size_mb'] ?></span></td>
+                      <td><?= htmlspecialchars($table['table_name'] ?? ($table['TABLE_NAME'] ?? ($table[0] ?? ''))) ?></td>
+                      <td class="text-end"><span class="badge bg-light text-dark"><?= htmlspecialchars((string)($table['size_mb'] ?? ($table['SIZE_MB'] ?? ($table[1] ?? '')))) ?></span></td>
                     </tr>
                   <?php endforeach; ?>
                 </tbody>

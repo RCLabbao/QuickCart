@@ -24,7 +24,7 @@ class AdminMaintenanceController extends Controller
                 FROM information_schema.tables
                 WHERE table_schema = DATABASE()
                 ORDER BY (data_length + index_length) DESC
-            ")->fetchAll();
+            ")->fetchAll(\PDO::FETCH_ASSOC);
         } catch (\Throwable $e) {
             $tableSizes = [];
         }

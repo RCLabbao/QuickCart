@@ -142,7 +142,7 @@ class AdminOrdersController extends Controller
             $st->execute([$startStr, $endStr]);
             $rows = $st->fetchAll();
         } catch (\Throwable $e) {
-            $sql2 = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, '''' AS customer_name, '''' AS phone FROM orders o WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC';
+            $sql2 = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, \'\' AS customer_name, \'\' AS phone FROM orders o WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC';
             $st = $pdo->prepare($sql2); $st->execute([$startStr, $endStr]);
             $rows = $st->fetchAll();
         }

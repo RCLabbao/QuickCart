@@ -217,8 +217,19 @@ class AdminSyncController extends Controller
                 $p = $pst->fetch();
                 if (!$p) {
                     if ($dryRun) { $created++; continue; }
-                    $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
-                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,"active",?,?,NOW())')
+                    // Build a safe, unique slug
+                    $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', (string)$title));
+                    $slugTitle = trim($slugTitle, '-');
+                    if ($slugTitle === '') {
+                        $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', (string)$fsc));
+                        $slugTitle = trim($slugTitle, '-');
+                    }
+                    if ($slugTitle === '') { $slugTitle = 'product-'.substr(md5((string)$fsc.microtime(true)),0,6); }
+                    $baseSlug = $slugTitle; $suffix = 1;
+                    while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($slugTitle))->fetchColumn() > 0) {
+                        $slugTitle = $baseSlug.'-'.$suffix++; if ($suffix>1000) break; // safety
+                    }
+                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,'"active"',?,?,NOW())')
                         ->execute([$title,$slugTitle,$fsc,$price,$stock,$collectionId]);
                     $created++;
                 } else {
