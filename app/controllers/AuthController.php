@@ -26,6 +26,7 @@ class AuthController extends Controller
 
         if (Auth::attempt($email, $password)) {
             unset($_SESSION['auth_throttle'][$key]);
+            $_SESSION['success'] = 'Login successful. Welcome back, '.(\App\Core\Auth::user()['name'] ?? 'Admin').'.';
             // Admin role goes to the dashboard; others go to their first allowed page
             if (\App\Core\Auth::checkRole('admin')) { $this->redirect('/admin'); return; }
             $target = $this->firstAllowedAdminPage();

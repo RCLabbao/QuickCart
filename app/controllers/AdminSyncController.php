@@ -158,10 +158,20 @@ class AdminSyncController extends Controller
                 }
             }
         } else {
-            // CSV path (default)
+            // CSV path (default) with delimiter auto-detection and BOM handling
             if (($h = fopen($tmp, 'r')) !== false) {
-                $header = fgetcsv($h);
+                $firstLine = fgets($h);
+                if ($firstLine === false) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
+                // Pick the most likely delimiter
+                $candidates = [",", "\t", ";", "|"];
+                $bestDelim = ","; $bestCount = -1;
+                foreach ($candidates as $d) { $cnt = substr_count($firstLine, $d); if ($cnt > $bestCount) { $bestCount = $cnt; $bestDelim = $d; } }
+                // Rewind and parse header with chosen delimiter
+                rewind($h);
+                $header = fgetcsv($h, 0, $bestDelim);
                 if (!$header) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
+                // Remove UTF-8 BOM if present on first cell
+                if (isset($header[0])) { $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$header[0]); }
                 // Normalize header keys (trim + lowercase) and map flexible names
                 $headerNorm = array_map(fn($v)=> strtolower(trim((string)$v)), $header);
                 $map = array_flip($headerNorm);
@@ -169,7 +179,7 @@ class AdminSyncController extends Controller
                     foreach ($keys as $k) { if (isset($map[$k])) { return $rowVals[$map[$k]] ?? ''; } }
                     return '';
                 };
-                while (($r = fgetcsv($h)) !== false) {
+                while (($r = fgetcsv($h, 0, $bestDelim)) !== false) {
                     $rows[] = [
                         'FSC' => $pick($r,$map,['fsc']),
                         'Description' => $pick($r,$map,['description','desc','product description','productdescription']),

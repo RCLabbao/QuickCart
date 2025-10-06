@@ -68,11 +68,13 @@
           </div>
 
           <ul class="nav flex-column">
+            <?php if (\App\Core\Auth::checkRole('admin')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin') === 0 && strpos($_SERVER['REQUEST_URI'], '/admin/') === false ? 'active' : '' ?>" href="/admin">
                 <i class="bi bi-speedometer2"></i>Dashboard
               </a>
             </li>
+            <?php endif; ?>
             <?php if (\App\Core\Auth::hasPermission('products.read') || \App\Core\Auth::hasPermission('products.write')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/products') === 0 ? 'active' : '' ?>" href="/admin/products">
@@ -111,7 +113,7 @@
             </li>
             <?php endif; ?>
 
-            <?php if (\App\Core\Auth::hasPermission('collections.write')): ?>
+            <?php if (\App\Core\Auth::hasPermission('collections.read') || \App\Core\Auth::hasPermission('collections.write')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/collections') === 0 ? 'active' : '' ?>" href="/admin/collections">
                 <i class="bi bi-grid"></i>Collections
@@ -119,7 +121,7 @@
             </li>
             <?php endif; ?>
 
-            <?php if (\App\Core\Auth::hasPermission('settings.read')): ?>
+            <?php if (\App\Core\Auth::hasPermission('coupons.read') || \App\Core\Auth::hasPermission('coupons.write')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/coupons') === 0 ? 'active' : '' ?>" href="/admin/coupons">
                 <i class="bi bi-tag"></i>Coupons
@@ -127,7 +129,7 @@
             </li>
             <?php endif; ?>
 
-            <?php if (\App\Core\Auth::hasPermission('orders.read')): ?>
+            <?php if (\App\Core\Auth::hasPermission('reports.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/reports') === 0 ? 'active' : '' ?>" href="/admin/reports">
                 <i class="bi bi-graph-up"></i>Reports
@@ -135,7 +137,7 @@
             </li>
             <?php endif; ?>
 
-            <?php if (\App\Core\Auth::hasPermission('products.write')): ?>
+            <?php if (\App\Core\Auth::hasPermission('sync.read')): ?>
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/sync') === 0 ? 'active' : '' ?>" href="/admin/sync">
                 <i class="bi bi-arrow-repeat"></i>Sync
