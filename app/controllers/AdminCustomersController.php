@@ -74,4 +74,41 @@ class AdminCustomersController extends Controller
         } catch (\Throwable $e) {}
         $this->redirect('/admin/customers/view?email='.urlencode($email));
     }
+
+	    public function seedDummies(): void
+	    {
+	        if (!isset($_POST['_token']) || !\App\Core\CSRF::check($_POST['_token'])) { $this->redirect('/admin/customers'); }
+	        $pdo = DB::pdo();
+	        $pdo->beginTransaction();
+	        try {
+	            // Pick some products
+	            $products = $pdo->query('SELECT id,title,price FROM products ORDER BY RAND() LIMIT 20')->fetchAll(\PDO::FETCH_ASSOC);
+	            for ($i=0; $i<5; $i++) {
+	                $email = 'dummy'.str_pad((string)rand(1,9999), 4, '0', STR_PAD_LEFT).'@example.com';
+	                $name = 'Dummy Customer '.substr($email, 5, 4);
+	                $phone = '+63 9'.rand(10,99).rand(100,999).rand(1000,9999);
+	                $itemsN = max(1, rand(1,2)); $subtotal = 0.0; $chosen = [];
+	                for ($k=0; $k<$itemsN; $k++) { $p=$products[array_rand($products)]; if(isset($chosen[$p['id']]))continue; $chosen[$p['id']]=true; $qty=rand(1,2); $subtotal += ((float)$p['price'])*$qty; }
+	                $shipMethod = (rand(0,1)?'pickup':'cod'); $shipFee = $shipMethod==='cod' ? (float)($pdo->query("SELECT value FROM settings WHERE `key`='shipping_fee_cod'")->fetchColumn() ?: 0) : 0.0;
+	                $total = $subtotal + $shipFee;
+	                $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, shipping_fee, total, status, notes, created_at) VALUES (?,?,?,?,?,"processing",?,NOW())')
+	                    ->execute([$email, $shipMethod, $subtotal, $shipFee, $total, 'Dummy seed']);
+	                $oid = (int)$pdo->lastInsertId();
+	                foreach (array_keys($chosen) as $pid) {
+	                    foreach ($products as $p) { if ((int)$p['id']===(int)$pid) { $qty=rand(1,2); $pdo->prepare('INSERT INTO order_items (order_id,product_id,title,unit_price,quantity) VALUES (?,?,?,?,?)')->execute([$oid,$pid,$p['title'],$p['price'],$qty]); break; } }
+	                }
+	                // Address
+	                try { $pdo->prepare('INSERT INTO addresses (order_id, name, phone, region, province, city, barangay, street, postal_code) VALUES (?,?,?,?,?,?,?,?,?)')->execute([$oid,$name,$phone,null,null,'Test City',null,'',null]); } catch (\Throwable $e) {}
+	                // Upsert profile (best-effort)
+	                try { $pdo->exec('CREATE TABLE IF NOT EXISTS customer_profiles (email VARCHAR(191) NOT NULL PRIMARY KEY, name VARCHAR(191) NULL, phone VARCHAR(64) NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'); } catch (\Throwable $e) {}
+	                try { $pdo->prepare('INSERT INTO customer_profiles (email,name,phone,created_at,updated_at) VALUES (?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE name=VALUES(name), phone=VALUES(phone), updated_at=NOW()')->execute([$email,$name,$phone,date('Y-m-d H:i:s')]); } catch (\Throwable $e) {}
+	            }
+	            $pdo->commit();
+	            $_SESSION['success'] = 'Seeded 5 dummy customers with sample orders.';
+	        } catch (\Throwable $e) {
+	            $pdo->rollBack();
+	            $_SESSION['error'] = 'Failed to seed dummy customers: '.$e->getMessage();
+	        }
+	        $this->redirect('/admin/customers');
+	    }
 }

@@ -103,12 +103,16 @@
       </div>
     </div>
     <div class="card mt-3">
-      <div class="card-header">Notes</div>
+      <div class="card-header"><i class="bi bi-sticky me-2"></i>Order Notes</div>
       <div class="card-body">
-        <form method="post" action="/admin/orders/<?= (int)$order['id'] ?>/note" class="d-flex gap-2">
+        <form method="post" action="/admin/orders/<?= (int)$order['id'] ?>/note">
           <?= csrf_field() ?>
-          <textarea class="form-control" name="note" rows="2" placeholder="Internal notes..."><?= htmlspecialchars($order['notes'] ?? '') ?></textarea>
-          <button class="btn btn-dark">Save</button>
+          <label class="form-label fw-semibold">Internal note</label>
+          <textarea class="form-control" name="note" rows="3" placeholder="Add an internal note that only staff can see..."><?= htmlspecialchars($order['notes'] ?? '') ?></textarea>
+          <div class="d-flex justify-content-end mt-2">
+            <button class="btn btn-dark"><i class="bi bi-save me-1"></i>Save Note</button>
+          </div>
+          <div class="form-text">Notes are visible only to store staff.</div>
         </form>
       </div>
     </div>
@@ -134,11 +138,13 @@
     <div class="card">
       <div class="card-header">Customer</div>
       <div class="card-body">
-        <div><strong>Email:</strong> <?= htmlspecialchars($order['email'] ?? 'Guest') ?></div>
+        <?php $custName = htmlspecialchars(($address['name'] ?? '') !== '' ? $address['name'] : 'Guest Customer'); ?>
+        <div><strong>Name:</strong> <?= $custName ?></div>
+        <div><strong>Email:</strong> <?= htmlspecialchars($order['email'] ?? '—') ?></div>
         <div><strong>Method:</strong> <?= htmlspecialchars(strtoupper($order['shipping_method'])) ?></div>
       </div>
     </div>
-    <?php if ($order['shipping_method']==='cod' && $address): ?>
+    <?php if ($address): ?>
     <div class="card mt-3">
       <div class="card-header">Shipping Address</div>
       <div class="card-body">

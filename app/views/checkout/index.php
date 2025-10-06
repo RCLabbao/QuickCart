@@ -96,7 +96,7 @@
               </div>
               <div class="card-body">
                 <div class="row g-3">
-                  <div class="col-12">
+                  <div class="col-12" id="codOption">
                     <div class="form-check form-check-card">
                       <input class="form-check-input" type="radio" name="shipping_method" id="cod" value="cod" <?= ($_POST['shipping_method'] ?? 'cod') === 'cod' ? 'checked' : '' ?>>
                       <label class="form-check-label w-100" for="cod">
@@ -115,7 +115,7 @@
                       </label>
                     </div>
                   </div>
-                  <div class="col-12">
+                  <div class="col-12" id="pickupOption">
                     <div class="form-check form-check-card">
                       <input class="form-check-input" type="radio" name="shipping_method" id="pickup" value="pickup" <?= ($_POST['shipping_method'] ?? '') === 'pickup' ? 'checked' : '' ?>>
                       <label class="form-check-label w-100" for="pickup">
@@ -339,6 +339,38 @@ document.addEventListener('DOMContentLoaded', function() {
   const pickupRadio = document.getElementById('pickup');
   const addressCard = document.getElementById('addressCard');
 
+  const codOption = document.getElementById('codOption');
+  const pickupOption = document.getElementById('pickupOption');
+
+  // Build whitelists from settings
+  const codList = (<?= json_encode(array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string)\App\Core\setting('cod_city_whitelist','')))))) ?>).map(s => s.toLowerCase());
+  const pickupList = (<?= json_encode(array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string)\App\Core\setting('pickup_city_whitelist','')))))) ?>).map(s => s.toLowerCase());
+
+  function isAllowed(list, city){
+    if (!list || list.length === 0) return true;
+    return list.includes((city||'').toLowerCase());
+  }
+
+  function updateMethodVisibility(){
+    const cityInput = document.querySelector('input[name="city"]');
+    const city = cityInput ? cityInput.value.trim() : '';
+    const codAllowed = isAllowed(codList, city);
+    const pickupAllowed = isAllowed(pickupList, city);
+
+    if (codOption) codOption.style.display = codAllowed ? '' : 'none';
+    if (pickupOption) pickupOption.style.display = pickupAllowed ? '' : 'none';
+
+    // Auto-switch selection if currently hidden
+    if (!codAllowed && document.getElementById('cod').checked && pickupAllowed){
+      document.getElementById('pickup').checked = true;
+      toggleAddressFields();
+    }
+    if (!pickupAllowed && document.getElementById('pickup').checked && codAllowed){
+      document.getElementById('cod').checked = true;
+      toggleAddressFields();
+    }
+  }
+
   function toggleAddressFields() {
     if (pickupRadio.checked) {
       addressCard.style.display = 'none';
@@ -362,6 +394,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize
   toggleAddressFields();
+  updateMethodVisibility();
 
   // Update order summary (shipping + total) when method changes
   async function fetchFeeAndUpdate() {
@@ -408,9 +441,9 @@ document.addEventListener('DOMContentLoaded', function() {
   if (cityInput) {
     cityInput.addEventListener('input', function(){
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(updateSummary, 300);
+      debounceTimer = setTimeout(function(){ updateMethodVisibility(); updateSummary(); }, 300);
     });
-    cityInput.addEventListener('blur', updateSummary);
+    cityInput.addEventListener('blur', function(){ updateMethodVisibility(); updateSummary(); });
   }
 
 
@@ -419,6 +452,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize
   toggleAddressFields();
+  updateMethodVisibility();
 
   // Form validation
   const form = document.getElementById('checkoutForm');

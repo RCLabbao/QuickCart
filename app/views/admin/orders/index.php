@@ -202,9 +202,10 @@ $totalRevenue = $stats['total_revenue'] ?? 0;
                     <i class="bi bi-person text-muted"></i>
                   </div>
                   <div>
-                    <h6 class="mb-0"><?= htmlspecialchars($o['email'] ?? 'Guest Customer') ?></h6>
-                    <?php if (!empty($o['phone'])): ?>
-                      <small class="text-muted"><?= htmlspecialchars($o['phone']) ?></small>
+                    <?php $custName = trim((string)($o['customer_name'] ?? '')); $custEmail = trim((string)($o['email'] ?? '')); ?>
+                    <h6 class="mb-0"><?= htmlspecialchars($custName !== '' ? $custName : ($custEmail !== '' ? $custEmail : 'Guest Customer')) ?></h6>
+                    <?php if ($custEmail !== ''): ?>
+                      <small class="text-muted"><?= htmlspecialchars($custEmail) ?></small>
                     <?php endif; ?>
                   </div>
                 </div>

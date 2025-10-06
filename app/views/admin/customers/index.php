@@ -9,6 +9,10 @@
     <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i></button>
     <a class="btn btn-outline-secondary ms-2" href="/admin/customers/export">Export CSV</a>
   </form>
+  <form method="post" action="/admin/customers/seed-dummies" class="ms-2">
+    <?= App\Core\csrf_field() ?>
+    <button class="btn btn-sm btn-dark" type="submit"><i class="bi bi-people-fill me-1"></i>Seed Dummy Customers</button>
+  </form>
 </div>
 
 <div class="card border-0 shadow-sm">

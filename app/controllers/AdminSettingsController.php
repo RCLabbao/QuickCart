@@ -30,6 +30,7 @@ class AdminSettingsController extends Controller
                 'pickup_location' => $_POST['pickup_location'] ?? '',
                 'brand_color' => $_POST['brand_color'] ?? '#212529',
                 'today_cutoff' => $_POST['today_cutoff'] ?? '00:00',
+                'debug' => isset($_POST['debug']) ? '1' : '0',
             ];
         } elseif ($scope === 'checkout') {
             $pairs = [
@@ -45,6 +46,8 @@ class AdminSettingsController extends Controller
             $pairs = [
                 'shipping_fee_cod' => $_POST['shipping_fee_cod'] ?? '0',
                 'shipping_fee_pickup' => $_POST['shipping_fee_pickup'] ?? '0',
+                'cod_city_whitelist' => trim((string)($_POST['cod_city_whitelist'] ?? '')),
+                'pickup_city_whitelist' => trim((string)($_POST['pickup_city_whitelist'] ?? '')),
             ];
         } elseif ($scope === 'email') {
             $pairs = [

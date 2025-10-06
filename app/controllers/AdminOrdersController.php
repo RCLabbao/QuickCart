@@ -10,9 +10,9 @@ class AdminOrdersController extends Controller
         if (!empty($_GET['status'])) { $where[]='status=?'; $params[]=$_GET['status']; }
         if (!empty($_GET['from'])) { $where[]='created_at >= ?'; $params[]=$_GET['from'].' 00:00:00'; }
         if (!empty($_GET['to'])) { $where[]='created_at <= ?'; $params[]=$_GET['to'].' 23:59:59'; }
-        $sql = 'SELECT id, email, shipping_method, total, status, created_at FROM orders';
+        $sql = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at,\n                       COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS customer_name,\n                       COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS phone\n                FROM orders o';
         if ($where) { $sql .= ' WHERE '.implode(' AND ',$where); }
-        $sql .= ' ORDER BY id DESC LIMIT 200';
+        $sql .= ' ORDER BY o.id DESC LIMIT 200';
         $st = $pdo->prepare($sql); $st->execute($params);
         $rows = $st->fetchAll();
 
@@ -55,6 +55,7 @@ class AdminOrdersController extends Controller
             $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
                 ->execute([$oid, Auth::userId(), 'status', 'Status changed to '. $status]);
         } catch (\Throwable $e) {}
+        $_SESSION['success'] = 'Order status updated.';
         $this->redirect('/admin/orders/'.$params['id']);
     }
     public function export(): void
@@ -127,7 +128,7 @@ class AdminOrdersController extends Controller
         $startStr = $start->format('Y-m-d H:i:s');
         $endStr = $end->format('Y-m-d H:i:s');
 
-        $st = $pdo->prepare('SELECT id, email, shipping_method, total, status, created_at FROM orders WHERE created_at >= ? AND created_at < ? ORDER BY id DESC');
+        $st = $pdo->prepare('SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at,\n                                     COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS customer_name,\n                                     COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS phone\n                              FROM orders o WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC');
         $st->execute([$startStr, $endStr]);
         $rows = $st->fetchAll();
 
@@ -235,6 +236,7 @@ class AdminOrdersController extends Controller
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/orders/'.$params['id']); }
         $note = trim((string)($_POST['note'] ?? ''));
         DB::pdo()->prepare('UPDATE orders SET notes=? WHERE id=?')->execute([$note, (int)$params['id']]);
+        $_SESSION['success'] = 'Order updated.';
         $this->redirect('/admin/orders/'.$params['id']);
     }
 

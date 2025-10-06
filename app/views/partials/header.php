@@ -23,11 +23,16 @@
           <i class="bi bi-bag"></i>
           <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="cartCount"><?= (int)$cartCount ?></span>
         </button>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-controls="nav" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
       </div>
 
       <!-- Desktop navigation -->
       <div id="nav" class="collapse navbar-collapse">
+        <!-- Mobile nav links -->
+        <ul class="navbar-nav d-lg-none me-auto mb-2">
+          <li class="nav-item"><a class="nav-link" href="/collections">Collections</a></li>
+          <li class="nav-item"><a class="nav-link" href="/products">All Products</a></li>
+        </ul>
         <form action="/search" method="get" class="ms-auto me-3 w-50 d-none d-lg-block position-relative">
           <div class="input-group">
             <input type="text" class="form-control" name="q" placeholder="Search products..." id="desktopSearchInput">

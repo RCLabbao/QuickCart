@@ -79,6 +79,21 @@ class CheckoutController extends Controller
                 return;
             }
         }
+        // Enforce city-based availability for methods
+        $codWhitelist = array_filter(array_map('trim', preg_split('/\r?\n/', (string)($settings['cod_city_whitelist'] ?? ''))));
+        $pickupWhitelist = array_filter(array_map('trim', preg_split('/\r?\n/', (string)($settings['pickup_city_whitelist'] ?? ''))));
+        $cityNorm = strtolower($city);
+        $inList = function(array $list, string $val): bool { if (empty($list)) return true; foreach ($list as $x) { if (strtolower($x) === $val) return true; } return false; };
+        if ($method === 'cod' && !$inList($codWhitelist, $cityNorm)) {
+            $_SESSION['checkout_error'] = 'Cash on Delivery is not available for the selected city.';
+            $this->redirect('/checkout');
+            return;
+        }
+        if ($method === 'pickup' && !$inList($pickupWhitelist, $cityNorm)) {
+            $_SESSION['checkout_error'] = 'Store Pickup is not available for the selected city.';
+            $this->redirect('/checkout');
+            return;
+        }
         $pdo = DB::pdo(); $pdo->beginTransaction();
         try {
             $subtotal = 0; $items = [];
@@ -147,6 +162,10 @@ class CheckoutController extends Controller
             if ($method==='cod') {
                 $pdo->prepare('INSERT INTO addresses (order_id, name, phone, region, province, city, barangay, street, postal_code) VALUES (?,?,?,?,?,?,?,?,?)')
                     ->execute([$orderId,$name,$phone,$region,$province,$city,$barangay,$street,$postal]);
+            } else {
+                // Store minimal contact info for pickup orders
+                $pdo->prepare('INSERT INTO addresses (order_id, name, phone, region, province, city, barangay, street, postal_code) VALUES (?,?,?,?,?,?,?,?,?)')
+                    ->execute([$orderId,$name,$phone,null,null,$city ?: null,null,null,null]);
             }
             $pdo->commit();
             // Send order email (best-effort)

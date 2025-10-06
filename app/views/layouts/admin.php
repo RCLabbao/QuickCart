@@ -18,7 +18,7 @@
     .navbar .btn-dark{ background:var(--brand); border-color:var(--brand); }
     a{ color: var(--brand); }
     a.link-secondary{ color:#6c757d !important; }
-    
+
     /* Admin Layout Styles */
     .admin-sidebar {
       min-height: 100vh;
@@ -66,7 +66,7 @@
           <div class="px-3 mb-3">
             <h5 class="text-muted">QuickCart Admin</h5>
           </div>
-          
+
           <ul class="nav flex-column">
             <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin') === 0 && strpos($_SERVER['REQUEST_URI'], '/admin/') === false ? 'active' : '' ?>" href="/admin">
@@ -118,6 +118,11 @@
               </a>
             </li>
             <li class="nav-item">
+              <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/sync') === 0 ? 'active' : '' ?>" href="/admin/sync">
+                <i class="bi bi-arrow-repeat"></i>Sync
+              </a>
+            </li>
+            <li class="nav-item">
               <a class="nav-link <?= strpos($_SERVER['REQUEST_URI'], '/admin/users') === 0 ? 'active' : '' ?>" href="/admin/users">
                 <i class="bi bi-person-gear"></i>Admin Users
               </a>
@@ -138,9 +143,9 @@
               </a>
             </li>
           </ul>
-          
+
           <hr>
-          
+
           <ul class="nav flex-column">
             <li class="nav-item">
               <a class="nav-link" href="/" target="_blank">
@@ -170,6 +175,20 @@
             <span class="text-muted me-3">Welcome, <?= e(App\Core\Auth::user()['name'] ?? 'Admin') ?></span>
           </div>
         </div>
+        <?php if (!empty($_SESSION['success'])): ?>
+          <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+            <i class="bi bi-check-circle me-2"></i><?= htmlspecialchars($_SESSION['success']) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          <?php unset($_SESSION['success']); ?>
+        <?php endif; ?>
+        <?php if (!empty($_SESSION['error'])): ?>
+          <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($_SESSION['error']) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          <?php unset($_SESSION['error']); ?>
+        <?php endif; ?>
 
         <!-- Page Content -->
         <div class="py-4">

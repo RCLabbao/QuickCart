@@ -44,6 +44,13 @@
     <small class="text-muted">Orders placed after this time will appear in the next day's "Today" view.</small>
   </div>
   <div class="col-12">
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" name="debug" id="debug" <?= !empty($settings['debug']) && $settings['debug']=='1' ? 'checked' : '' ?>>
+      <label class="form-check-label" for="debug">Show detailed PHP errors (Debug mode)</label>
+    </div>
+    <small class="text-muted">When enabled, 500 errors will display full error details. Disable in production.</small>
+  </div>
+  <div class="col-12">
     <button class="btn btn-dark">Save General</button>
   </div>
 </form>
@@ -125,6 +132,16 @@
     <div class="col-md-6">
       <label class="form-label">General Shipping Fee (Pickup)</label>
       <input class="form-control" type="number" step="0.01" name="shipping_fee_pickup" value="<?= htmlspecialchars($settings['shipping_fee_pickup'] ?? '0.00') ?>">
+    </div>
+    <div class="col-12">
+      <label class="form-label">COD available only in these cities</label>
+      <textarea class="form-control" name="cod_city_whitelist" rows="3" placeholder="One city per line (leave empty to allow all)"><?= htmlspecialchars($settings['cod_city_whitelist'] ?? '') ?></textarea>
+      <small class="text-muted">If not empty, Cash on Delivery will be available only when the customer's city matches one of these entries (case-insensitive).</small>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Pickup available only in these cities</label>
+      <textarea class="form-control" name="pickup_city_whitelist" rows="3" placeholder="One city per line (leave empty to allow all)"><?= htmlspecialchars($settings['pickup_city_whitelist'] ?? '') ?></textarea>
+      <small class="text-muted">If not empty, Store Pickup will be available only when the customer's city matches one of these entries. Otherwise it will be hidden.</small>
     </div>
     <div class="col-12">
       <div class="alert alert-info small">City-specific COD fees below override the General COD fee. Any city not listed will use the General COD fee.</div>

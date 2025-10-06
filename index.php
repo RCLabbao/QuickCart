@@ -160,6 +160,7 @@ $router->get('/admin/customers', 'AdminCustomersController@index', ['perm' => 'u
 $router->get('/admin/customer', 'AdminCustomersController@index', ['perm' => 'users.read']); // alias for singular path
 $router->get('/admin/customers/view', 'AdminCustomersController@show', ['perm' => 'users.read']);
 $router->post('/admin/customers/profile', 'AdminCustomersController@updateProfile', ['perm' => 'users.write']);
+$router->post('/admin/customers/seed-dummies', 'AdminCustomersController@seedDummies', ['perm' => 'users.write']);
 
 // Admin Collections
 $router->get('/admin/collections', 'AdminCollectionsController@index', ['perm' => 'collections.write']);
@@ -183,10 +184,18 @@ $router->post('/admin/products/(?P<id>\d+)/delete', 'AdminProductsController@des
 $router->post('/admin/products/(?P<id>\d+)/images/(?P<image_id>\d+)/delete', 'AdminProductsController@deleteImage', ['perm' => 'products.write']);
 $router->post('/admin/products/bulk', 'AdminProductsController@bulk', ['perm' => 'products.write']);
 $router->get('/admin/products/export', 'AdminProductsController@export', ['perm' => 'products.read']);
+// Admin Sync
+$router->get('/admin/sync', 'AdminSyncController@index', ['perm' => 'products.write']);
+$router->post('/admin/sync/save', 'AdminSyncController@save', ['perm' => 'products.write']);
+$router->post('/admin/sync/test', 'AdminSyncController@test', ['perm' => 'products.write']);
+$router->post('/admin/sync/run', 'AdminSyncController@run', ['perm' => 'products.write']);
+$router->post('/admin/sync/upload', 'AdminSyncController@uploadCsv', ['perm' => 'products.write']);
 $router->post('/admin/products/(?P<id>\d+)/images/sort', 'AdminProductsController@sortImages', ['perm' => 'products.write']);
 $router->post('/admin/products/quick-update', 'AdminProductsController@quickUpdate', ['perm' => 'products.write']);
 $router->post('/admin/products/import-stock', 'AdminProductsController@importStock', ['perm' => 'products.write']);
 $router->post('/admin/products/adjust-prices', 'AdminProductsController@adjustPrices', ['perm' => 'products.write']);
+// Public webhook for stock sync
+$router->get('/sync/stock', 'AdminSyncController@webhook');
 $router->get('/admin/products/search', 'AdminProductsController@search', ['perm' => 'products.read']);
 $router->get('/admin/products/duplicates', 'AdminProductsController@duplicates', ['perm' => 'products.read']);
 
