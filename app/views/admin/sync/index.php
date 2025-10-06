@@ -35,6 +35,23 @@
                 <label class="form-check-label" for="csv_dry_run">Dry-run (preview changes without saving)</label>
               </div>
               <div class="mt-3">
+                <label class="form-label">Update Rules (for this import)</label>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="csv_sync_update_price" name="sync_update_price" <?= (($settings['sync_update_price'] ?? '1')==='1')?'checked':'' ?>>
+                  <label class="form-check-label" for="csv_sync_update_price">Update price from RegPrice</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="csv_sync_update_title" name="sync_update_title" <?= (($settings['sync_update_title'] ?? '1')==='1')?'checked':'' ?>>
+                  <label class="form-check-label" for="csv_sync_update_title">Update title from Description</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="csv_sync_update_collection" name="sync_update_collection" <?= (($settings['sync_update_collection'] ?? '1')==='1')?'checked':'' ?>>
+                  <label class="form-check-label" for="csv_sync_update_collection">Update collection from Categorycode (auto-create if missing)</label>
+                </div>
+                <div class="form-text">These rules apply only to this upload. To change defaults, use the SQL Server tab &gt; Connection Settings.</div>
+              </div>
+
+              <div class="mt-3">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-2"></i>Import File</button>
               </div>
             </form>

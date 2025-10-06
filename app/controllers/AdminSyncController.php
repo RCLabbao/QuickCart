@@ -186,7 +186,12 @@ class AdminSyncController extends Controller
             }
         }
         try {
-            $result = $this->processRows($rows, $dryRun);
+            $overrides = [
+                'update_price' => isset($_POST['sync_update_price']),
+                'update_title' => isset($_POST['sync_update_title']),
+                'update_collection' => isset($_POST['sync_update_collection']),
+            ];
+            $result = $this->processRows($rows, $dryRun, $overrides);
             $_SESSION['success'] = ($dryRun? 'Dry-run: ' : '') .
                 "File processed. Products matched: {$result['seen']}, created: {$result['created']}, updated: {$result['updated']}, errors: {$result['errors']}";
         } catch (\Throwable $e) {
@@ -195,13 +200,31 @@ class AdminSyncController extends Controller
         $this->redirect('/admin/sync');
     }
 
-    private function processRows(array $rows, bool $dryRun): array
+    private function processRows(array $rows, bool $dryRun, array $overrides = []): array
     {
         $pdo = DB::pdo();
-        $updatePrice = (string)\App\Core\setting('sync_update_price','1') === '1';
-        $updateTitle = (string)\App\Core\setting('sync_update_title','1') === '1';
-        $updateCollection = (string)\App\Core\setting('sync_update_collection','1') === '1';
+        $updatePrice = array_key_exists('update_price', $overrides)
+            ? (bool)$overrides['update_price']
+            : ((string)\App\Core\setting('sync_update_price','1') === '1');
+        $updateTitle = array_key_exists('update_title', $overrides)
+            ? (bool)$overrides['update_title']
+            : ((string)\App\Core\setting('sync_update_title','1') === '1');
+        $updateCollection = array_key_exists('update_collection', $overrides)
+            ? (bool)$overrides['update_collection']
+            : ((string)\App\Core\setting('sync_update_collection','1') === '1');
         $seen=0; $created=0; $updated=0; $errors=0;
+        $collectPreview = !empty($overrides['collect_preview']);
+        $preview = [];
+        $collTitle = [];
+        $collLabel = function(?int $id) use ($pdo, &$collTitle) {
+            if (!$id) { return null; }
+            if (!array_key_exists($id, $collTitle)) {
+                $st = $pdo->prepare('SELECT title FROM collections WHERE id=?');
+                $st->execute([$id]);
+                $collTitle[$id] = $st->fetchColumn() ?: null;
+            }
+            return $collTitle[$id];
+        };
         // Ensure tag tables exist outside of transaction to avoid implicit commits
         try {
             $pdo->exec('CREATE TABLE IF NOT EXISTS tags (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, slug VARCHAR(120) NOT NULL UNIQUE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
@@ -285,7 +308,9 @@ class AdminSyncController extends Controller
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
             throw $e;
         }
-        return compact('seen','created','updated','errors');
+        return $collectPreview
+            ? array_merge(compact('seen','created','updated','errors'), ['preview' => $preview])
+            : compact('seen','created','updated','errors');
     }
 
     public function webhook(): void
