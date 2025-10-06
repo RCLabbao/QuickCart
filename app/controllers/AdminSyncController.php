@@ -99,18 +99,28 @@ class AdminSyncController extends Controller
                     $header = null;
                     foreach ($sheet->toArray(null, true, true, true) as $row) {
                         $arr = array_values($row);
-                        if ($header === null) { $header = $arr; $map = array_flip($header); continue; }
+                        if ($header === null) {
+                            // Normalize header keys to be robust (trim, lowercase)
+                            $header = array_map(fn($h)=> strtolower(trim((string)$h)), $arr);
+                            $map = array_flip($header);
+                            // helper to pick value by any of the candidate keys
+                            $pick = function(array $rowVals, array $map, array $keys) {
+                                foreach ($keys as $k) { if (isset($map[$k])) { return $rowVals[$map[$k]] ?? ''; } }
+                                return '';
+                            };
+                            continue;
+                        }
                         if (count(array_filter($arr, fn($v)=>$v!==null && $v!==''))===0) continue; // skip empty lines
                         $rows[] = [
-                            'FSC' => $arr[$map['FSC']] ?? '',
-                            'Description' => $arr[$map['Description']] ?? '',
-                            'SM_SOH' => $arr[$map['SM_SOH']] ?? 0,
-                            'WH_SOH' => $arr[$map['WH_SOH']] ?? 0,
-                            'TotalSOH' => $arr[$map['TotalSOH']] ?? 0,
-                            'UnitSold' => $arr[$map['UnitSold']] ?? 0,
-                            'Categorycode' => $arr[$map['Categorycode']] ?? '',
-                            'ProductType' => $arr[$map['ProductType']] ?? '',
-                            'RegPrice' => $arr[$map['RegPrice']] ?? 0,
+                            'FSC' => $pick($arr,$map,['fsc']),
+                            'Description' => $pick($arr,$map,['description','desc','product description','productdescription']),
+                            'SM_SOH' => $pick($arr,$map,['sm_soh','sm soh','smqty','sm_qty','sm qty']),
+                            'WH_SOH' => $pick($arr,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
+                            'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
+                            'UnitSold' => $pick($arr,$map,['unitsold','unit_sold','unit sold','sold']),
+                            'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category']),
+                            'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
+                            'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
                         ];
                     }
                 } catch (\Throwable $e) {
@@ -122,20 +132,24 @@ class AdminSyncController extends Controller
                 try {
                     $parsed = $this->parseXlsx($tmp);
                     if (!$parsed) { throw new \RuntimeException('Empty XLSX or unsupported format'); }
-                    $header = array_shift($parsed);
+                    $header = array_map(fn($h)=> strtolower(trim((string)$h)), array_shift($parsed));
                     $map = array_flip($header);
+                    $pick = function(array $rowVals, array $map, array $keys) {
+                        foreach ($keys as $k) { if (isset($map[$k])) { return $rowVals[$map[$k]] ?? ''; } }
+                        return '';
+                    };
                     foreach ($parsed as $arr) {
                         if (count(array_filter($arr, fn($v)=>$v!==null && $v!==''))===0) continue;
                         $rows[] = [
-                            'FSC' => $arr[$map['FSC']] ?? '',
-                            'Description' => $arr[$map['Description']] ?? '',
-                            'SM_SOH' => $arr[$map['SM_SOH']] ?? 0,
-                            'WH_SOH' => $arr[$map['WH_SOH']] ?? 0,
-                            'TotalSOH' => $arr[$map['TotalSOH']] ?? 0,
-                            'UnitSold' => $arr[$map['UnitSold']] ?? 0,
-                            'Categorycode' => $arr[$map['Categorycode']] ?? '',
-                            'ProductType' => $arr[$map['ProductType']] ?? '',
-                            'RegPrice' => $arr[$map['RegPrice']] ?? 0,
+                            'FSC' => $pick($arr,$map,['fsc']),
+                            'Description' => $pick($arr,$map,['description','desc','product description','productdescription']),
+                            'SM_SOH' => $pick($arr,$map,['sm_soh','sm soh','smqty','sm_qty','sm qty']),
+                            'WH_SOH' => $pick($arr,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
+                            'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
+                            'UnitSold' => $pick($arr,$map,['unitsold','unit_sold','unit sold','sold']),
+                            'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category']),
+                            'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
+                            'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
                         ];
                     }
                 } catch (\Throwable $e) {
@@ -148,18 +162,24 @@ class AdminSyncController extends Controller
             if (($h = fopen($tmp, 'r')) !== false) {
                 $header = fgetcsv($h);
                 if (!$header) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
-                $map = array_flip($header);
+                // Normalize header keys (trim + lowercase) and map flexible names
+                $headerNorm = array_map(fn($v)=> strtolower(trim((string)$v)), $header);
+                $map = array_flip($headerNorm);
+                $pick = function(array $rowVals, array $map, array $keys) {
+                    foreach ($keys as $k) { if (isset($map[$k])) { return $rowVals[$map[$k]] ?? ''; } }
+                    return '';
+                };
                 while (($r = fgetcsv($h)) !== false) {
                     $rows[] = [
-                        'FSC' => $r[$map['FSC']] ?? '',
-                        'Description' => $r[$map['Description']] ?? '',
-                        'SM_SOH' => $r[$map['SM_SOH']] ?? 0,
-                        'WH_SOH' => $r[$map['WH_SOH']] ?? 0,
-                        'TotalSOH' => $r[$map['TotalSOH']] ?? 0,
-                        'UnitSold' => $r[$map['UnitSold']] ?? 0,
-                        'Categorycode' => $r[$map['Categorycode']] ?? '',
-                        'ProductType' => $r[$map['ProductType']] ?? '',
-                        'RegPrice' => $r[$map['RegPrice']] ?? 0,
+                        'FSC' => $pick($r,$map,['fsc']),
+                        'Description' => $pick($r,$map,['description','desc','product description','productdescription']),
+                        'SM_SOH' => $pick($r,$map,['sm_soh','sm soh','smqty','sm_qty','sm qty']),
+                        'WH_SOH' => $pick($r,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
+                        'TotalSOH' => $pick($r,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
+                        'UnitSold' => $pick($r,$map,['unitsold','unit_sold','unit sold','sold']),
+                        'Categorycode' => $pick($r,$map,['categorycode','category_code','category code','category']),
+                        'ProductType' => $pick($r,$map,['producttype','product_type','product type','type']),
+                        'RegPrice' => $pick($r,$map,['regprice','listprice','list price','price']),
                     ];
                 }
                 fclose($h);
