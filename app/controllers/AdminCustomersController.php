@@ -17,7 +17,7 @@ class AdminCustomersController extends Controller
             $like = "%$q%"; $params[] = $like; $params[] = $like;
         }
         $sql = "SELECT o.email,
-                       COALESCE(cp.name, (SELECT a.name FROM addresses a WHERE a.order_id = (SELECT id FROM orders i WHERE i.email=o.email AND i.shipping_method='cod' ORDER BY id DESC LIMIT 1) LIMIT 1)) AS name,
+                       COALESCE(MAX(cp.name), (SELECT a.name FROM addresses a WHERE a.order_id = (SELECT id FROM orders i WHERE i.email=o.email AND i.shipping_method='cod' ORDER BY id DESC LIMIT 1) LIMIT 1)) AS name,
                        COUNT(*) AS orders,
                        COALESCE(SUM(o.total),0) AS spent
                 FROM orders o

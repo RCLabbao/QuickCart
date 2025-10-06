@@ -2,7 +2,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>
     <h1 class="h3 mb-1">Product Sync</h1>
-    <p class="text-muted mb-0">Sync products and inventory from SQL Server, or import via CSV. Stock updates are applied automatically.</p>
+    <p class="text-muted mb-0">Sync products and inventory from SQL Server, or import via CSV/XLSX. Stock updates are applied automatically.</p>
   </div>
 </div>
 
@@ -117,13 +117,13 @@
     </div>
 
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white border-bottom"><h5 class="mb-0">CSV Import (Fallback)</h5></div>
+      <div class="card-header bg-white border-bottom"><h5 class="mb-0">CSV/XLSX Import</h5></div>
       <div class="card-body">
         <form method="post" action="/admin/sync/upload" enctype="multipart/form-data">
           <?= csrf_field() ?>
           <div class="mb-2">
-            <label class="form-label">Upload CSV</label>
-            <input type="file" class="form-control" name="csv" accept=".csv" required>
+            <label class="form-label">Upload CSV or XLSX</label>
+            <input type="file" class="form-control" name="csv" accept=".csv,.xlsx" required>
             <div class="form-text">Expected headers: FSC, Description, SM_SOH, WH_SOH, TotalSOH, UnitSold, Categorycode, ProductType, RegPrice</div>
           </div>
           <div class="form-check mt-2">
@@ -131,7 +131,7 @@
             <label class="form-check-label" for="csv_dry_run">Dry-run (preview changes without saving)</label>
           </div>
           <div class="mt-3">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-2"></i>Import CSV</button>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-2"></i>Import File</button>
           </div>
         </form>
       </div>

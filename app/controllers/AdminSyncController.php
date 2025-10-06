@@ -83,34 +83,72 @@ class AdminSyncController extends Controller
     public function uploadCsv(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/sync'); }
-        if (empty($_FILES['csv']['tmp_name'])) { $_SESSION['error'] = 'No CSV uploaded.'; $this->redirect('/admin/sync'); return; }
+        if (empty($_FILES['csv']['tmp_name'])) { $_SESSION['error'] = 'No file uploaded.'; $this->redirect('/admin/sync'); return; }
         $dryRun = isset($_POST['dry_run']);
         $rows = [];
-        if (($h = fopen($_FILES['csv']['tmp_name'], 'r')) !== false) {
-            $header = fgetcsv($h);
-            if (!$header) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
-            $map = array_flip($header);
-            while (($r = fgetcsv($h)) !== false) {
-                $rows[] = [
-                    'FSC' => $r[$map['FSC']] ?? '',
-                    'Description' => $r[$map['Description']] ?? '',
-                    'SM_SOH' => $r[$map['SM_SOH']] ?? 0,
-                    'WH_SOH' => $r[$map['WH_SOH']] ?? 0,
-                    'TotalSOH' => $r[$map['TotalSOH']] ?? 0,
-                    'UnitSold' => $r[$map['UnitSold']] ?? 0,
-                    'Categorycode' => $r[$map['Categorycode']] ?? '',
-                    'ProductType' => $r[$map['ProductType']] ?? '',
-                    'RegPrice' => $r[$map['RegPrice']] ?? 0,
-                ];
+        $tmp = $_FILES['csv']['tmp_name'];
+        $ext = strtolower(pathinfo($_FILES['csv']['name'] ?? '', PATHINFO_EXTENSION));
+        if ($ext === 'xlsx') {
+            // Support XLSX via PhpSpreadsheet if available
+            if (class_exists('PhpOffice\\PhpSpreadsheet\\IOFactory')) {
+                try {
+                    $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
+                    $reader->setReadDataOnly(true);
+                    $spreadsheet = $reader->load($tmp);
+                    $sheet = $spreadsheet->getActiveSheet();
+                    $header = null;
+                    foreach ($sheet->toArray(null, true, true, true) as $row) {
+                        $arr = array_values($row);
+                        if ($header === null) { $header = $arr; $map = array_flip($header); continue; }
+                        if (count(array_filter($arr, fn($v)=>$v!==null && $v!==''))===0) continue; // skip empty lines
+                        $rows[] = [
+                            'FSC' => $arr[$map['FSC']] ?? '',
+                            'Description' => $arr[$map['Description']] ?? '',
+                            'SM_SOH' => $arr[$map['SM_SOH']] ?? 0,
+                            'WH_SOH' => $arr[$map['WH_SOH']] ?? 0,
+                            'TotalSOH' => $arr[$map['TotalSOH']] ?? 0,
+                            'UnitSold' => $arr[$map['UnitSold']] ?? 0,
+                            'Categorycode' => $arr[$map['Categorycode']] ?? '',
+                            'ProductType' => $arr[$map['ProductType']] ?? '',
+                            'RegPrice' => $arr[$map['RegPrice']] ?? 0,
+                        ];
+                    }
+                } catch (\Throwable $e) {
+                    $_SESSION['error'] = 'XLSX import failed: '.$e->getMessage();
+                    $this->redirect('/admin/sync'); return;
+                }
+            } else {
+                $_SESSION['error'] = 'XLSX not supported on this server. Please install phpoffice/phpspreadsheet via Composer or upload a CSV file.';
+                $this->redirect('/admin/sync'); return;
             }
-            fclose($h);
+        } else {
+            // CSV path (default)
+            if (($h = fopen($tmp, 'r')) !== false) {
+                $header = fgetcsv($h);
+                if (!$header) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
+                $map = array_flip($header);
+                while (($r = fgetcsv($h)) !== false) {
+                    $rows[] = [
+                        'FSC' => $r[$map['FSC']] ?? '',
+                        'Description' => $r[$map['Description']] ?? '',
+                        'SM_SOH' => $r[$map['SM_SOH']] ?? 0,
+                        'WH_SOH' => $r[$map['WH_SOH']] ?? 0,
+                        'TotalSOH' => $r[$map['TotalSOH']] ?? 0,
+                        'UnitSold' => $r[$map['UnitSold']] ?? 0,
+                        'Categorycode' => $r[$map['Categorycode']] ?? '',
+                        'ProductType' => $r[$map['ProductType']] ?? '',
+                        'RegPrice' => $r[$map['RegPrice']] ?? 0,
+                    ];
+                }
+                fclose($h);
+            }
         }
         try {
             $result = $this->processRows($rows, $dryRun);
             $_SESSION['success'] = ($dryRun? 'Dry-run: ' : '') .
-                "CSV processed. Products matched: {$result['seen']}, created: {$result['created']}, updated: {$result['updated']}, errors: {$result['errors']}";
+                "File processed. Products matched: {$result['seen']}, created: {$result['created']}, updated: {$result['updated']}, errors: {$result['errors']}";
         } catch (\Throwable $e) {
-            $_SESSION['error'] = 'CSV import failed: '.$e->getMessage();
+            $_SESSION['error'] = 'Import failed: '.$e->getMessage();
         }
         $this->redirect('/admin/sync');
     }

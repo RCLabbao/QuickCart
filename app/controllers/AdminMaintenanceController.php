@@ -16,15 +16,19 @@ class AdminMaintenanceController extends Controller
             'users' => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(),
         ];
 
-        // Get table sizes
-        $tableSizes = $pdo->query("
-            SELECT
-                table_name,
-                ROUND(((data_length + index_length) / 1024 / 1024), 2) AS size_mb
-            FROM information_schema.tables
-            WHERE table_schema = DATABASE()
-            ORDER BY (data_length + index_length) DESC
-        ")->fetchAll();
+        // Get table sizes (best-effort; some hosts restrict information_schema)
+        try {
+            $tableSizes = $pdo->query("
+                SELECT
+                    table_name,
+                    ROUND(((data_length + index_length) / 1024 / 1024), 2) AS size_mb
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                ORDER BY (data_length + index_length) DESC
+            ")->fetchAll();
+        } catch (\Throwable $e) {
+            $tableSizes = [];
+        }
 
         // Check for missing columns/tables
         $checks = [
