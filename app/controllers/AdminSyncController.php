@@ -191,9 +191,17 @@ class AdminSyncController extends Controller
                 'update_title' => isset($_POST['sync_update_title']),
                 'update_collection' => isset($_POST['sync_update_collection']),
             ];
+            if ($dryRun) { $overrides['collect_preview'] = true; }
             $result = $this->processRows($rows, $dryRun, $overrides);
-            $_SESSION['success'] = ($dryRun? 'Dry-run: ' : '') .
-                "File processed. Products matched: {$result['seen']}, created: {$result['created']}, updated: {$result['updated']}, errors: {$result['errors']}";
+            if ($dryRun && !empty($result['preview'])) {
+                $this->adminView('admin/sync/preview', [
+                    'title' => 'CSV/XLSX Dry-run Preview',
+                    'result' => $result,
+                    'overrides' => $overrides,
+                ]);
+                return;
+            }
+            $_SESSION['success'] = 'File processed. Products matched: ' . $result['seen'] . ', created: ' . $result['created'] . ', updated: ' . $result['updated'] . ', errors: ' . $result['errors'];
         } catch (\Throwable $e) {
             $_SESSION['error'] = 'Import failed: '.$e->getMessage();
         }
@@ -259,6 +267,21 @@ class AdminSyncController extends Controller
                 $pst->execute([$fsc]);
                 $p = $pst->fetch();
                 if (!$p) {
+                    if ($collectPreview) {
+                        $preview[] = [
+                            'action' => 'create',
+                            'fsc' => $fsc,
+                            'title_old' => null,
+                            'title_new' => $title,
+                            'price_old' => null,
+                            'price_new' => $price,
+                            'stock_old' => null,
+                            'stock_new' => $stock,
+                            'collection_old' => null,
+                            'collection_new' => $collLabel($collectionId),
+                            'category' => $category,
+                        ];
+                    }
                     if ($dryRun) { $created++; continue; }
                     // Build a safe, unique slug
                     $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', (string)$title));
@@ -277,6 +300,29 @@ class AdminSyncController extends Controller
                     $created++;
                 } else {
                     // Update
+                    if ($collectPreview) {
+                        $oldTitle = (string)$p['title'];
+                        $newTitle = $updateTitle ? $title : $oldTitle;
+                        $oldPrice = (float)$p['price'];
+                        $newPrice = $updatePrice ? $price : $oldPrice;
+                        $oldStock = (int)$p['stock'];
+                        $newStock = $stock; // stock always considered
+                        $oldCollId = (int)($p['collection_id'] ?? 0);
+                        $newCollId = ($updateCollection && $collectionId) ? (int)$collectionId : $oldCollId;
+                        $preview[] = [
+                            'action' => 'update',
+                            'fsc' => $fsc,
+                            'title_old' => $oldTitle,
+                            'title_new' => $newTitle,
+                            'price_old' => $oldPrice,
+                            'price_new' => $newPrice,
+                            'stock_old' => $oldStock,
+                            'stock_new' => $newStock,
+                            'collection_old' => $collLabel($oldCollId),
+                            'collection_new' => $collLabel($newCollId),
+                            'category' => $category,
+                        ];
+                    }
                     if ($dryRun) { $updated++; continue; }
                     $fields = ['stock = ?']; $vals = [$stock];
                     if ($updatePrice) { $fields[] = 'price = ?'; $vals[] = $price; }
