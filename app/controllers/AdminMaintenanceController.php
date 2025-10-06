@@ -64,6 +64,18 @@ class AdminMaintenanceController extends Controller
         // Add orders.coupon_code if missing
         $this->ensureColumn($pdo, 'orders','coupon_code','ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(64) NULL AFTER discount');
 
+        // Rename products.sku -> products.fsc if needed
+        try {
+            $hasSku = $this->columnExists($pdo, 'products', 'sku');
+            $hasFsc = $this->columnExists($pdo, 'products', 'fsc');
+            if ($hasSku && !$hasFsc) {
+                $pdo->exec("ALTER TABLE products CHANGE COLUMN sku fsc VARCHAR(64) NULL");
+                // Refresh unique index name to be consistent (best-effort)
+                try { $pdo->exec('ALTER TABLE products DROP INDEX idx_products_sku'); } catch (\Throwable $e) { /* ignore */ }
+                try { $pdo->exec('ALTER TABLE products ADD UNIQUE INDEX idx_products_fsc (fsc)'); } catch (\Throwable $e) { /* ignore */ }
+            }
+        } catch (\Throwable $e) { /* ignore migration errors */ }
+
         // Ensure tables for future features
         $this->ensureTable($pdo, 'order_events',
             'CREATE TABLE order_events (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, user_id INT NULL, type VARCHAR(64) NOT NULL, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');

@@ -99,7 +99,7 @@ $draftProducts = $stats['draft_products'] ?? 0;
         <label class="form-label fw-semibold">Search Products</label>
         <div class="input-group">
           <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input class="form-control" type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>" placeholder="Search by title, SKU, or barcode (scan to search)..." autofocus>
+          <input class="form-control" type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>" placeholder="Search by title, FSC, or barcode (scan to search)..." autofocus>
         </div>
       </div>
       <div class="col-md-2">
@@ -282,7 +282,7 @@ $draftProducts = $stats['draft_products'] ?? 0;
                     <h6 class="mb-1"><?= htmlspecialchars($p['title']) ?></h6>
                     <?php if (!empty($p['sku']) || !empty($p['barcode'])): ?>
                       <div class="small text-muted mb-1">
-                        <?php if (!empty($p['sku'])): ?><span class="me-2"><i class="bi bi-upc-scan me-1"></i>SKU: <?= htmlspecialchars($p['sku']) ?></span><?php endif; ?>
+                        <?php if (!empty($p['sku'])): ?><span class="me-2"><i class="bi bi-upc-scan me-1"></i>FSC: <?= htmlspecialchars($p['sku']) ?></span><?php endif; ?>
                         <?php if (!empty($p['barcode'])): ?><span class="me-2"><i class="bi bi-upc me-1"></i><?= htmlspecialchars($p['barcode']) ?></span><?php endif; ?>
                       </div>
                     <?php endif; ?>

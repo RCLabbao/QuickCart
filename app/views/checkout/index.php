@@ -101,14 +101,19 @@
                       <input class="form-check-input" type="radio" name="shipping_method" id="cod" value="cod" <?= ($_POST['shipping_method'] ?? 'cod') === 'cod' ? 'checked' : '' ?>>
                       <label class="form-check-label w-100" for="cod">
                         <div class="card">
-                          <div class="card-body d-flex align-items-center">
-                            <i class="bi bi-cash-coin fs-4 text-primary me-3"></i>
-                            <div class="flex-grow-1">
-                              <h6 class="mb-1">Cash on Delivery</h6>
-                              <small class="text-muted">Pay when you receive your order</small>
+                          <div class="card-body">
+                            <div class="d-flex align-items-center">
+                              <i class="bi bi-cash-coin fs-4 text-primary me-3"></i>
+                              <div class="flex-grow-1">
+                                <h6 class="mb-1">Cash on Delivery</h6>
+                                <small class="text-muted">Pay when you receive your order</small>
+                              </div>
+                              <div class="text-end">
+                                <span class="badge bg-success">Free</span>
+                              </div>
                             </div>
-                            <div class="text-end">
-                              <span class="badge bg-success">Free</span>
+                            <div id="codUnavailableMsg" class="mt-2 text-danger small" style="display:none;">
+                              Cash on Delivery is not available for your city. Please choose Store Pickup or update your address.
                             </div>
                           </div>
                         </div>
@@ -280,7 +285,7 @@
                 <?php endif; ?>
 
                 <?php if (!empty($cart)): ?>
-                <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                <button type="submit" id="placeOrderBtn" class="btn btn-primary btn-lg w-100 mb-3">
                   <i class="bi bi-lock me-2"></i>Place Secure Order
                 </button>
                 <div class="text-center">
@@ -357,31 +362,40 @@ document.addEventListener('DOMContentLoaded', function() {
     const codAllowed = isAllowed(codList, city);
     const pickupAllowed = isAllowed(pickupList, city);
 
-    if (codOption) codOption.style.display = codAllowed ? '' : 'none';
-    if (pickupOption) pickupOption.style.display = pickupAllowed ? '' : 'none';
+    // Keep both options visible; enable/disable based on whitelist
+    const codInput = document.getElementById('cod');
+    const pickupInput = document.getElementById('pickup');
+    const codMsg = document.getElementById('codUnavailableMsg');
+    const placeBtn = document.getElementById('placeOrderBtn');
 
-    // Auto-switch selection if currently hidden
-    if (!codAllowed && document.getElementById('cod').checked && pickupAllowed){
-      document.getElementById('pickup').checked = true;
-      toggleAddressFields();
+    if (codInput) {
+      codInput.disabled = !codAllowed;
+      if (!codAllowed) {
+        if (codMsg) codMsg.style.display = '';
+        // If COD is selected but not allowed, keep it selected but disable submission
+        if (placeBtn) placeBtn.disabled = codInput.checked;
+      } else {
+        if (codMsg) codMsg.style.display = 'none';
+        if (placeBtn) placeBtn.disabled = false;
+      }
     }
-    if (!pickupAllowed && document.getElementById('pickup').checked && codAllowed){
-      document.getElementById('cod').checked = true;
-      toggleAddressFields();
+    if (pickupInput) {
+      pickupInput.disabled = !pickupAllowed;
+      // If pickup is not allowed and currently selected, prevent submit too
+      if (!pickupAllowed && pickupInput.checked && placeBtn) {
+        placeBtn.disabled = true;
+      }
     }
   }
 
   function toggleAddressFields() {
+    // Do not hide the address card; only toggle required attributes for COD
+    const requiredFields = ['region', 'province', 'city', 'barangay', 'street'];
     if (pickupRadio.checked) {
-      addressCard.style.display = 'none';
-      // Remove required attributes from address fields
-      addressCard.querySelectorAll('input').forEach(input => {
-        input.removeAttribute('required');
-      });
+      addressCard.style.display = 'block';
+      addressCard.querySelectorAll('input').forEach(input => { input.removeAttribute('required'); });
     } else {
       addressCard.style.display = 'block';
-      // Add required attributes to address fields for COD
-      const requiredFields = ['region', 'province', 'city', 'barangay', 'street'];
       requiredFields.forEach(fieldName => {
         const field = addressCard.querySelector(`input[name="${fieldName}"]`);
         if (field) field.setAttribute('required', 'required');

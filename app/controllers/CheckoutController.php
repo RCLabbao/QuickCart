@@ -85,7 +85,7 @@ class CheckoutController extends Controller
         $cityNorm = strtolower($city);
         $inList = function(array $list, string $val): bool { if (empty($list)) return true; foreach ($list as $x) { if (strtolower($x) === $val) return true; } return false; };
         if ($method === 'cod' && !$inList($codWhitelist, $cityNorm)) {
-            $_SESSION['checkout_error'] = 'Cash on Delivery is not available for the selected city.';
+            $_SESSION['checkout_error'] = 'Cash on Delivery is not available for your city. Please choose Store Pickup or update your address.';
             $this->redirect('/checkout');
             return;
         }

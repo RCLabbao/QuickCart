@@ -126,9 +126,9 @@ class AdminSyncController extends Controller
         try {
             foreach ($rows as $row) {
                 $seen++;
-                $sku = trim((string)($row['FSC'] ?? ''));
-                if ($sku==='') { $errors++; continue; }
-                $title = trim((string)($row['Description'] ?? '')) ?: $sku;
+                $fsc = trim((string)($row['FSC'] ?? ''));
+                if ($fsc==='') { $errors++; continue; }
+                $title = trim((string)($row['Description'] ?? '')) ?: $fsc;
                 $price = (float)($row['RegPrice'] ?? 0);
                 $stock = (int)($row['TotalSOH'] ?? 0);
                 $category = trim((string)($row['Categorycode'] ?? ''));
@@ -146,15 +146,15 @@ class AdminSyncController extends Controller
                     }
                     $collectionId = $cid ? (int)$cid : null;
                 }
-                // Find product by SKU
-                $pst = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE sku=?');
-                $pst->execute([$sku]);
+                // Find product by FSC
+                $pst = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE fsc=?');
+                $pst->execute([$fsc]);
                 $p = $pst->fetch();
                 if (!$p) {
                     if ($dryRun) { $created++; continue; }
                     $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
-                    $pdo->prepare('INSERT INTO products (title,slug,sku,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,"active",?,?,NOW())')
-                        ->execute([$title,$slugTitle,$sku,$price,$stock,$collectionId]);
+                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,"active",?,?,NOW())')
+                        ->execute([$title,$slugTitle,$fsc,$price,$stock,$collectionId]);
                     $created++;
                 } else {
                     // Update
@@ -177,7 +177,7 @@ class AdminSyncController extends Controller
                         $t = $pdo->prepare('INSERT INTO tags (name,slug) VALUES (?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)');
                         $t->execute([$ptype,$slug]);
                         $tagId = (int)$pdo->query('SELECT id FROM tags WHERE slug='.$pdo->quote($slug))->fetchColumn();
-                        $pid = (int)$pdo->query('SELECT id FROM products WHERE sku='.$pdo->quote($sku))->fetchColumn();
+                        $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
                         if ($tagId && $pid) { $pdo->prepare('INSERT IGNORE INTO product_tags (product_id, tag_id) VALUES (?,?)')->execute([$pid,$tagId]); }
                     } catch (\Throwable $e) { /* ignore tags failures */ }
                 }

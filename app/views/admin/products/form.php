@@ -55,9 +55,9 @@
             <div class="form-text">Leave empty for unlimited stock</div>
           </div>
           <div class="col-md-6">
-            <label class="form-label fw-semibold">SKU</label>
-            <input class="form-control" type="text" name="sku" value="<?= htmlspecialchars($product['sku'] ?? '') ?>" placeholder="e.g. ABC-1234">
-            <div class="form-text">Unique stock keeping unit. Scannable.</div>
+            <label class="form-label fw-semibold">FSC</label>
+            <input class="form-control" type="text" name="fsc" value="<?= htmlspecialchars($product['fsc'] ?? '') ?>" placeholder="e.g. FSC-1234">
+            <div class="form-text">Product code (FSC). Scannable.</div>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">Barcode</label>

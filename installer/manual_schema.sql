@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(191) NOT NULL,
   slug VARCHAR(191) NOT NULL UNIQUE,
-  sku VARCHAR(64) NULL UNIQUE,
+  fsc VARCHAR(64) NULL UNIQUE,
   barcode VARCHAR(64) NULL UNIQUE,
   description TEXT,
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS products (
   created_at DATETIME NOT NULL,
   FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL,
   INDEX idx_products_title (title),
-  INDEX idx_products_sku (sku),
+  INDEX idx_products_fsc (fsc),
   INDEX idx_products_barcode (barcode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
