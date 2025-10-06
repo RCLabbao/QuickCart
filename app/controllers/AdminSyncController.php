@@ -89,7 +89,7 @@ class AdminSyncController extends Controller
         $tmp = $_FILES['csv']['tmp_name'];
         $ext = strtolower(pathinfo($_FILES['csv']['name'] ?? '', PATHINFO_EXTENSION));
         if ($ext === 'xlsx') {
-            // Support XLSX via PhpSpreadsheet if available
+            // Support XLSX via PhpSpreadsheet if available, otherwise try lightweight Zip/XML fallback
             if (class_exists('PhpOffice\\PhpSpreadsheet\\IOFactory')) {
                 try {
                     $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
@@ -118,8 +118,30 @@ class AdminSyncController extends Controller
                     $this->redirect('/admin/sync'); return;
                 }
             } else {
-                $_SESSION['error'] = 'XLSX not supported on this server. Please install phpoffice/phpspreadsheet via Composer or upload a CSV file.';
-                $this->redirect('/admin/sync'); return;
+                // Lightweight fallback using ZipArchive and SimpleXML (handles simple sheets)
+                try {
+                    $parsed = $this->parseXlsx($tmp);
+                    if (!$parsed) { throw new \RuntimeException('Empty XLSX or unsupported format'); }
+                    $header = array_shift($parsed);
+                    $map = array_flip($header);
+                    foreach ($parsed as $arr) {
+                        if (count(array_filter($arr, fn($v)=>$v!==null && $v!==''))===0) continue;
+                        $rows[] = [
+                            'FSC' => $arr[$map['FSC']] ?? '',
+                            'Description' => $arr[$map['Description']] ?? '',
+                            'SM_SOH' => $arr[$map['SM_SOH']] ?? 0,
+                            'WH_SOH' => $arr[$map['WH_SOH']] ?? 0,
+                            'TotalSOH' => $arr[$map['TotalSOH']] ?? 0,
+                            'UnitSold' => $arr[$map['UnitSold']] ?? 0,
+                            'Categorycode' => $arr[$map['Categorycode']] ?? '',
+                            'ProductType' => $arr[$map['ProductType']] ?? '',
+                            'RegPrice' => $arr[$map['RegPrice']] ?? 0,
+                        ];
+                    }
+                } catch (\Throwable $e) {
+                    $_SESSION['error'] = 'XLSX not supported on this server. Please upload CSV instead. Details: '.$e->getMessage();
+                    $this->redirect('/admin/sync'); return;
+                }
             }
         } else {
             // CSV path (default)
@@ -160,6 +182,11 @@ class AdminSyncController extends Controller
         $updateTitle = (string)\App\Core\setting('sync_update_title','1') === '1';
         $updateCollection = (string)\App\Core\setting('sync_update_collection','1') === '1';
         $seen=0; $created=0; $updated=0; $errors=0;
+        // Ensure tag tables exist outside of transaction to avoid implicit commits
+        try {
+            $pdo->exec('CREATE TABLE IF NOT EXISTS tags (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, slug VARCHAR(120) NOT NULL UNIQUE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            $pdo->exec('CREATE TABLE IF NOT EXISTS product_tags (product_id INT NOT NULL, tag_id INT NOT NULL, PRIMARY KEY(product_id, tag_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        } catch (\Throwable $e) { /* ignore */ }
         $pdo->beginTransaction();
         try {
             foreach ($rows as $row) {
@@ -206,11 +233,9 @@ class AdminSyncController extends Controller
                     $pdo->prepare($sql)->execute($vals);
                     $updated++;
                 }
-                // Optional: tag with ProductType
+                // Optional: tag with ProductType (no DDL here; DDL was done before transaction)
                 if ($ptype !== '' && !$dryRun) {
                     try {
-                        $pdo->exec('CREATE TABLE IF NOT EXISTS tags (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, slug VARCHAR(120) NOT NULL UNIQUE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-                        $pdo->exec('CREATE TABLE IF NOT EXISTS product_tags (product_id INT NOT NULL, tag_id INT NOT NULL, PRIMARY KEY(product_id, tag_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
                         $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $ptype));
                         $t = $pdo->prepare('INSERT INTO tags (name,slug) VALUES (?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)');
                         $t->execute([$ptype,$slug]);
@@ -220,9 +245,13 @@ class AdminSyncController extends Controller
                     } catch (\Throwable $e) { /* ignore tags failures */ }
                 }
             }
-            if ($dryRun) { $pdo->rollBack(); } else { $pdo->commit(); }
+            if ($dryRun) {
+                if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            } else {
+                if ($pdo->inTransaction()) { $pdo->commit(); }
+            }
         } catch (\Throwable $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
             throw $e;
         }
         return compact('seen','created','updated','errors');
@@ -255,6 +284,8 @@ class AdminSyncController extends Controller
             $rows = $st->fetchAll();
             // Temporarily adjust price update policy if webhook wants only stock
             if (!$webhookUpdatePrice) {
+
+
                 $this->setSetting('sync_update_price','0');
             }
             $res = $this->processRows($rows, false);
@@ -274,5 +305,49 @@ class AdminSyncController extends Controller
         $st = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
         $st->execute([$key,$value]);
     }
+
+    // Minimal XLSX parser using ZipArchive + SimpleXML (Active sheet only)
+    private function parseXlsx(string $file): array
+    {
+        if (!class_exists('ZipArchive')) { throw new \RuntimeException('ZipArchive not available'); }
+        $zip = new \ZipArchive();
+        if ($zip->open($file) !== true) { throw new \RuntimeException('Cannot open XLSX'); }
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        if ($sheetXml === false) { $sheetXml = $zip->getFromName('xl/worksheets/sheet.xml'); }
+        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+        $zip->close();
+        if ($sheetXml === false) { throw new \RuntimeException('Sheet XML not found'); }
+        $shared = [];
+        if ($sharedXml !== false) {
+            $sx = @simplexml_load_string($sharedXml);
+            if ($sx && isset($sx->si)) {
+                foreach ($sx->si as $i => $si) {
+                    // concatenate all t nodes
+                    $texts = [];
+                    foreach ($si->t as $t) { $texts[] = (string)$t; }
+                    if (!$texts && isset($si->r)) {
+                        foreach ($si->r as $r) { $texts[] = (string)$r->t; }
+                    }
+                    $shared[(int)$i] = implode('', $texts);
+                }
+            }
+        }
+        $sx = @simplexml_load_string($sheetXml);
+        if (!$sx) { throw new \RuntimeException('Invalid sheet XML'); }
+        $rows = [];
+        foreach ($sx->sheetData->row as $row) {
+            $line = [];
+            foreach ($row->c as $c) {
+                $t = (string)($c['t'] ?? '');
+                $v = (string)($c->v ?? '');
+                if ($t === 's') { // shared string
+                    $idx = (int)$v; $line[] = $shared[$idx] ?? '';
+                } else { $line[] = $v; }
+            }
+            $rows[] = $line;
+        }
+        return $rows;
+    }
+
 }
 

@@ -320,8 +320,27 @@ class AdminProductsController extends Controller
             $st = DB::pdo()->prepare("UPDATE products SET status=? WHERE id IN ($in)");
             $params = array_merge([$action], $ids); $st->execute($params);
         } elseif ($action === 'delete') {
-            $st = DB::pdo()->prepare("DELETE FROM products WHERE id IN ($in)");
-            $st->execute($ids);
+            $pdo = DB::pdo();
+            // Find products that are referenced by order_items and skip them (preserve order history)
+            $ref = $pdo->prepare("SELECT DISTINCT product_id FROM order_items WHERE product_id IN ($in)");
+            $ref->execute($ids);
+            $blocked = array_map('intval', $ref->fetchAll(\PDO::FETCH_COLUMN));
+            $deletable = array_values(array_diff($ids, $blocked));
+            if ($deletable) {
+                $in2 = implode(',', array_fill(0, count($deletable), '?'));
+                // Clean related rows first
+                try { $pdo->prepare("DELETE FROM product_images WHERE product_id IN ($in2)")->execute($deletable); } catch (\Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM product_tags WHERE product_id IN ($in2)")->execute($deletable); } catch (\Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM product_stock_events WHERE product_id IN ($in2)")->execute($deletable); } catch (\Throwable $e) {}
+                // Finally delete products
+                $st = $pdo->prepare("DELETE FROM products WHERE id IN ($in2)");
+                $st->execute($deletable);
+            }
+            if (!empty($blocked)) {
+                $_SESSION['error'] = count($blocked)." product(s) were not deleted because they are referenced by existing orders.";
+            } else {
+                $_SESSION['success'] = 'Selected products deleted.';
+            }
         } elseif ($action === 'assign_collection') {
             $cid = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
             $st = DB::pdo()->prepare("UPDATE products SET collection_id=? WHERE id IN ($in)");

@@ -13,172 +13,162 @@
   </div>
 </div>
 
-<!-- System Statistics -->
-<div class="row g-4 mb-4">
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
-          <i class="bi bi-box fs-4 text-primary"></i>
-        </div>
-        <h3 class="h4 mb-1"><?= number_format($stats['products']) ?></h3>
-        <p class="text-muted mb-0">Products</p>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
-          <i class="bi bi-cart-check fs-4 text-success"></i>
-        </div>
-        <h3 class="h4 mb-1"><?= number_format($stats['orders']) ?></h3>
-        <p class="text-muted mb-0">Orders</p>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
-          <i class="bi bi-grid fs-4 text-info"></i>
-        </div>
-        <h3 class="h4 mb-1"><?= number_format($stats['collections']) ?></h3>
-        <p class="text-muted mb-0">Collections</p>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-body text-center">
-        <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
-          <i class="bi bi-people fs-4 text-warning"></i>
-        </div>
-        <h3 class="h4 mb-1"><?= number_format($stats['users']) ?></h3>
-        <p class="text-muted mb-0">Users</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- System Health Check -->
-<div class="row g-4 mb-4">
-  <div class="col-lg-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-shield-check me-2"></i>System Health Check
-        </h5>
-      </div>
-      <div class="card-body">
-        <div class="list-group list-group-flush">
-          <?php foreach ($checks as $item => $status): ?>
-            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-              <span><?= htmlspecialchars($item) ?></span>
-              <?php if ($status): ?>
-                <span class="badge bg-success">
-                  <i class="bi bi-check-circle me-1"></i>OK
-                </span>
-              <?php else: ?>
-                <span class="badge bg-warning">
-                  <i class="bi bi-exclamation-triangle me-1"></i>Missing
-                </span>
-              <?php endif; ?>
+<!-- Sub Tabs -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-overview" type="button" role="tab">Overview</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-actions" type="button" role="tab">Actions</button>
+  </li>
+</ul>
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
+    <!-- System Statistics -->
+    <div class="row g-4 mb-4">
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+              <i class="bi bi-box fs-4 text-primary"></i>
             </div>
-          <?php endforeach; ?>
+            <h3 class="h4 mb-1"><?= number_format($stats['products'] ?? 0) ?></h3>
+            <p class="text-muted mb-0">Products</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+              <i class="bi bi-cart-check fs-4 text-success"></i>
+            </div>
+            <h3 class="h4 mb-1"><?= number_format($stats['orders'] ?? 0) ?></h3>
+            <p class="text-muted mb-0">Orders</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+              <i class="bi bi-grid fs-4 text-info"></i>
+            </div>
+            <h3 class="h4 mb-1"><?= number_format($stats['collections'] ?? 0) ?></h3>
+            <p class="text-muted mb-0">Collections</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+              <i class="bi bi-people fs-4 text-warning"></i>
+            </div>
+            <h3 class="h4 mb-1"><?= number_format($stats['users'] ?? 0) ?></h3>
+            <p class="text-muted mb-0">Users</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Health Check -->
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-shield-check me-2"></i>System Health Check
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="list-group list-group-flush">
+              <?php foreach ($checks as $item => $status): ?>
+                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                  <span><?= htmlspecialchars($item) ?></span>
+                  <?php if ($status): ?>
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>OK</span>
+                  <?php else: ?>
+                    <span class="badge bg-warning"><i class="bi bi-exclamation-triangle me-1"></i>Missing</span>
+                  <?php endif; ?>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-hdd me-2"></i>Database Table Sizes
+            </h5>
+          </div>
+          <div class="card-body">
+            <?php if (empty($table_sizes)): ?>
+              <div class="alert alert-light border">Not available on this host.</div>
+            <?php else: ?>
+            <div class="table-responsive">
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Table</th>
+                    <th class="text-end">Size (MB)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach (array_slice($table_sizes, 0, 8) as $table): ?>
+                    <tr>
+                      <td><?= htmlspecialchars($table['table_name']) ?></td>
+                      <td class="text-end"><span class="badge bg-light text-dark"><?= $table['size_mb'] ?></span></td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+            <?php endif; ?>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="col-lg-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-hdd me-2"></i>Database Table Sizes
-        </h5>
+  <div class="tab-pane fade" id="tab-actions" role="tabpanel">
+    <!-- Maintenance Actions -->
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom"><h5 class="card-title mb-0"><i class="bi bi-tools me-2"></i>Database Optimization</h5></div>
+          <div class="card-body">
+            <p class="text-muted mb-4">Optimize database structure, add missing columns and indexes for better performance.</p>
+            <form method="post" action="/admin/maintenance/optimize" onsubmit="return confirmAction('optimize the database')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-warning w-100"><i class="bi bi-gear me-2"></i>Optimize Database</button>
+            </form>
+            <div class="mt-3"><small class="text-muted"><i class="bi bi-info-circle me-1"></i>This will add missing columns, tables, and indexes. Safe to run multiple times.</small></div>
+          </div>
+        </div>
       </div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead>
-              <tr>
-                <th>Table</th>
-                <th class="text-end">Size (MB)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach (array_slice($table_sizes, 0, 8) as $table): ?>
-                <tr>
-                  <td><?= htmlspecialchars($table['table_name']) ?></td>
-                  <td class="text-end">
-                    <span class="badge bg-light text-dark"><?= $table['size_mb'] ?></span>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
+
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom"><h5 class="card-title mb-0"><i class="bi bi-database-add me-2"></i>Demo Data</h5></div>
+          <div class="card-body">
+            <p class="text-muted mb-4">Add sample products, orders, and collections for testing and demonstration purposes.</p>
+            <form method="post" action="/admin/maintenance/seed-demo" onsubmit="return confirmAction('add demo data')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-info w-100"><i class="bi bi-plus-circle me-2"></i>Add Demo Data</button>
+            </form>
+            <div class="mt-3"><small class="text-muted"><i class="bi bi-exclamation-triangle me-1"></i>This will add 300+ demo products and sample orders. Use only for testing.</small></div>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- Reset, Wipe, Wipe Demo are already below in the file and remain accessible within this tab -->
   </div>
 </div>
-
-<!-- Maintenance Actions -->
-<div class="row g-4">
-  <div class="col-lg-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-tools me-2"></i>Database Optimization
-        </h5>
-      </div>
-      <div class="card-body">
-        <p class="text-muted mb-4">
-          Optimize database structure, add missing columns and indexes for better performance.
-        </p>
-        <form method="post" action="/admin/maintenance/optimize" onsubmit="return confirmAction('optimize the database')">
-          <?= csrf_field() ?>
-          <button type="submit" class="btn btn-warning w-100">
-            <i class="bi bi-gear me-2"></i>Optimize Database
-          </button>
-        </form>
-        <div class="mt-3">
-          <small class="text-muted">
-            <i class="bi bi-info-circle me-1"></i>
-            This will add missing columns, tables, and indexes. Safe to run multiple times.
-          </small>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-database-add me-2"></i>Demo Data
-        </h5>
-      </div>
-      <div class="card-body">
-        <p class="text-muted mb-4">
-          Add sample products, orders, and collections for testing and demonstration purposes.
-        </p>
-        <form method="post" action="/admin/maintenance/seed-demo" onsubmit="return confirmAction('add demo data')">
-          <?= csrf_field() ?>
-          <button type="submit" class="btn btn-info w-100">
-            <i class="bi bi-plus-circle me-2"></i>Add Demo Data
-          </button>
-        </form>
-        <div class="mt-3">
-          <small class="text-muted">
-            <i class="bi bi-exclamation-triangle me-1"></i>
-            This will add 300+ demo products and sample orders. Use only for testing.
-          </small>
-        </div>
-      </div>
-    </div>
-  </div>
 
   </div>
 </div>

@@ -8,13 +8,12 @@ class AdminMaintenanceController extends Controller
     {
         $pdo = DB::pdo();
 
-        // Get database statistics
-        $stats = [
-            'products' => (int)$pdo->query('SELECT COUNT(*) FROM products')->fetchColumn(),
-            'orders' => (int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn(),
-            'collections' => (int)$pdo->query('SELECT COUNT(*) FROM collections')->fetchColumn(),
-            'users' => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(),
-        ];
+        // Get database statistics (safe defaults if tables are missing)
+        $stats = [ 'products' => 0, 'orders' => 0, 'collections' => 0, 'users' => 0 ];
+        foreach (['products','orders','collections','users'] as $t) {
+            try { $stats[$t === 'users' ? 'users' : $t] = (int)$pdo->query('SELECT COUNT(*) FROM `'.$t.'`')->fetchColumn(); }
+            catch (\Throwable $e) { /* ignore */ }
+        }
 
         // Get table sizes (best-effort; some hosts restrict information_schema)
         try {
@@ -30,16 +29,19 @@ class AdminMaintenanceController extends Controller
             $tableSizes = [];
         }
 
-        // Check for missing columns/tables
-        $checks = [
-            'products.stock' => $this->columnExists($pdo, 'products', 'stock'),
-            'products.sale_price' => $this->columnExists($pdo, 'products', 'sale_price'),
-            'orders.notes' => $this->columnExists($pdo, 'orders', 'notes'),
-            'coupons table' => $this->tableExists($pdo, 'coupons'),
-            'order_events table' => $this->tableExists($pdo, 'order_events'),
-            'delivery_fees table' => $this->tableExists($pdo, 'delivery_fees'),
-            'customer_profiles table' => $this->tableExists($pdo, 'customer_profiles'),
+        // Check for missing columns/tables (guard each call)
+        $checks = [];
+        $checkItems = [
+            ['products','stock','products.stock'],
+            ['products','sale_price','products.sale_price'],
+            ['orders','notes','orders.notes'],
         ];
+        foreach ($checkItems as [$tbl,$col,$label]) {
+            try { $checks[$label] = $this->columnExists($pdo, $tbl, $col); } catch (\Throwable $e) { $checks[$label] = false; }
+        }
+        foreach (['coupons','order_events','delivery_fees','customer_profiles'] as $tbl) {
+            try { $checks[$tbl.' table'] = $this->tableExists($pdo, $tbl); } catch (\Throwable $e) { $checks[$tbl.' table'] = false; }
+        }
 
         $this->adminView('admin/maintenance/index', [
             'title' => 'System Maintenance',

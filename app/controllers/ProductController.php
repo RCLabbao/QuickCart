@@ -71,9 +71,14 @@ class ProductController extends Controller
             return;
         }
 
-        $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC LIMIT ' . $limit);
         $like = "%$q%";
-        $stmt->execute([$like, $like]);
+        try {
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC LIMIT ' . $limit);
+            $stmt->execute([$like, $like]);
+        } catch (\Throwable $e) {
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC LIMIT ' . $limit);
+            $stmt->execute([$like, $like]);
+        }
         $products = $stmt->fetchAll();
 
         // Get total count for the query
