@@ -12,9 +12,18 @@ class AdminSettingsController extends Controller
         foreach ($stmt->fetchAll() as $row) { $settings[$row['key']] = $row['value']; }
         $fees = [];
         try { $fees = $pdo->query('SELECT id, city, fee FROM delivery_fees ORDER BY city')->fetchAll(); } catch (\Throwable $e) { $fees = []; }
+        $collections = [];
+        try { $collections = $pdo->query('SELECT id, title, slug FROM collections ORDER BY title')->fetchAll(); } catch (\Throwable $e) { $collections = []; }
         $activeTab = $_GET['tab'] ?? 'general';
         $flash = $_SESSION['settings_flash'] ?? null; if ($flash) { unset($_SESSION['settings_flash']); }
-        $this->adminView('admin/settings/index', ['title' => 'Settings', 'settings' => $settings, 'fees' => $fees, 'activeTab' => $activeTab, 'flash' => $flash]);
+        $this->adminView('admin/settings/index', [
+            'title' => 'Settings',
+            'settings' => $settings,
+            'fees' => $fees,
+            'collections' => $collections,
+            'activeTab' => $activeTab,
+            'flash' => $flash
+        ]);
     }
 
     public function update(): void

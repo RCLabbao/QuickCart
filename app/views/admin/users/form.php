@@ -59,20 +59,7 @@
           </select>
           <div class="form-text">User permissions come from assigned roles.</div>
         </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Direct Permissions (overrides)</label>
-          <div class="border rounded p-2" style="max-height:220px; overflow:auto;">
-            <?php $userPermIds = $userPermIds ?? []; foreach (($perms ?? []) as $p): ?>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="perms[]" id="perm<?= (int)$p['id'] ?>" value="<?= (int)$p['id'] ?>" <?= in_array((int)$p['id'], $userPermIds, true) ? 'checked' : '' ?>>
-                <label class="form-check-label" for="perm<?= (int)$p['id'] ?>">
-                  <?= htmlspecialchars($p['name']) ?> <small class="text-muted">(<?= htmlspecialchars($p['slug']) ?>)</small>
-                </label>
-              </div>
-            <?php endforeach; ?>
-          </div>
-          <div class="form-text">Checked permissions are granted directly to this user in addition to roles.</div>
-        </div>
+
         <div class="d-grid gap-2">
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-check-circle me-2"></i><?= isset($user) ? 'Update User' : 'Create User' ?>

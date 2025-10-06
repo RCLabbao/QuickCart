@@ -101,6 +101,14 @@ if (file_exists($configFile)) {
     \App\Core\DB::init(CONFIG['db']);
     \App\Core\Auth::init();
 }
+\App\Core\qc_ensure_permissions([
+  'settings.read',
+  'coupons.read','coupons.write',
+  'reports.read',
+  'sync.read','sync.run','sync.manage',
+  'collections.read'
+]);
+
 
 use App\Core\Router;
 // Re-evaluate debug after DB/settings are available
@@ -171,7 +179,7 @@ $router->post('/admin/customers/profile', 'AdminCustomersController@updateProfil
 $router->post('/admin/customers/seed-dummies', 'AdminCustomersController@seedDummies', ['perm' => 'users.write']);
 
 // Admin Collections
-$router->get('/admin/collections', 'AdminCollectionsController@index', ['perm' => 'collections.write']);
+$router->get('/admin/collections', 'AdminCollectionsController@index', ['perm' => 'collections.read']);
 $router->get('/admin/collections/create', 'AdminCollectionsController@create', ['perm' => 'collections.write']);
 $router->post('/admin/collections', 'AdminCollectionsController@store', ['perm' => 'collections.write']);
 $router->get('/admin/collections/(?P<id>\d+)/edit', 'AdminCollectionsController@edit', ['perm' => 'collections.write']);
@@ -179,7 +187,7 @@ $router->post('/admin/collections/(?P<id>\d+)', 'AdminCollectionsController@upda
 $router->post('/admin/collections/(?P<id>\d+)/delete', 'AdminCollectionsController@destroy', ['perm' => 'collections.write']);
 
 // Admin Reports
-$router->get('/admin/reports', 'AdminReportsController@index', ['perm' => 'orders.read']);
+$router->get('/admin/reports', 'AdminReportsController@index', ['perm' => 'reports.read']);
 
 
 // Admin Products
@@ -193,11 +201,11 @@ $router->post('/admin/products/(?P<id>\d+)/images/(?P<image_id>\d+)/delete', 'Ad
 $router->post('/admin/products/bulk', 'AdminProductsController@bulk', ['perm' => 'products.write']);
 $router->get('/admin/products/export', 'AdminProductsController@export', ['perm' => 'products.read']);
 // Admin Sync
-$router->get('/admin/sync', 'AdminSyncController@index', ['perm' => 'products.write']);
-$router->post('/admin/sync/save', 'AdminSyncController@save', ['perm' => 'products.write']);
-$router->post('/admin/sync/test', 'AdminSyncController@test', ['perm' => 'products.write']);
-$router->post('/admin/sync/run', 'AdminSyncController@run', ['perm' => 'products.write']);
-$router->post('/admin/sync/upload', 'AdminSyncController@uploadCsv', ['perm' => 'products.write']);
+$router->get('/admin/sync', 'AdminSyncController@index', ['perm' => 'sync.read']);
+$router->post('/admin/sync/save', 'AdminSyncController@save', ['perm' => 'sync.manage']);
+$router->post('/admin/sync/test', 'AdminSyncController@test', ['perm' => 'sync.run']);
+$router->post('/admin/sync/run', 'AdminSyncController@run', ['perm' => 'sync.run']);
+$router->post('/admin/sync/upload', 'AdminSyncController@uploadCsv', ['perm' => 'sync.run']);
 $router->post('/admin/products/(?P<id>\d+)/images/sort', 'AdminProductsController@sortImages', ['perm' => 'products.write']);
 $router->post('/admin/products/quick-update', 'AdminProductsController@quickUpdate', ['perm' => 'products.write']);
 $router->post('/admin/products/import-stock', 'AdminProductsController@importStock', ['perm' => 'products.write']);
@@ -236,12 +244,12 @@ $router->post('/admin/maintenance/wipe-demo', 'AdminMaintenanceController@wipeDe
 $router->post('/admin/maintenance/reset-db', 'AdminMaintenanceController@resetDb', ['perm' => 'settings.write']);
 
 // Admin Coupons
-$router->get('/admin/coupons', 'AdminCouponsController@index', ['perm' => 'settings.read']);
-$router->get('/admin/coupons/create', 'AdminCouponsController@create', ['perm' => 'settings.write']);
-$router->post('/admin/coupons', 'AdminCouponsController@store', ['perm' => 'settings.write']);
-$router->get('/admin/coupons/(?P<id>\d+)/edit', 'AdminCouponsController@edit', ['perm' => 'settings.write']);
-$router->post('/admin/coupons/(?P<id>\d+)', 'AdminCouponsController@update', ['perm' => 'settings.write']);
-$router->post('/admin/coupons/(?P<id>\d+)/delete', 'AdminCouponsController@delete', ['perm' => 'settings.write']);
+$router->get('/admin/coupons', 'AdminCouponsController@index', ['perm' => 'coupons.read']);
+$router->get('/admin/coupons/create', 'AdminCouponsController@create', ['perm' => 'coupons.write']);
+$router->post('/admin/coupons', 'AdminCouponsController@store', ['perm' => 'coupons.write']);
+$router->get('/admin/coupons/(?P<id>\d+)/edit', 'AdminCouponsController@edit', ['perm' => 'coupons.write']);
+$router->post('/admin/coupons/(?P<id>\d+)', 'AdminCouponsController@update', ['perm' => 'coupons.write']);
+$router->post('/admin/coupons/(?P<id>\d+)/delete', 'AdminCouponsController@delete', ['perm' => 'coupons.write']);
 
 
 // Order quick actions

@@ -109,3 +109,17 @@ function order_public_parts_from_slug(string $slug): array {
     return [$parts[0], $parts[1]];
 }
 
+
+
+// Ensure a set of permissions exist (idempotent)
+function qc_ensure_permissions(array $slugs): void {
+    try {
+        $pdo = DB::pdo();
+        $stmt = $pdo->prepare('INSERT INTO permissions (slug, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name)');
+        foreach ($slugs as $slug) {
+            $slug = (string)$slug; if ($slug==='') continue;
+            $name = ucwords(str_replace(['.','_'], ' ', $slug));
+            $stmt->execute([$slug, $name]);
+        }
+    } catch (\Throwable $e) {}
+}

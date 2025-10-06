@@ -271,15 +271,53 @@
   <form method="post" action="/admin/settings" class="row g-3">
     <?= csrf_field() ?>
     <input type="hidden" name="scope" value="catalog">
+
+    <?php $hiddenRaw = (string)($settings['hidden_collections'] ?? '');
+          $hiddenParts = preg_split('/[\s,]+/u', $hiddenRaw, -1, PREG_SPLIT_NO_EMPTY);
+          $hiddenSet = array_flip(array_map('strval', $hiddenParts)); ?>
+
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom"><strong>Collections Visibility</strong></div>
+        <div class="card-body" style="max-height:280px; overflow:auto;">
+          <div class="row g-2">
+            <?php foreach (($collections ?? []) as $c): $id=(string)$c['id']; $slug=(string)$c['slug'];
+              $checked = isset($hiddenSet[$id]) || isset($hiddenSet[$slug]); ?>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input coll-hide" type="checkbox" data-slug="<?= htmlspecialchars($slug) ?>" id="coll<?= (int)$c['id'] ?>" <?= $checked?'checked':'' ?>>
+                  <label class="form-check-label" for="coll<?= (int)$c['id'] ?>">
+                    <?= htmlspecialchars($c['title']) ?> <small class="text-muted">(<?= htmlspecialchars($slug) ?>)</small>
+                  </label>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+          <div class="form-text">Checked collections will be hidden sitewide.</div>
+        </div>
+      </div>
+    </div>
+
     <div class="col-12">
       <label class="form-label">Hidden Collections (IDs or slugs)</label>
-      <textarea class="form-control" name="hidden_collections" rows="4" placeholder="e.g. 3, clearance, archived&#10;One per line or comma-separated"><?php echo htmlspecialchars($settings['hidden_collections'] ?? ''); ?></textarea>
-      <small class="text-muted">Collections listed here (and all products inside them) will be hidden sitewide: not listed, not searchable, and visiting their URLs returns 404.</small>
+      <textarea class="form-control" id="hiddenCollections" name="hidden_collections" rows="3" placeholder="e.g. 3, clearance, archived&#10;One per line or comma-separated"><?php echo htmlspecialchars($settings['hidden_collections'] ?? ''); ?></textarea>
+      <small class="text-muted">You can paste slugs/IDs directly, or use the checkboxes above.</small>
     </div>
     <div class="col-12">
       <button class="btn btn-primary">Save Catalog Settings</button>
     </div>
   </form>
+  <script>
+    (function(){
+      const textarea = document.getElementById('hiddenCollections');
+      const boxes = Array.from(document.querySelectorAll('.coll-hide'));
+      function syncFromBoxes(){
+        const slugs = boxes.filter(b=>b.checked).map(b=>b.getAttribute('data-slug')).filter(Boolean);
+        textarea.value = slugs.join(', ');
+      }
+      boxes.forEach(b=>b.addEventListener('change', syncFromBoxes));
+    })();
+  </script>
 </div>
 
 

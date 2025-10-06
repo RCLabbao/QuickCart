@@ -15,8 +15,7 @@ class AdminUsersController extends Controller
     {
         $pdo = DB::pdo();
         $roles = $pdo->query('SELECT id, name, slug FROM roles ORDER BY id')->fetchAll();
-        $perms = $pdo->query('SELECT id, name, slug FROM permissions ORDER BY name')->fetchAll();
-        $this->adminView('admin/users/form', ['title' => 'Create Admin User', 'roles' => $roles, 'perms'=>$perms]);
+        $this->adminView('admin/users/form', ['title' => 'Create Admin User', 'roles' => $roles]);
     }
 
     public function store(): void
@@ -31,12 +30,7 @@ class AdminUsersController extends Controller
             $roles = $_POST['roles'] ?? [];
             $ins = $pdo->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
             foreach ($roles as $rid) { $ins->execute([$uid, (int)$rid]); }
-            // direct permissions
-            $perms = $_POST['perms'] ?? [];
-            if (!empty($perms)) {
-                $ipu = $pdo->prepare('INSERT INTO user_permissions (user_id, permission_id) VALUES (?, ?)');
-                foreach ($perms as $pid) { $ipu->execute([$uid, (int)$pid]); }
-            }
+
             $pdo->commit();
         } catch (\Throwable $e) { $pdo->rollBack(); }
         $this->redirect('/admin/users');
@@ -50,16 +44,11 @@ class AdminUsersController extends Controller
         $roles = $pdo->query('SELECT id, name, slug FROM roles ORDER BY id')->fetchAll();
         $assigned = $pdo->prepare('SELECT role_id FROM user_roles WHERE user_id=?'); $assigned->execute([$id]);
         $assignedIds = array_map('intval', $assigned->fetchAll(\PDO::FETCH_COLUMN));
-        $perms = $pdo->query('SELECT id, name, slug FROM permissions ORDER BY name')->fetchAll();
-        $up = $pdo->prepare('SELECT permission_id FROM user_permissions WHERE user_id=?'); $up->execute([$id]);
-        $userPermIds = array_map('intval', $up->fetchAll(\PDO::FETCH_COLUMN));
         $this->adminView('admin/users/form', [
             'title' => 'Edit Admin User',
             'user'=>$user,
             'roles'=>$roles,
-            'assignedIds'=>$assignedIds,
-            'perms'=>$perms,
-            'userPermIds'=>$userPermIds
+            'assignedIds'=>$assignedIds
         ]);
     }
 
@@ -97,13 +86,7 @@ class AdminUsersController extends Controller
         $pdo->prepare('DELETE FROM user_roles WHERE user_id=?')->execute([$id]);
         $ins = $pdo->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
         foreach ($newRoleIds as $rid) { $ins->execute([$id, (int)$rid]); }
-        // update direct permissions
-        $pdo->prepare('DELETE FROM user_permissions WHERE user_id=?')->execute([$id]);
-        $perms = array_map('intval', $_POST['perms'] ?? []);
-        if (!empty($perms)) {
-            $ipu = $pdo->prepare('INSERT INTO user_permissions (user_id, permission_id) VALUES (?, ?)');
-            foreach ($perms as $pid) { $ipu->execute([$id, (int)$pid]); }
-        }
+
         $this->redirect('/admin/users');
     }
 
