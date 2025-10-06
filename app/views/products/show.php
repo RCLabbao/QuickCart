@@ -130,7 +130,8 @@
         <?= price((float)$product['price']) ?>
       <?php endif; ?>
     </div>
-    <form id="pdpAddToCartForm" class="addToCart mb-3">
+    <form id="pdpAddToCartForm" class="addToCart mb-3" method="post" action="/cart/add">
+      <?= App\Core\csrf_field() ?>
       <input type="hidden" name="product_id" value="<?= (int)$product['id'] ?>"/>
       <div class="input-group">
         <button class="btn btn-outline-secondary" type="button" data-qty="-1" <?= $stk<=0?'disabled':'' ?>>-</button>

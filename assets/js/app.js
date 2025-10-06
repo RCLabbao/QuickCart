@@ -1,14 +1,15 @@
 document.addEventListener('DOMContentLoaded',()=>{
   // Cart drawer
-  const offcanvas = new bootstrap.Offcanvas('#cartDrawer');
+  const offcanvasEl = document.getElementById('cartDrawer');
+  const offcanvas = offcanvasEl ? new bootstrap.Offcanvas(offcanvasEl) : null;
   const openBtn = document.getElementById('openCart');
   const openBtnDesktop = document.getElementById('openCartDesktop');
   const cartCount = document.getElementById('cartCount');
   const cartCountDesktop = document.getElementById('cartCountDesktop');
 
   // Handle both mobile and desktop cart buttons
-  openBtn?.addEventListener('click',()=>offcanvas.show());
-  openBtnDesktop?.addEventListener('click',()=>offcanvas.show());
+  openBtn?.addEventListener('click',()=>{ offcanvas && offcanvas.show(); });
+  openBtnDesktop?.addEventListener('click',()=>{ offcanvas && offcanvas.show(); });
   // Initial load of cart drawer and count
   reloadCart();
 
@@ -26,7 +27,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       // Update both cart count badges
       if(cartCount) cartCount.textContent = json.count;
       if(cartCountDesktop) cartCountDesktop.textContent = json.count;
-      offcanvas.show();
+      offcanvas && offcanvas.show();
       loadCart();
     }
   });
