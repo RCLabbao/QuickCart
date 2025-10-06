@@ -180,6 +180,34 @@
     </div>
   </div>
 
+  </div>
+</div>
+
+<!-- Reset Database (Reinstall schema + seed samples) -->
+<div class="row g-4 mt-1">
+  <div class="col-lg-12">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Database (Reinstall schema + seed samples)
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="text-danger">
+          This will reinstall database structures and wipe catalog, orders, addresses, tags and related data, then seed sample data.
+          Admin users and settings are preserved. Use only if your database is corrupted or migrations failed.
+        </p>
+        <form method="post" action="/admin/maintenance/reset-db" onsubmit="return confirm('This will REINSTALL the database schema and DELETE all catalog/order data, then add sample data. Admin users and settings are preserved. Proceed?');">
+          <?= csrf_field() ?>
+          <button type="submit" class="btn btn-outline-warning">
+            <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Database
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Dangerous: Wipe Data -->
 <div class="row g-4 mt-1">
   <div class="col-lg-12">

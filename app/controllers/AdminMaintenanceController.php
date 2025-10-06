@@ -111,55 +111,125 @@ class AdminMaintenanceController extends Controller
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin'); }
         $pdo = DB::pdo();
+        $this->seedSamples($pdo);
+        echo '<div style="padding:20px;font-family:system-ui">Seeded demo data. <a href="/admin">Back to admin</a></div>';
+    }
+
+    public function resetDb(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+        $pdo = DB::pdo();
+        try {
+            // 1) Ensure schema is present/consistent (best-effort)
+            $this->runSqlFile($pdo, BASE_PATH . '/installer/schema.sql');
+
+            // 2) Wipe data tables (preserve users/roles/permissions/settings)
+            $tables = [
+                'order_items','addresses','orders',
+                'product_images','product_tags','product_stock_events','products',
+                'tags','collections',
+                'coupons','delivery_fees',
+                'customer_profiles','pickup_locations'
+            ];
+            foreach ($tables as $t) {
+                try { $pdo->exec('SET FOREIGN_KEY_CHECKS=0'); } catch (\Throwable $e) {}
+                try { $pdo->exec('TRUNCATE TABLE `'.$t.'`'); } catch (\Throwable $e) {}
+                try { $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); } catch (\Throwable $e) {}
+            }
+
+            // 3) Apply structural optimizations (add missing columns/indexes)
+            $this->ensureColumn($pdo, 'products','stock','ALTER TABLE products ADD COLUMN stock INT NOT NULL DEFAULT 0 AFTER status');
+            $this->ensureColumn($pdo, 'products','sale_price','ALTER TABLE products ADD COLUMN sale_price DECIMAL(10,2) NULL AFTER price');
+            $this->ensureColumn($pdo, 'products','sale_start','ALTER TABLE products ADD COLUMN sale_start DATETIME NULL AFTER sale_price');
+            $this->ensureColumn($pdo, 'products','sale_end','ALTER TABLE products ADD COLUMN sale_end DATETIME NULL AFTER sale_start');
+            $this->ensureColumn($pdo, 'collections','image_url','ALTER TABLE collections ADD COLUMN image_url VARCHAR(255) NULL AFTER description');
+            $this->ensureColumn($pdo, 'orders','notes','ALTER TABLE orders ADD COLUMN notes TEXT NULL AFTER status');
+            $this->ensureColumn($pdo, 'orders','discount','ALTER TABLE orders ADD COLUMN discount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER shipping_fee');
+            $this->ensureColumn($pdo, 'orders','coupon_code','ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(64) NULL AFTER discount');
+            $this->ensureTable($pdo, 'order_events',
+                'CREATE TABLE order_events (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, user_id INT NULL, type VARCHAR(64) NOT NULL, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            $this->ensureTable($pdo, 'product_stock_events',
+                'CREATE TABLE product_stock_events (id INT AUTO_INCREMENT PRIMARY KEY, product_id INT NOT NULL, user_id INT NULL, delta INT NOT NULL, reason VARCHAR(255) NULL, created_at DATETIME NOT NULL, FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+            // 4) Seed samples (no admin/users touched)
+            $this->seedSamples($pdo);
+
+            echo '<div style="padding:20px;font-family:system-ui">Database reset complete. Schema reinstalled and demo data seeded. Users and settings preserved. <a href="/admin">Back to admin</a></div>';
+        } catch (\Throwable $e) {
+            echo '<div style="padding:20px;font-family:system-ui">Reset failed: '.htmlspecialchars($e->getMessage()).' <a href="/admin">Back to admin</a></div>';
+        }
+    }
+
+    private function runSqlFile(\PDO $pdo, string $path): void
+    {
+        if (!is_file($path)) { return; }
+        $sql = file_get_contents($path);
+        if ($sql === false) { return; }
+        // Naive splitter by semicolon; safe for our simple schema file
+        $stmts = array_filter(array_map('trim', preg_split('/;\s*\n/', $sql)));
+        foreach ($stmts as $stmt) {
+            if ($stmt === '' || strpos(ltrim($stmt), '--') === 0) { continue; }
+            try { $pdo->exec($stmt); } catch (\Throwable $e) { /* ignore individual failures */ }
+        }
+    }
+
+    private function seedSamples(\PDO $pdo): void
+    {
         // Ensure collections exist
-        $existing = (int)$pdo->query('SELECT COUNT(*) FROM collections')->fetchColumn();
+        $existing = 0;
+        try { $existing = (int)$pdo->query('SELECT COUNT(*) FROM collections')->fetchColumn(); } catch (\Throwable $e) {}
         if ($existing < 6) {
-            $pdo->exec("INSERT IGNORE INTO collections (title,slug,description) VALUES
-              ('Apparel','apparel','Clothing and fashion'),
-              ('Accessories','accessories','Complete your look'),
-              ('Electronics','electronics','Gadgets and devices'),
-              ('Home & Living','home-living','For your space'),
-              ('Beauty','beauty','Skincare and wellness'),
-              ('Sports','sports','Gear and active wear'),
-              ('Kids','kids','For the little ones')");
+            try {
+                $pdo->exec("INSERT IGNORE INTO collections (title,slug,description) VALUES
+                  ('Apparel','apparel','Clothing and fashion'),
+                  ('Accessories','accessories','Complete your look'),
+                  ('Electronics','electronics','Gadgets and devices'),
+                  ('Home & Living','home-living','For your space'),
+                  ('Beauty','beauty','Skincare and wellness'),
+                  ('Sports','sports','Gear and active wear'),
+                  ('Kids','kids','For the little ones')");
+            } catch (\Throwable $e) {}
         }
-        $collectionIds = $pdo->query('SELECT id FROM collections ORDER BY id')->fetchAll(\PDO::FETCH_COLUMN);
-        // Seed products (adds 300 more demo products)
-        $stmt = $pdo->prepare('INSERT INTO products (title,slug,description,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,"active",?, ?, NOW())');
-        $insImg = $pdo->prepare('INSERT INTO product_images (product_id,url,sort_order) VALUES (?,?,?)');
-        $start = (int)$pdo->query('SELECT COALESCE(MAX(id),0)+1 FROM products')->fetchColumn();
-        for ($i=$start; $i<$start+300; $i++) {
-            $t = "Demo Product $i"; $s = strtolower(preg_replace('/[^a-z0-9]+/','-', $t));
-            $d = 'Modern demo item for showcasing the catalog.';
-            $price = rand(199, 9999)/1.0;
-            $r = rand(0,100); $stock = $r<10 ? 0 : ($r<30 ? rand(1,3) : rand(4,20));
-            $cid = $collectionIds[array_rand($collectionIds)] ?? null;
-            $stmt->execute([$t,$s,$d,$price,$stock,$cid]);
-            $pid = (int)$pdo->lastInsertId();
-            $count = rand(1,2); for($k=0;$k<$count;$k++){ $insImg->execute([$pid, 'https://picsum.photos/seed/'.($pid*10+$k).'/1000/1000', $k]); }
-        }
+        $collectionIds = [];
+        try { $collectionIds = $pdo->query('SELECT id FROM collections ORDER BY id')->fetchAll(\PDO::FETCH_COLUMN); } catch (\Throwable $e) {}
+        // Seed products
+        try {
+            $stmt = $pdo->prepare('INSERT INTO products (title,slug,description,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,"active",?, ?, NOW())');
+            $insImg = $pdo->prepare('INSERT INTO product_images (product_id,url,sort_order) VALUES (?,?,?)');
+            $start = (int)$pdo->query('SELECT COALESCE(MAX(id),0)+1 FROM products')->fetchColumn();
+            for ($i=$start; $i<$start+300; $i++) {
+                $t = "Demo Product $i"; $s = strtolower(preg_replace('/[^a-z0-9]+/','-', $t));
+                $d = 'Modern demo item for showcasing the catalog.';
+                $price = rand(199, 9999)/1.0;
+                $r = rand(0,100); $stock = $r<10 ? 0 : ($r<30 ? rand(1,3) : rand(4,20));
+                $cid = $collectionIds ? ($collectionIds[array_rand($collectionIds)] ?? null) : null;
+                $stmt->execute([$t,$s,$d,$price,$stock,$cid]);
+                $pid = (int)$pdo->lastInsertId();
+                $count = rand(1,2); for($k=0;$k<$count;$k++){ $insImg->execute([$pid, 'https://picsum.photos/seed/'.($pid*10+$k).'/1000/1000', $k]); }
+            }
+        } catch (\Throwable $e) {}
         // Seed a few orders as well
-        $productIds = $pdo->query('SELECT id,title,price FROM products ORDER BY RAND() LIMIT 100')->fetchAll(\PDO::FETCH_ASSOC);
-        $insOrder = $pdo->prepare('INSERT INTO orders (user_id,email,shipping_method,subtotal,shipping_fee,total,status,notes,created_at) VALUES (?,?,?,?,?,?,?,?,?)');
-        $insItem  = $pdo->prepare('INSERT INTO order_items (order_id,product_id,title,unit_price,quantity) VALUES (?,?,?,?,?)');
-        for ($i=0;$i<10;$i++){
-            $created = (new \DateTime('-'.rand(0,7).' days'))->format('Y-m-d '.sprintf('%02d:%02d:%02d', rand(9,20), rand(0,59), rand(0,59)));
-            $itemsN = rand(1,3); $subtotal = 0.0; $chosen = [];
-            for ($k=0;$k<$itemsN;$k++){ $p=$productIds[array_rand($productIds)]; if(isset($chosen[$p['id']]))continue; $chosen[$p['id']]=true; $qty=rand(1,3); $subtotal += ((float)$p['price'])*$qty; }
-            $ship = (rand(0,1)?120.00:0.00); $total=$subtotal+$ship;
-            $insOrder->execute([null,'guest'.rand(1000,9999).'@example.com', ($ship>0?'cod':'pickup'), $subtotal,$ship,$total,'processing','Seed order', $created]);
-            $oid=(int)$pdo->lastInsertId(); foreach(array_keys($chosen) as $pid){ foreach($productIds as $p){ if((int)$p['id']===(int)$pid){ $qty=rand(1,3); $insItem->execute([$oid,$pid,$p['title'],$p['price'],$qty]); break; } } }
-        }
+        try {
+            $productIds = $pdo->query('SELECT id,title,price FROM products ORDER BY RAND() LIMIT 100')->fetchAll(\PDO::FETCH_ASSOC);
+            $insOrder = $pdo->prepare('INSERT INTO orders (user_id,email,shipping_method,subtotal,shipping_fee,total,status,notes,created_at) VALUES (?,?,?,?,?,?,?,?,?)');
+            $insItem  = $pdo->prepare('INSERT INTO order_items (order_id,product_id,title,unit_price,quantity) VALUES (?,?,?,?,?)');
+            for ($i=0;$i<10;$i++){
+                $created = (new \DateTime('-'.rand(0,7).' days'))->format('Y-m-d '.sprintf('%02d:%02d:%02d', rand(9,20), rand(0,59), rand(0,59)));
+                $itemsN = rand(1,3); $subtotal = 0.0; $chosen = [];
+                for ($k=0;$k<$itemsN;$k++){ $p=$productIds[array_rand($productIds)]; if(isset($chosen[$p['id']]))continue; $chosen[$p['id']]=true; $qty=rand(1,3); $subtotal += ((float)$p['price'])*$qty; }
+                $ship = (rand(0,1)?120.00:0.00); $total=$subtotal+$ship;
+                $insOrder->execute([null,'guest'.rand(1000,9999).'@example.com', ($ship>0?'cod':'pickup'), $subtotal,$ship,$total,'processing','Seed order', $created]);
+                $oid=(int)$pdo->lastInsertId(); foreach(array_keys($chosen) as $pid){ foreach($productIds as $p){ if((int)$p['id']===(int)$pid){ $qty=rand(1,3); $insItem->execute([$oid,$pid,$p['title'],$p['price'],$qty]); break; } } }
+            }
+        } catch (\Throwable $e) {}
         // Seed a sample coupon
         try {
-            $exists = (int)$pdo->query("SELECT COUNT(*) FROM coupons")->fetchColumn();
+            $exists = (int)$pdo->query('SELECT COUNT(*) FROM coupons')->fetchColumn();
             if ($exists === 0) {
                 $pdo->prepare('INSERT INTO coupons (code,kind,amount,min_spend,expires_at,active,created_at) VALUES (?,?,?,?,?,?,NOW())')
                     ->execute(['WELCOME10','percent',10.0, null, date('Y-m-d H:i:s', strtotime('+90 days')), 1]);
             }
         } catch (\Throwable $e) {}
-
-        echo '<div style="padding:20px;font-family:system-ui">Seeded demo data. <a href="/admin">Back to admin</a></div>';
     }
 
     public function wipe(): void

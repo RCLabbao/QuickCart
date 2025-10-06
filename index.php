@@ -226,6 +226,7 @@ $router->post('/admin/maintenance/optimize', 'AdminMaintenanceController@optimiz
 $router->post('/admin/maintenance/seed-demo', 'AdminMaintenanceController@seedDemo', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/wipe', 'AdminMaintenanceController@wipe', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/wipe-demo', 'AdminMaintenanceController@wipeDemo', ['perm' => 'settings.write']);
+$router->post('/admin/maintenance/reset-db', 'AdminMaintenanceController@resetDb', ['perm' => 'settings.write']);
 
 // Admin Coupons
 $router->get('/admin/coupons', 'AdminCouponsController@index', ['perm' => 'settings.read']);
