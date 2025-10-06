@@ -10,7 +10,7 @@ class AdminOrdersController extends Controller
         if (!empty($_GET['status'])) { $where[]='status=?'; $params[]=$_GET['status']; }
         if (!empty($_GET['from'])) { $where[]='created_at >= ?'; $params[]=$_GET['from'].' 00:00:00'; }
         if (!empty($_GET['to'])) { $where[]='created_at <= ?'; $params[]=$_GET['to'].' 23:59:59'; }
-        $sql = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at,\n                       COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS customer_name,\n                       COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS phone\n                FROM orders o';
+        $sql = 'SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS customer_name, COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS phone FROM orders o';
         if ($where) { $sql .= ' WHERE '.implode(' AND ',$where); }
         $sql .= ' ORDER BY o.id DESC LIMIT 200';
         $st = $pdo->prepare($sql); $st->execute($params);
@@ -19,9 +19,9 @@ class AdminOrdersController extends Controller
         // Get overall statistics (not filtered)
         $stats = [
             'total_orders' => (int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn(),
-            'pending_orders' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE status = "pending"')->fetchColumn(),
-            'completed_orders' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE status = "completed"')->fetchColumn(),
-            'total_revenue' => (float)$pdo->query('SELECT COALESCE(SUM(total), 0) FROM orders WHERE status = "completed"')->fetchColumn()
+            'pending_orders' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE status = \'pending\'')->fetchColumn(),
+            'completed_orders' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE status = \'completed\'')->fetchColumn(),
+            'total_revenue' => (float)$pdo->query('SELECT COALESCE(SUM(total), 0) FROM orders WHERE status = \'completed\'')->fetchColumn()
         ];
 
         $this->adminView('admin/orders/index', ['title' => 'Orders', 'orders'=>$rows, 'stats'=>$stats]);
@@ -128,7 +128,7 @@ class AdminOrdersController extends Controller
         $startStr = $start->format('Y-m-d H:i:s');
         $endStr = $end->format('Y-m-d H:i:s');
 
-        $st = $pdo->prepare('SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at,\n                                     COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS customer_name,\n                                     COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), "") AS phone\n                              FROM orders o WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC');
+        $st = $pdo->prepare('SELECT o.id, o.email, o.shipping_method, o.total, o.status, o.created_at, COALESCE((SELECT a.name FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS customer_name, COALESCE((SELECT a.phone FROM addresses a WHERE a.order_id=o.id LIMIT 1), \'\') AS phone FROM orders o WHERE created_at >= ? AND created_at < ? ORDER BY o.id DESC');
         $st->execute([$startStr, $endStr]);
         $rows = $st->fetchAll();
 
@@ -136,15 +136,15 @@ class AdminOrdersController extends Controller
         $st2->execute([$startStr, $endStr]);
         $today_orders = (int)$st2->fetchColumn();
 
-        $st3 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ? AND status = "pending"');
+        $st3 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ? AND status = \'pending\'');
         $st3->execute([$startStr, $endStr]);
         $today_pending = (int)$st3->fetchColumn();
 
-        $st4 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ? AND status = "completed"');
+        $st4 = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ? AND status = \'completed\'');
         $st4->execute([$startStr, $endStr]);
         $today_completed = (int)$st4->fetchColumn();
 
-        $st5 = $pdo->prepare('SELECT COALESCE(SUM(total),0) FROM orders WHERE created_at >= ? AND created_at < ? AND status = "completed"');
+        $st5 = $pdo->prepare('SELECT COALESCE(SUM(total),0) FROM orders WHERE created_at >= ? AND created_at < ? AND status = \'completed\'');
         $st5->execute([$startStr, $endStr]);
         $today_revenue = (float)$st5->fetchColumn();
 

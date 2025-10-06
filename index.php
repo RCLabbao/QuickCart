@@ -74,6 +74,7 @@ require_once APP_PATH . '/core/DB.php';
 require_once APP_PATH . '/core/Auth.php';
 require_once APP_PATH . '/core/CSRF.php';
 require_once APP_PATH . '/core/Mailer.php';
+require_once APP_PATH . '/core/SQLServer.php';
 
 // Simple autoloader for controllers
 spl_autoload_register(function ($class) {
