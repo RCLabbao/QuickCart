@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Validate bulk status action
   window.validateBulkStatus = function() {
     const selectedOrders = document.querySelectorAll('.order-checkbox:checked');
-    const status = document.querySelector('select[name="status"]').value;
+    const status = document.querySelector('#bulkStatusForm select[name="status"]').value;
 
     if (selectedOrders.length === 0) {
       alert('Please select at least one order.');
