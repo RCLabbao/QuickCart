@@ -131,7 +131,7 @@
       <?php endif; ?>
     </div>
     <form id="pdpAddToCartForm" class="addToCart mb-3" method="post" action="/cart/add">
-      <?= App\Core\csrf_field() ?>
+      <?= \App\Core\csrf_field() ?>
       <input type="hidden" name="product_id" value="<?= (int)$product['id'] ?>"/>
       <div class="input-group">
         <button class="btn btn-outline-secondary" type="button" data-qty="-1" <?= $stk<=0?'disabled':'' ?>>-</button>
@@ -145,10 +145,12 @@
       <div class="col-6 col-md-4 d-flex align-items-center gap-2"><i class="bi bi-shop"></i><div>Pickup in Store</div></div>
       <div class="col-6 col-md-4 d-flex align-items-center gap-2"><i class="bi bi-arrow-repeat"></i><div>Easy Returns</div></div>
     </div>
+    <?php $desc = trim((string)($product['description'] ?? '')); if ($desc !== ''): ?>
     <div class="mt-4">
       <h2 class="h5">Product details</h2>
       <p><?= nl2br(e($product['description'])) ?></p>
     </div>
+    <?php endif; ?>
   </div>
 </div>
 <div class="sticky-cta d-md-none">

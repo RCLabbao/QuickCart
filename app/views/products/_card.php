@@ -43,7 +43,7 @@
           <?php endif; ?>
         </div>
         <form class="addToCart" method="post" action="/cart/add">
-          <?= App\Core\csrf_field() ?>
+          <?= \App\Core\csrf_field() ?>
           <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>"/>
           <?php $oos = (int)($p['stock'] ?? 0) <= 0; ?>
           <button class="btn btn-sm btn-dark" type="submit" <?= $oos?'disabled':'' ?>><?= $oos?'Sold out':'Add' ?></button>

@@ -28,6 +28,16 @@
   </main>
   <?php include BASE_PATH . '/app/views/partials/footer.php'; ?>
   <?php include BASE_PATH . '/app/views/partials/cart_drawer.php'; ?>
+  <!-- Global toast container -->
+  <div class="position-fixed top-0 end-0 p-3" style="z-index: 2000">
+    <div id="qcToast" class="toast align-items-center text-bg-dark border-0" role="status" aria-live="polite" aria-atomic="true" data-bs-delay="1800">
+      <div class="d-flex">
+        <div class="toast-body" id="qcToastBody">Added to cart</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>window.CSRF='<?= e(\App\Core\CSRF::token()) ?>';</script>
   <script src="<?= asset('js/app.js') ?>"></script>

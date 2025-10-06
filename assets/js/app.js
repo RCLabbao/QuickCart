@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       if(cartCountDesktop) cartCountDesktop.textContent = json.count;
       offcanvas && offcanvas.show();
       loadCart();
+      showToast('Added to cart');
     }
   });
 
@@ -44,6 +45,15 @@ document.addEventListener('DOMContentLoaded',()=>{
     const res = await fetch('/cart/summary');
     const html = await res.text();
     wrap.innerHTML = html;
+  }
+
+  function showToast(msg){
+    const el = document.getElementById('qcToast');
+    if(!el) return;
+    const body = document.getElementById('qcToastBody');
+    if(body) body.textContent = msg;
+    const t = bootstrap.Toast.getOrCreateInstance(el, { delay: 1800 });
+    t.show();
   }
 
   // Submit helper for sticky CTA

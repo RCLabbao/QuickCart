@@ -7,6 +7,8 @@ class CheckoutController extends Controller
     public function index(): void
     {
         $cart = $_SESSION['cart'] ?? [];
+        if (isset($_SESSION['checkout_success'])) { unset($_SESSION['checkout_success']); }
+
 
         // Debug: Log cart contents
         error_log('Checkout - Cart contents: ' . json_encode($cart));
