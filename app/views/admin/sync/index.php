@@ -34,6 +34,10 @@
                 <input class="form-check-input" type="checkbox" name="dry_run" id="csv_dry_run">
                 <label class="form-check-label" for="csv_dry_run">Dry-run (preview changes without saving)</label>
               </div>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="debug" id="csv_debug">
+                <label class="form-check-label" for="csv_debug">Debug mode (show parser mapping and per-row reasons)</label>
+              </div>
               <div class="mt-3">
                 <label class="form-label">Update Rules (for this import)</label>
                 <div class="form-check">

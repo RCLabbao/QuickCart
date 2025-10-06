@@ -193,6 +193,15 @@ class AdminSyncController extends Controller
                     ];
                 }
                 fclose($h);
+                // Build parser debug info for CSV
+                if (isset($_POST['debug'])) {
+                    $debugInfo = [
+                        'source' => 'csv',
+                        'delimiter' => $bestDelim,
+                        'header_norm' => $headerNorm,
+                        'category_index' => $map['category'] ?? ($map['category code'] ?? ($map['category_code'] ?? ($map['categorycode'] ?? null))),
+                    ];
+                }
             }
         }
         try {
@@ -202,10 +211,12 @@ class AdminSyncController extends Controller
                 'update_collection' => isset($_POST['sync_update_collection']),
             ];
             if ($dryRun) { $overrides['collect_preview'] = true; }
+            if (isset($_POST['debug'])) { $overrides['collect_debug'] = true; }
             $result = $this->processRows($rows, $dryRun, $overrides);
-            if ($dryRun && !empty($result['preview'])) {
+            if (!empty($debugInfo)) { $result['debug'] = $result['debug'] ?? []; $result['debug']['info'] = $debugInfo; }
+            if (($dryRun && !empty($result['preview'])) || (!empty($overrides['collect_debug']))) {
                 $this->adminView('admin/sync/preview', [
-                    'title' => 'CSV/XLSX Dry-run Preview',
+                    'title' => $dryRun ? 'CSV/XLSX Dry-run Preview' : 'CSV/XLSX Import Debugger',
                     'result' => $result,
                     'overrides' => $overrides,
                 ]);
@@ -230,9 +241,12 @@ class AdminSyncController extends Controller
         $updateCollection = array_key_exists('update_collection', $overrides)
             ? (bool)$overrides['update_collection']
             : ((string)\App\Core\setting('sync_update_collection','1') === '1');
-        $seen=0; $created=0; $updated=0; $errors=0;
         $collectPreview = !empty($overrides['collect_preview']);
+        $collectDebug = !empty($overrides['collect_debug']);
+
+        $seen=0; $created=0; $updated=0; $errors=0;
         $preview = [];
+        $debugRows = [];
         $collTitle = [];
         $collLabel = function(?int $id) use ($pdo, &$collTitle) {
             if (!$id) { return null; }
@@ -253,21 +267,21 @@ class AdminSyncController extends Controller
             foreach ($rows as $row) {
                 $seen++;
                 $fsc = trim((string)($row['FSC'] ?? ''));
-                if ($fsc==='') { $errors++; continue; }
+                if ($fsc==='') { $errors++; if ($collectDebug && count($debugRows) < 500) { $debugRows[] = ['fsc'=>'','category_raw'=>'','slug'=>'','collection'=>null,'action'=>'skip','reason'=>'Missing FSC']; } continue; }
                 $title = trim((string)($row['Description'] ?? '')) ?: $fsc;
                 $price = (float)($row['RegPrice'] ?? 0);
                 $stock = (int)($row['TotalSOH'] ?? 0);
                 $category = trim((string)($row['Categorycode'] ?? ''));
                 $ptype = trim((string)($row['ProductType'] ?? ''));
                 // Resolve/ensure collection
-                $collectionId = null;
+                $collectionId = null; $catSlug = '';
                 if ($category !== '') {
-                    $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $category));
+                    $catSlug = strtolower(preg_replace('/[^a-z0-9]+/','-', $category));
                     $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=?');
-                    $cst->execute([$slug]); $cid = $cst->fetchColumn();
+                    $cst->execute([$catSlug]); $cid = $cst->fetchColumn();
                     if (!$cid && !$dryRun) {
                         $pdo->prepare('INSERT INTO collections (title,slug,description) VALUES (?,?,?)')
-                            ->execute([$category,$slug,null]);
+                            ->execute([$category,$catSlug,null]);
                         $cid = (int)$pdo->lastInsertId();
                     }
                     $collectionId = $cid ? (int)$cid : null;
@@ -276,6 +290,26 @@ class AdminSyncController extends Controller
                 $pst = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE fsc=?');
                 $pst->execute([$fsc]);
                 $p = $pst->fetch();
+
+                // For debug: decide action and reason
+                if ($collectDebug && count($debugRows) < 500) {
+                    $reason = '';
+                    $collLabelNow = $collectionId ? ($collLabel($collectionId) ?: (string)$collectionId) : '-';
+                    if ($category === '') { $reason = 'Categorycode empty'; }
+                    elseif (!$collectionId && $dryRun) { $reason = 'Would create collection (dry-run)'; }
+                    elseif (!$collectionId && !$dryRun) { $reason = 'Created new collection'; }
+                    elseif (!$updateCollection) { $reason = 'Update collection disabled by rule'; }
+                    else { $reason = 'Collection resolved'; }
+                    $debugRows[] = [
+                        'fsc' => $fsc,
+                        'category_raw' => $category,
+                        'slug' => $catSlug,
+                        'collection' => $collLabelNow,
+                        'action' => $p ? 'update' : 'create',
+                        'reason' => $reason,
+                    ];
+                }
+
                 if (!$p) {
                     if ($collectPreview) {
                         $preview[] = [
@@ -364,9 +398,10 @@ class AdminSyncController extends Controller
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
             throw $e;
         }
-        return $collectPreview
-            ? array_merge(compact('seen','created','updated','errors'), ['preview' => $preview])
-            : compact('seen','created','updated','errors');
+        $base = compact('seen','created','updated','errors');
+        if ($collectPreview) { $base['preview'] = $preview; }
+        if ($collectDebug) { $base['debug'] = ($base['debug'] ?? []) + ['rows' => $debugRows]; }
+        return $base;
     }
 
     public function webhook(): void

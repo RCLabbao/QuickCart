@@ -17,6 +17,42 @@
   <div class="col-auto"><span class="badge bg-danger">Errors/Skipped: <?= (int)$counts['errors'] ?></span></div>
 </div>
 
+<?php if (!empty($result['debug'])): $dbg = $result['debug']; ?>
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-bottom"><h5 class="mb-0">Parser Debug</h5></div>
+    <div class="card-body">
+      <?php if (!empty($dbg['info'])): ?>
+        <div class="mb-2 small text-muted">
+          <?php foreach ($dbg['info'] as $k => $v): ?>
+            <div><strong><?= htmlspecialchars($k) ?>:</strong> <code><?= htmlspecialchars(is_array($v)? json_encode($v) : (string)$v) ?></code></div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+      <?php if (!empty($dbg['rows'])): ?>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead class="table-light"><tr>
+              <th>FSC</th><th>Category (raw)</th><th>Slug</th><th>Found Coll</th><th>Action</th><th>Reason</th>
+            </tr></thead>
+            <tbody>
+              <?php foreach (array_slice($dbg['rows'],0,200) as $r): ?>
+                <tr>
+                  <td><code><?= htmlspecialchars((string)($r['fsc'] ?? '')) ?></code></td>
+                  <td><?= htmlspecialchars((string)($r['category_raw'] ?? '')) ?></td>
+                  <td><code><?= htmlspecialchars((string)($r['slug'] ?? '')) ?></code></td>
+                  <td><?= htmlspecialchars((string)($r['collection'] ?? '-')) ?></td>
+                  <td><?= htmlspecialchars((string)($r['action'] ?? '')) ?></td>
+                  <td class="small text-muted"><?= htmlspecialchars((string)($r['reason'] ?? '')) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </div>
+  </div>
+<?php endif; ?>
+
 <?php $rows = array_slice(($result['preview'] ?? []), 0, 200); ?>
 <?php if (!$rows): ?>
   <div class="alert alert-info">Nothing to preview.</div>
