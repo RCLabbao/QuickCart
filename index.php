@@ -28,10 +28,17 @@ if (file_exists(BASE_PATH . '/vendor/autoload.php')) { require BASE_PATH . '/ven
 // Debug/error handling
 if (!function_exists('qc_is_debug')) {
     function qc_is_debug(): bool {
+        // Per-request override: ?debug=1
+        $q = strtolower((string)($_GET['debug'] ?? ''));
+        if (in_array($q, ['1','true','on','yes'], true)) return true;
+        // File flag at project root: create an empty .debug file to force debug
+        if (is_file(BASE_PATH.'/.debug')) return true;
+        // Environment variable
         $env = strtolower((string)getenv('QUICKCART_DEBUG'));
         if (in_array($env, ['1','true','on','yes'], true)) return true;
+        // Config constant
         if (defined('CONFIG') && isset(\CONFIG['debug']) && \CONFIG['debug']) return true;
-        // Try DB-backed setting if available (safe: Helpers::settings() already catches failures)
+        // DB-backed setting (best-effort)
         try { return (string)\App\Core\setting('debug', '0') === '1'; } catch (\Throwable $e) { return false; }
     }
     function qc_render_exception(\Throwable $e): void {
