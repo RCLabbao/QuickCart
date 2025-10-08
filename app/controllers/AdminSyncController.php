@@ -276,7 +276,7 @@ class AdminSyncController extends Controller
                 // Resolve/ensure collection (match by slug OR title, create if missing and not dry-run)
                 $collectionId = null; $catSlug = '';
                 if ($category !== '') {
-                    $catSlug = strtolower(preg_replace('/[^a-z0-9]+/','-', $category));
+                    $catSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($category));
                     $catSlug = trim($catSlug, '-');
                     $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=? OR LOWER(title)=LOWER(?) LIMIT 1');
                     $cst->execute([$catSlug, $category]); $cid = $cst->fetchColumn();
@@ -301,7 +301,7 @@ class AdminSyncController extends Controller
 
                 // Fallback: try to match existing product by slug or exact title to preserve images
                 if (!$p) {
-                    $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', (string)$title));
+                    $slugTitle = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$title));
                     $slugTitle = trim($slugTitle, '-');
                     if ($slugTitle !== '') {
                         $alt = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE slug=? OR title=? LIMIT 1');
@@ -346,10 +346,10 @@ class AdminSyncController extends Controller
                     }
                     if ($dryRun) { $created++; continue; }
                     // Build a safe, unique slug
-                    $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', (string)$title));
+                    $slugTitle = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$title));
                     $slugTitle = trim($slugTitle, '-');
                     if ($slugTitle === '') {
-                        $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', (string)$fsc));
+                        $slugTitle = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$fsc));
                         $slugTitle = trim($slugTitle, '-');
                     }
                     if ($slugTitle === '') { $slugTitle = 'product-'.substr(md5((string)$fsc.microtime(true)),0,6); }
@@ -398,7 +398,7 @@ class AdminSyncController extends Controller
                 // Optional: tag with ProductType (no DDL here; DDL was done before transaction)
                 if ($ptype !== '' && !$dryRun) {
                     try {
-                        $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $ptype));
+                        $slug = preg_replace('/[^a-z0-9]+/','-', strtolower($ptype));
                         $t = $pdo->prepare('INSERT INTO tags (name,slug) VALUES (?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)');
                         $t->execute([$ptype,$slug]);
                         $tagId = (int)$pdo->query('SELECT id FROM tags WHERE slug='.$pdo->quote($slug))->fetchColumn();

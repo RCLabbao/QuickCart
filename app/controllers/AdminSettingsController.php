@@ -14,7 +14,8 @@ class AdminSettingsController extends Controller
         try { $fees = $pdo->query('SELECT id, city, fee FROM delivery_fees ORDER BY city')->fetchAll(); } catch (\Throwable $e) { $fees = []; }
         $collections = [];
         try { $collections = $pdo->query('SELECT id, title, slug FROM collections ORDER BY title')->fetchAll(); } catch (\Throwable $e) { $collections = []; }
-        $activeTab = $_GET['tab'] ?? 'general';
+        $activeTab = strtolower(trim($_GET['tab'] ?? 'general'));
+        if (!in_array($activeTab, ['general','checkout','shipping','email','catalog'], true)) { $activeTab = 'general'; }
         $flash = $_SESSION['settings_flash'] ?? null; if ($flash) { unset($_SESSION['settings_flash']); }
         $this->adminView('admin/settings/index', [
             'title' => 'Settings',
