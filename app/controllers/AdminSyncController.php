@@ -147,7 +147,7 @@ class AdminSyncController extends Controller
                             'WH_SOH' => $pick($arr,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
                             'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
                             'UnitSold' => $pick($arr,$map,['unitsold','unit_sold','unit sold','sold']),
-                            'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category']),
+                            'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
                             'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
                         ];

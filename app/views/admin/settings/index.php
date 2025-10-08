@@ -11,11 +11,11 @@
 </div>
 <?php endif; ?>
 <ul class="nav nav-tabs" role="tablist">
-  <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='general'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-general" type="button" role="tab">General</button></li>
-  <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='checkout'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-checkout" type="button" role="tab">Checkout</button></li>
-  <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='shipping'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-shipping" type="button" role="tab">Shipping</button></li>
-  <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='email'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-email" type="button" role="tab">Email</button></li>
-  <li class="nav-item" role="presentation"><button class="nav-link <?= $activeTab==='catalog'?'active':'' ?>" data-bs-toggle="tab" data-bs-target="#tab-catalog" type="button" role="tab">Catalog</button></li>
+  <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='general'?'active':'' ?>" href="/admin/settings?tab=general" data-bs-toggle="tab" data-bs-target="#tab-general" role="tab">General</a></li>
+  <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='checkout'?'active':'' ?>" href="/admin/settings?tab=checkout" data-bs-toggle="tab" data-bs-target="#tab-checkout" role="tab">Checkout</a></li>
+  <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='shipping'?'active':'' ?>" href="/admin/settings?tab=shipping" data-bs-toggle="tab" data-bs-target="#tab-shipping" role="tab">Shipping</a></li>
+  <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='email'?'active':'' ?>" href="/admin/settings?tab=email" data-bs-toggle="tab" data-bs-target="#tab-email" role="tab">Email</a></li>
+  <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='catalog'?'active':'' ?>" href="/admin/settings?tab=catalog" data-bs-toggle="tab" data-bs-target="#tab-catalog" role="tab">Catalog</a></li>
 </ul>
 <div class="tab-content mt-3">
 <div class="tab-pane fade <?= $activeTab==='general'?'show active':'' ?>" id="tab-general" role="tabpanel">
