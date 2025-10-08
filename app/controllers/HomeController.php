@@ -55,8 +55,14 @@ class HomeController extends Controller
                                  WHERE p.status="active"' . $exSql);
             $st->execute($exParams); $best = $st->fetchAll();
         }
-        // Featured collections with images
-        $feat = $pdo->query('SELECT id,title,slug,image_url FROM collections WHERE image_url IS NOT NULL AND image_url <> "" ORDER BY id DESC LIMIT 8')->fetchAll();
+        // Featured collections with images (respect hidden collections)
+        if (!empty($hidden)) {
+            $in = implode(',', array_fill(0, count($hidden), '?'));
+            $st = $pdo->prepare('SELECT id,title,slug,image_url FROM collections WHERE image_url IS NOT NULL AND image_url <> "" AND id NOT IN (' . $in . ') ORDER BY id DESC LIMIT 8');
+            $st->execute($hidden); $feat = $st->fetchAll();
+        } else {
+            $feat = $pdo->query('SELECT id,title,slug,image_url FROM collections WHERE image_url IS NOT NULL AND image_url <> "" ORDER BY id DESC LIMIT 8')->fetchAll();
+        }
         $this->view('home/index', [
             'title' => 'QuickCart - Modern Shopping',
             'sale_items' => $sale,

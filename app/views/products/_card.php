@@ -38,7 +38,7 @@
           <?php if (is_on_sale($p)): ?>
             <span class="text-danger me-1"><?= price(effective_price($p)) ?></span>
             <s class="text-muted small"><?= price((float)$p['price']) ?></s>
-          <?php else: ?>
+          <?php elseif ((float)($p['price'] ?? 0) > 0): ?>
             <?= price((float)$p['price']) ?>
           <?php endif; ?>
         </div>

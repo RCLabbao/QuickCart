@@ -118,7 +118,7 @@ class AdminSyncController extends Controller
                             'WH_SOH' => $pick($arr,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
                             'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
                             'UnitSold' => $pick($arr,$map,['unitsold','unit_sold','unit sold','sold']),
-                            'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category']),
+                            'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
                             'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
                         ];
@@ -187,7 +187,7 @@ class AdminSyncController extends Controller
                         'WH_SOH' => $pick($r,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
                         'TotalSOH' => $pick($r,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
                         'UnitSold' => $pick($r,$map,['unitsold','unit_sold','unit sold','sold']),
-                        'Categorycode' => $pick($r,$map,['categorycode','category_code','category code','category']),
+                        'Categorycode' => $pick($r,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
                         'ProductType' => $pick($r,$map,['producttype','product_type','product type','type']),
                         'RegPrice' => $pick($r,$map,['regprice','listprice','list price','price']),
                     ];
@@ -291,6 +291,16 @@ class AdminSyncController extends Controller
                 $pst->execute([$fsc]);
                 $p = $pst->fetch();
 
+                // Fallback: try to match existing product by slug or exact title to preserve images
+                if (!$p) {
+                    $slugTitle = strtolower(preg_replace('/[^a-z0-9]+/','-', (string)$title));
+                    $slugTitle = trim($slugTitle, '-');
+                    if ($slugTitle !== '') {
+                        $alt = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE slug=? OR title=? LIMIT 1');
+                        $alt->execute([$slugTitle, $title]);
+                        $p = $alt->fetch();
+                    }
+                }
                 // For debug: decide action and reason
                 if ($collectDebug && count($debugRows) < 500) {
                     $reason = '';

@@ -126,7 +126,7 @@
       <?php if (is_on_sale($product)): ?>
         <span class="text-danger me-2"><?= price(effective_price($product)) ?></span>
         <s class="text-muted fs-5"><?= price((float)$product['price']) ?></s>
-      <?php else: ?>
+      <?php elseif ((float)($product['price'] ?? 0) > 0): ?>
         <?= price((float)$product['price']) ?>
       <?php endif; ?>
     </div>

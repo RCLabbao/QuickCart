@@ -9,7 +9,9 @@ function csrf_field(): string { return '<input type="hidden" name="_token" value
 function is_on_sale(array $p): bool {
     if (!isset($p['sale_price']) || $p['sale_price'] === null) return false;
     $sp = (float)$p['sale_price']; $rp = isset($p['price']) ? (float)$p['price'] : $sp;
-    if ($sp <= 0 || $sp >= $rp) return false;
+    // Require a valid compare/original price and allow 0.00 as a valid sale price when compare price > 0
+    if ($rp <= 0) return false;
+    if ($sp < 0 || $sp >= $rp) return false;
     $now = time();
     $startOk = empty($p['sale_start']) || strtotime($p['sale_start']) <= $now;
     $endOk = empty($p['sale_end']) || strtotime($p['sale_end']) >= $now;
