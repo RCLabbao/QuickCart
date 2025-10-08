@@ -278,15 +278,22 @@ class AdminSyncController extends Controller
                 if ($category !== '') {
                     $catSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($category));
                     $catSlug = trim($catSlug, '-');
-                    $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=? OR LOWER(title)=LOWER(?) LIMIT 1');
-                    $cst->execute([$catSlug, $category]); $cid = $cst->fetchColumn();
+                    // Avoid matching an existing collection with an empty slug; fall back to title-only match
+                    if ($catSlug !== '') {
+                        $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=? OR LOWER(title)=LOWER(?) LIMIT 1');
+                        $cst->execute([$catSlug, $category]);
+                    } else {
+                        $cst = $pdo->prepare('SELECT id FROM collections WHERE LOWER(title)=LOWER(?) LIMIT 1');
+                        $cst->execute([$category]);
+                    }
+                    $cid = $cst->fetchColumn();
                     if (!$cid && !$dryRun) {
                         // Ensure a non-empty unique slug
-                        $slugCandidate = $catSlug !== '' ? $catSlug : strtolower(preg_replace('/[^a-z0-9]+/','-', $category));
+                        $slugCandidate = $catSlug !== '' ? $catSlug : preg_replace('/[^a-z0-9]+/','-', strtolower($category));
                         $slugCandidate = trim($slugCandidate, '-') ?: ('collection-'.substr(md5($category.microtime(true)),0,6));
                         $baseSlug = $slugCandidate; $suffix = 1;
                         while ((int)$pdo->query('SELECT COUNT(*) FROM collections WHERE slug='.$pdo->quote($slugCandidate))->fetchColumn() > 0) {
-                            $slugCandidate = $baseSlug.'-'.$suffix++; if ($suffix>1000) break;
+                            $slugCandidate = $baseSlug+'-'.$suffix++; if ($suffix>1000) break;
                         }
                         $pdo->prepare('INSERT INTO collections (title,slug,description) VALUES (?,?,?)')
                             ->execute([$category,$slugCandidate,null]);
