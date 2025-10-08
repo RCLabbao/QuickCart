@@ -273,15 +273,23 @@ class AdminSyncController extends Controller
                 $stock = (int)($row['TotalSOH'] ?? 0);
                 $category = trim((string)($row['Categorycode'] ?? ''));
                 $ptype = trim((string)($row['ProductType'] ?? ''));
-                // Resolve/ensure collection
+                // Resolve/ensure collection (match by slug OR title, create if missing and not dry-run)
                 $collectionId = null; $catSlug = '';
                 if ($category !== '') {
                     $catSlug = strtolower(preg_replace('/[^a-z0-9]+/','-', $category));
-                    $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=?');
-                    $cst->execute([$catSlug]); $cid = $cst->fetchColumn();
+                    $catSlug = trim($catSlug, '-');
+                    $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=? OR LOWER(title)=LOWER(?) LIMIT 1');
+                    $cst->execute([$catSlug, $category]); $cid = $cst->fetchColumn();
                     if (!$cid && !$dryRun) {
+                        // Ensure a non-empty unique slug
+                        $slugCandidate = $catSlug !== '' ? $catSlug : strtolower(preg_replace('/[^a-z0-9]+/','-', $category));
+                        $slugCandidate = trim($slugCandidate, '-') ?: ('collection-'.substr(md5($category.microtime(true)),0,6));
+                        $baseSlug = $slugCandidate; $suffix = 1;
+                        while ((int)$pdo->query('SELECT COUNT(*) FROM collections WHERE slug='.$pdo->quote($slugCandidate))->fetchColumn() > 0) {
+                            $slugCandidate = $baseSlug.'-'.$suffix++; if ($suffix>1000) break;
+                        }
                         $pdo->prepare('INSERT INTO collections (title,slug,description) VALUES (?,?,?)')
-                            ->execute([$category,$catSlug,null]);
+                            ->execute([$category,$slugCandidate,null]);
                         $cid = (int)$pdo->lastInsertId();
                     }
                     $collectionId = $cid ? (int)$cid : null;
