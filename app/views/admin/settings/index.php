@@ -6,6 +6,10 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
 <style>
   .nav-tabs .nav-link:not(.active){ color: <?= $brand ?> !important; }
   .nav-tabs .nav-link.active{ color: #000 !important; }
+  /* Force tab panes to display when active - override any conflicting Bootstrap CSS */
+  .tab-pane { display: none !important; }
+  .tab-pane.active { display: block !important; }
+  .tab-pane.show { opacity: 1 !important; }
 </style>
 <h1 class="h4 mb-3">Settings</h1>
 <?php if (!empty($flash ?? null)): ?>
