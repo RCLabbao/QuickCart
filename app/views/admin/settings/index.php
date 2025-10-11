@@ -1,4 +1,8 @@
-<?php use function App\Core\csrf_field; $activeTab = $activeTab ?? ($_GET['tab'] ?? 'general'); $brand = htmlspecialchars($settings['brand_color'] ?? '#212529'); ?>
+<?php
+use function App\Core\csrf_field;
+$activeTab = isset($activeTab) ? $activeTab : (isset($_GET['tab']) ? $_GET['tab'] : 'general');
+$brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
+?>
 <style>
   .nav-tabs .nav-link:not(.active){ color: <?= $brand ?> !important; }
   .nav-tabs .nav-link.active{ color: #000 !important; }
@@ -254,7 +258,22 @@
           </div>
           <label class="form-label">HTML Template</label>
           <textarea class="form-control" name="email_order_template" rows="10"><?php
-          echo htmlspecialchars($settings['email_order_template'] ?? '<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width:640px; margin:0 auto;">\n  <div style="padding:16px; background:#f8f9fa; border:1px solid #eee; border-bottom:0;">\n    <h2 style=\"margin:0; color:#212529;\">{{store_name}}</h2>\n  </div>\n  <div style="padding:16px; border:1px solid #eee;">\n    <p>Hi {{customer_name}},</p>\n    <p>Thanks for your order <strong>#{{order_id}}</strong>. Here are the details:</p>\n    <div>{{order_items_html}}</div>\n    <p><strong>Total:</strong> {{total}}</p>\n    <p>We will notify you when your order status changes.</p>\n  </div>\n  <div style="padding:12px; color:#888; font-size:12px; text-align:center;">\n    This is an automated message from {{store_name}}.\n  </div>\n</div>');
+          $defaultTemplate = '<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width:640px; margin:0 auto;">
+  <div style="padding:16px; background:#f8f9fa; border:1px solid #eee; border-bottom:0;">
+    <h2 style="margin:0; color:#212529;">{{store_name}}</h2>
+  </div>
+  <div style="padding:16px; border:1px solid #eee;">
+    <p>Hi {{customer_name}},</p>
+    <p>Thanks for your order <strong>#{{order_id}}</strong>. Here are the details:</p>
+    <div>{{order_items_html}}</div>
+    <p><strong>Total:</strong> {{total}}</p>
+    <p>We will notify you when your order status changes.</p>
+  </div>
+  <div style="padding:12px; color:#888; font-size:12px; text-align:center;">
+    This is an automated message from {{store_name}}.
+  </div>
+</div>';
+          echo htmlspecialchars($settings['email_order_template'] ?? $defaultTemplate);
           ?></textarea>
           <div class="small text-muted mt-2">Available variables: {{store_name}}, {{customer_name}}, {{order_id}}, {{total}}, {{order_items_html}}</div>
         </div>

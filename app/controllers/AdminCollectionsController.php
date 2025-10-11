@@ -6,7 +6,12 @@ class AdminCollectionsController extends Controller
 {
     public function index(): void
     {
-        $rows = DB::pdo()->query('SELECT id, title, slug, image_url FROM collections ORDER BY id DESC')->fetchAll();
+        $hasCategoryCode = $this->hasCategoryCode();
+        if ($hasCategoryCode) {
+            $rows = DB::pdo()->query('SELECT id, title, slug, image_url, category_code FROM collections ORDER BY id DESC')->fetchAll();
+        } else {
+            $rows = DB::pdo()->query('SELECT id, title, slug, image_url FROM collections ORDER BY id DESC')->fetchAll();
+        }
         $this->adminView('admin/collections/index', ['title' => 'Collections', 'collections'=>$rows]);
     }
     public function create(): void { $this->adminView('admin/collections/form', ['title' => 'Create Collection']); }

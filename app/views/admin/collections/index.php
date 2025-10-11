@@ -23,6 +23,7 @@
             <th style="width: 80px;">ID</th>
             <th style="width:100px;">Cover</th>
             <th>Title</th>
+            <th>Category Code</th>
             <th>Slug</th>
             <th style="width: 140px;" class="text-end">Actions</th>
           </tr>
@@ -41,6 +42,13 @@
                 <?php endif; ?>
               </td>
               <td><?= htmlspecialchars($c['title']) ?></td>
+              <td>
+                <?php if (!empty($c['category_code'])): ?>
+                  <span class="badge bg-secondary"><?= htmlspecialchars($c['category_code']) ?></span>
+                <?php else: ?>
+                  <span class="text-muted">—</span>
+                <?php endif; ?>
+              </td>
               <td><code><?= htmlspecialchars($c['slug']) ?></code></td>
               <td class="text-end">
                 <div class="btn-group btn-group-sm">
