@@ -23,16 +23,36 @@ class AdminCollectionsController extends Controller
     public function store(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/collections'); }
-        $title = trim($_POST['title']); $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
+        $title = trim($_POST['title']);
+        $slug = preg_replace('/[^a-z0-9]+/','-', strtolower($title));
+        $slug = trim($slug, '-');
+        // If slug is empty or just hyphens, generate from category_code or use a hash
+        if ($slug === '' || $slug === '-') {
+            $code = trim($_POST['category_code'] ?? '');
+            if ($code !== '') {
+                $slug = preg_replace('/[^a-z0-9]+/','-', strtolower($code));
+                $slug = trim($slug, '-');
+            }
+            if ($slug === '' || $slug === '-') {
+                $slug = 'collection-' . substr(md5($title . microtime(true)), 0, 8);
+            }
+        }
+        // Ensure slug is unique
+        $pdo = DB::pdo();
+        $baseSlug = $slug; $suffix = 1;
+        while ((int)$pdo->query('SELECT COUNT(*) FROM collections WHERE slug='.$pdo->quote($slug))->fetchColumn() > 0) {
+            $slug = $baseSlug . '-' . $suffix++;
+            if ($suffix > 1000) break;
+        }
         $imageUrl = $this->handleImageUpload();
         $hasCode = $this->hasCategoryCode();
         $code = strtoupper(trim($_POST['category_code'] ?? ''));
         if ($code === '') { $code = null; }
         if ($hasCode) {
-            $stmt = DB::pdo()->prepare('INSERT INTO collections (title, slug, description, image_url, category_code) VALUES (?,?,?,?,?)');
+            $stmt = $pdo->prepare('INSERT INTO collections (title, slug, description, image_url, category_code) VALUES (?,?,?,?,?)');
             $stmt->execute([$title,$slug, $_POST['description'] ?? '', $imageUrl, $code]);
         } else {
-            $stmt = DB::pdo()->prepare('INSERT INTO collections (title, slug, description, image_url) VALUES (?,?,?,?)');
+            $stmt = $pdo->prepare('INSERT INTO collections (title, slug, description, image_url) VALUES (?,?,?,?)');
             $stmt->execute([$title,$slug, $_POST['description'] ?? '', $imageUrl]);
         }
         $this->redirect('/admin/collections');
@@ -45,25 +65,45 @@ class AdminCollectionsController extends Controller
     public function update(array $params): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/collections'); }
-        $title = trim($_POST['title']); $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
+        $title = trim($_POST['title']);
+        $slug = preg_replace('/[^a-z0-9]+/','-', strtolower($title));
+        $slug = trim($slug, '-');
+        // If slug is empty or just hyphens, generate from category_code or use a hash
+        if ($slug === '' || $slug === '-') {
+            $code = trim($_POST['category_code'] ?? '');
+            if ($code !== '') {
+                $slug = preg_replace('/[^a-z0-9]+/','-', strtolower($code));
+                $slug = trim($slug, '-');
+            }
+            if ($slug === '' || $slug === '-') {
+                $slug = 'collection-' . substr(md5($title . microtime(true)), 0, 8);
+            }
+        }
+        // Ensure slug is unique (excluding current record)
+        $pdo = DB::pdo();
+        $baseSlug = $slug; $suffix = 1;
+        while ((int)$pdo->query('SELECT COUNT(*) FROM collections WHERE slug='.$pdo->quote($slug).' AND id!='.(int)$params['id'])->fetchColumn() > 0) {
+            $slug = $baseSlug . '-' . $suffix++;
+            if ($suffix > 1000) break;
+        }
         $imageUrl = $this->handleImageUpload();
         $hasCode = $this->hasCategoryCode();
         $code = strtoupper(trim($_POST['category_code'] ?? ''));
         if ($code === '') { $code = null; }
         if ($imageUrl) {
             if ($hasCode) {
-                DB::pdo()->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=?, category_code=? WHERE id=?')
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=?, category_code=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $imageUrl, $code, $params['id']]);
             } else {
-                DB::pdo()->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=? WHERE id=?')
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $imageUrl, $params['id']]);
             }
         } else {
             if ($hasCode) {
-                DB::pdo()->prepare('UPDATE collections SET title=?, slug=?, description=?, category_code=? WHERE id=?')
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, category_code=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $code, $params['id']]);
             } else {
-                DB::pdo()->prepare('UPDATE collections SET title=?, slug=?, description=? WHERE id=?')
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $params['id']]);
             }
         }
