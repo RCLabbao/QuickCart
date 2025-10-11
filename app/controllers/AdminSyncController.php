@@ -244,6 +244,12 @@ class AdminSyncController extends Controller
         $collectPreview = !empty($overrides['collect_preview']);
         $collectDebug = !empty($overrides['collect_debug']);
 
+        // Detect if collections has a category_code column (for CSV matching by code)
+        $hasCategoryCode = false;
+        try {
+            $hasCategoryCode = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'collections' AND COLUMN_NAME = 'category_code'")->fetchColumn() > 0;
+        } catch (\Throwable $e) { $hasCategoryCode = false; }
+
         $seen=0; $created=0; $updated=0; $errors=0;
         $preview = [];
         $debugRows = [];
@@ -273,31 +279,54 @@ class AdminSyncController extends Controller
                 $stock = (int)($row['TotalSOH'] ?? 0);
                 $category = trim((string)($row['Categorycode'] ?? ''));
                 $ptype = trim((string)($row['ProductType'] ?? ''));
-                // Resolve/ensure collection (match by slug OR title, create if missing and not dry-run)
+                // Resolve/ensure collection using category_code when available; otherwise fall back to slug/title
                 $collectionId = null; $catSlug = '';
                 if ($category !== '') {
-                    $catSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($category));
-                    $catSlug = trim($catSlug, '-');
-                    // Avoid matching an existing collection with an empty slug; fall back to title-only match
-                    if ($catSlug !== '') {
-                        $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=? OR LOWER(title)=LOWER(?) LIMIT 1');
-                        $cst->execute([$catSlug, $category]);
-                    } else {
-                        $cst = $pdo->prepare('SELECT id FROM collections WHERE LOWER(title)=LOWER(?) LIMIT 1');
-                        $cst->execute([$category]);
-                    }
-                    $cid = $cst->fetchColumn();
-                    if (!$cid && !$dryRun) {
-                        // Ensure a non-empty unique slug
-                        $slugCandidate = $catSlug !== '' ? $catSlug : preg_replace('/[^a-z0-9]+/','-', strtolower($category));
-                        $slugCandidate = trim($slugCandidate, '-') ?: ('collection-'.substr(md5($category.microtime(true)),0,6));
-                        $baseSlug = $slugCandidate; $suffix = 1;
-                        while ((int)$pdo->query('SELECT COUNT(*) FROM collections WHERE slug='.$pdo->quote($slugCandidate))->fetchColumn() > 0) {
-                            $slugCandidate = $baseSlug+'-'.$suffix++; if ($suffix>1000) break;
+                    if ($hasCategoryCode) {
+                        $code = strtoupper($category);
+                        // Match by category_code (case-insensitive)
+                        $cst = $pdo->prepare('SELECT id FROM collections WHERE UPPER(category_code)=? LIMIT 1');
+                        $cst->execute([$code]);
+                        $cid = $cst->fetchColumn();
+                        if (!$cid && !$dryRun) {
+                            // Create collection with code as title by default; user can rename title later for customers
+                            $catSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($code));
+                            $catSlug = trim($catSlug, '-') ?: ('collection-'.substr(md5($code.microtime(true)),0,6));
+                            $baseSlug = $catSlug; $suffix = 1;
+                            while ((int)$pdo->query('SELECT COUNT(*) FROM collections WHERE slug='.$pdo->quote($catSlug))->fetchColumn() > 0) {
+                                $catSlug = $baseSlug.'-'.$suffix++; if ($suffix>1000) break;
+                            }
+                            $ins = $pdo->prepare('INSERT INTO collections (title,slug,description,category_code) VALUES (?,?,?,?)');
+                            $ins->execute([$code,$catSlug,null,$code]);
+                            $cid = (int)$pdo->lastInsertId();
+                        } else {
+                            // Also compute slug for debug table
+                            $catSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($category));
+                            $catSlug = trim($catSlug, '-');
                         }
-                        $pdo->prepare('INSERT INTO collections (title,slug,description) VALUES (?,?,?)')
-                            ->execute([$category,$slugCandidate,null]);
-                        $cid = (int)$pdo->lastInsertId();
+                    } else {
+                        // Legacy behavior: match by slug OR title, create if missing
+                        $catSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($category));
+                        $catSlug = trim($catSlug, '-');
+                        if ($catSlug !== '') {
+                            $cst = $pdo->prepare('SELECT id FROM collections WHERE slug=? OR LOWER(title)=LOWER(?) LIMIT 1');
+                            $cst->execute([$catSlug, $category]);
+                        } else {
+                            $cst = $pdo->prepare('SELECT id FROM collections WHERE LOWER(title)=LOWER(?) LIMIT 1');
+                            $cst->execute([$category]);
+                        }
+                        $cid = $cst->fetchColumn();
+                        if (!$cid && !$dryRun) {
+                            $slugCandidate = $catSlug !== '' ? $catSlug : preg_replace('/[^a-z0-9]+/','-', strtolower($category));
+                            $slugCandidate = trim($slugCandidate, '-') ?: ('collection-'.substr(md5($category.microtime(true)),0,6));
+                            $baseSlug = $slugCandidate; $suffix = 1;
+                            while ((int)$pdo->query('SELECT COUNT(*) FROM collections WHERE slug='.$pdo->quote($slugCandidate))->fetchColumn() > 0) {
+                                $slugCandidate = $baseSlug+'-'.$suffix++; if ($suffix>1000) break;
+                            }
+                            $pdo->prepare('INSERT INTO collections (title,slug,description) VALUES (?,?,?)')
+                                ->execute([$category,$slugCandidate,null]);
+                            $cid = (int)$pdo->lastInsertId();
+                        }
                     }
                     $collectionId = $cid ? (int)$cid : null;
                 }

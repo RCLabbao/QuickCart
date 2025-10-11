@@ -75,6 +75,7 @@ class AdminSettingsController extends Controller
         } elseif ($scope === 'catalog') {
             $pairs = [
                 'hidden_collections' => trim((string)($_POST['hidden_collections'] ?? '')),
+                'hide_zero_price' => isset($_POST['hide_zero_price']) ? '1' : '0',
             ];
         }
         foreach ($pairs as $k=>$v){

@@ -29,6 +29,14 @@
           <input class="form-control" name="title" value="<?= htmlspecialchars($collection['title'] ?? '') ?>" required placeholder="e.g. New Arrivals">
         </div>
         <div class="mb-3">
+          <label class="form-label fw-semibold">Category Code (for CSV matching)</label>
+          <input class="form-control" name="category_code" value="<?= htmlspecialchars($collection['category_code'] ?? '') ?>" placeholder="e.g. CFT" maxlength="64">
+          <div class="form-text">
+            Used to match CSV Categorycode values. Default collection title can be customer-friendly; this code stays as the matcher.
+          </div>
+        </div>
+
+        <div class="mb-3">
           <label class="form-label fw-semibold">Description</label>
           <textarea class="form-control" name="description" rows="4" placeholder="Describe this collection...">
 <?= htmlspecialchars($collection['description'] ?? '') ?></textarea>
