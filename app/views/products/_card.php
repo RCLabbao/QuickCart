@@ -28,7 +28,9 @@
             <?php $stk = (int)($p['stock'] ?? 0); if ($stk <= 0): ?>
               <span class="badge bg-secondary">Out of stock</span>
             <?php elseif ($stk <= 3): ?>
-              <span class="badge bg-warning text-dark">Low stock</span>
+              <span class="badge bg-warning text-dark">Low stock: <?= $stk ?></span>
+            <?php else: ?>
+              <span class="badge bg-success text-white">In stock: <?= $stk ?></span>
             <?php endif; ?>
           </div>
         </div>

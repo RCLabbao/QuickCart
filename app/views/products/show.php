@@ -134,9 +134,9 @@
       <?php if($stk<=0): ?>
         <span class="badge bg-secondary">Out of stock</span>
       <?php elseif($stk<=3): ?>
-        <span class="badge bg-warning text-dark">Low stock</span>
+        <span class="badge bg-warning text-dark">Low stock: <?= $stk ?> units</span>
       <?php else: ?>
-        <span class="text-muted">In stock</span>
+        <span class="badge bg-success text-white">In stock: <?= $stk ?> units</span>
       <?php endif; ?>
       <span class="text-muted"> • Free pickup available</span>
     </div>
@@ -316,4 +316,5 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+<?php // End of file ?>
 
