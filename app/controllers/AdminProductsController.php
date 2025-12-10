@@ -100,7 +100,33 @@ class AdminProductsController extends Controller
     public function create(): void
     {
         $collections = DB::pdo()->query('SELECT id,title FROM collections ORDER BY title')->fetchAll();
-        $this->adminView('admin/products/form', ['title' => 'Add Product', 'collections' => $collections]);
+        // Initialize empty product for create form
+        $product = [
+            'id' => null,
+            'title' => '',
+            'slug' => '',
+            'description' => '',
+            'price' => 0,
+            'sale_price' => 0,
+            'sale_start' => null,
+            'sale_end' => null,
+            'stock' => 0,
+            'sku' => '',
+            'barcode' => '',
+            'status' => 'active',
+            'collection_id' => null,
+            'featured' => 0,
+            'created_at' => null,
+            'updated_at' => null
+        ];
+        $this->adminView('admin/products/form', [
+            'title' => 'Add Product',
+            'product' => $product,
+            'collections' => $collections,
+            'images' => [],
+            'events' => [],
+            'tagsCsv' => ''
+        ]);
     }
 
     public function store(): void
@@ -251,7 +277,7 @@ class AdminProductsController extends Controller
                 try {
                     $this->makeVariants($dest, $mime);
                 } catch (\Throwable $e) { /* ignore */ }
-                $url = '/uploads/products/' . $productId . '/' . $final;
+                $url = '/public/uploads/products/' . $productId . '/' . $final;
                 DB::pdo()->prepare('INSERT INTO product_images (product_id,url,sort_order) VALUES (?,?,?)')->execute([$productId,$url,$sort++]);
             }
         }
@@ -386,7 +412,7 @@ class AdminProductsController extends Controller
                     $src = $srcDir . '/' . $basename;
                     $dst = $dstDir . '/' . $basename;
                     if (is_file($src)) { @copy($src, $dst); }
-                    $newUrl = '/uploads/products/' . $newId . '/' . $basename;
+                    $newUrl = '/public/uploads/products/' . $newId . '/' . $basename;
                     $insImg->execute([$newId, $newUrl, (int)$r['sort_order']]);
                 }
             }
