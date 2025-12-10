@@ -58,7 +58,8 @@ class AdminMaintenanceController extends Controller
         // Add products.stock if missing
         $this->ensureColumn($pdo, 'products','stock','ALTER TABLE products ADD COLUMN stock INT NOT NULL DEFAULT 0 AFTER status');
         // Add promo/sale columns if missing
-        $this->ensureColumn($pdo, 'products','sale_price','ALTER TABLE products ADD COLUMN sale_price DECIMAL(10,2) NULL AFTER price');
+        $this->ensureColumn($pdo, 'products','brochure_selling_price','ALTER TABLE products ADD COLUMN brochure_selling_price DECIMAL(10,2) NULL AFTER price');
+        $this->ensureColumn($pdo, 'products','sale_price','ALTER TABLE products ADD COLUMN sale_price DECIMAL(10,2) NULL AFTER brochure_selling_price');
         $this->ensureColumn($pdo, 'products','sale_start','ALTER TABLE products ADD COLUMN sale_start DATETIME NULL AFTER sale_price');
         $this->ensureColumn($pdo, 'products','sale_end','ALTER TABLE products ADD COLUMN sale_end DATETIME NULL AFTER sale_start');
         // Add collections.image_url if missing

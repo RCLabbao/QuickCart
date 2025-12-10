@@ -121,6 +121,7 @@ class AdminSyncController extends Controller
                             'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
                             'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
+                            'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
                         ];
                     }
                 } catch (\Throwable $e) {
@@ -150,6 +151,7 @@ class AdminSyncController extends Controller
                             'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
                             'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
+                            'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
                         ];
                     }
                 } catch (\Throwable $e) {
@@ -393,8 +395,9 @@ class AdminSyncController extends Controller
                     while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($slugTitle))->fetchColumn() > 0) {
                         $slugTitle = $baseSlug.'-'.$suffix++; if ($suffix>1000) break; // safety
                     }
-                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,status,stock,collection_id,created_at) VALUES (?,?,?,?,\'active\',?, ?, NOW())')
-                        ->execute([$title,$slugTitle,$fsc,$price,$stock,$collectionId]);
+                    $brochurePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : null;
+                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,brochure_selling_price,status,stock,collection_id,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NOW())')
+                        ->execute([$title,$slugTitle,$fsc,$price,$brochurePrice,$stock,$collectionId]);
                     $created++;
                 } else {
                     // Update
@@ -424,6 +427,11 @@ class AdminSyncController extends Controller
                     if ($dryRun) { $updated++; continue; }
                     $fields = ['stock = ?']; $vals = [$stock];
                     if ($updatePrice) { $fields[] = 'price = ?'; $vals[] = $price; }
+                    // Always update brochure price if present in CSV
+                    if (!empty($row['BrochurePrice'])) {
+                        $fields[] = 'brochure_selling_price = ?';
+                        $vals[] = (float)$row['BrochurePrice'];
+                    }
                     if ($updateTitle) { $fields[] = 'title = ?'; $vals[] = $title; }
                     if ($updateCollection && $collectionId) { $fields[] = 'collection_id = ?'; $vals[] = $collectionId; }
                     $vals[] = (int)$p['id'];

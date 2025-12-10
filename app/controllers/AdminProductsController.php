@@ -186,10 +186,17 @@ class AdminProductsController extends Controller
 
         // Try to set sale fields if supported
         try {
+            $brochure_price = ($_POST['brochure_selling_price'] === '' ? null : (float)$_POST['brochure_selling_price']);
             $sale_price = ($_POST['sale_price'] === '' ? null : (float)$_POST['sale_price']);
             $sale_start = ($_POST['sale_start'] === '' ? null : $_POST['sale_start']);
             $sale_end   = ($_POST['sale_end'] === '' ? null : $_POST['sale_end']);
-            $pdo->prepare('UPDATE products SET sale_price=?, sale_start=?, sale_end=? WHERE id=?')->execute([$sale_price,$sale_start,$sale_end,$pid]);
+
+            // Rule: If brochure price is 0 or empty, set sale_price to 0
+            if (!$brochure_price) {
+                $sale_price = null;
+            }
+
+            $pdo->prepare('UPDATE products SET brochure_selling_price=?, sale_price=?, sale_start=?, sale_end=? WHERE id=?')->execute([$brochure_price,$sale_price,$sale_start,$sale_end,$pid]);
         } catch (\Throwable $e) {}
         // Update tags
         if (isset($_POST['tags'])) { $this->updateTags($pid, (string)$_POST['tags']); }
@@ -252,10 +259,18 @@ class AdminProductsController extends Controller
         } catch (\Throwable $e) { /* ignore */ }
         // Try to set sale fields if supported
         try {
+            $brochure_price = ($_POST['brochure_selling_price'] === '' ? null : (float)$_POST['brochure_selling_price']);
             $sale_price = ($_POST['sale_price'] === '' ? null : (float)$_POST['sale_price']);
             $sale_start = ($_POST['sale_start'] === '' ? null : $_POST['sale_start']);
             $sale_end   = ($_POST['sale_end'] === '' ? null : $_POST['sale_end']);
-            DB::pdo()->prepare('UPDATE products SET sale_price=?, sale_start=?, sale_end=? WHERE id=?')->execute([$sale_price,$sale_start,$sale_end,(int)$params['id']]);
+
+            // Rule: If brochure price is 0 or empty, set sale_price to 0
+            if (!$brochure_price) {
+                $sale_price = null;
+            }
+
+            DB::pdo()->prepare('UPDATE products SET brochure_selling_price=?, sale_price=?, sale_start=?, sale_end=? WHERE id=?')
+                ->execute([$brochure_price,$sale_price,$sale_start,$sale_end,(int)$params['id']]);
         } catch (\Throwable $e) {}
         // Update tags
         if (isset($_POST['tags'])) { $this->updateTags((int)$params['id'], (string)$_POST['tags']); }
@@ -493,19 +508,21 @@ class AdminProductsController extends Controller
         $pdo = DB::pdo();
         $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
         $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
-        $headers = ['ID','Title','FSC','Barcode','Price','Status','Stock','Collection'];
+        $headers = ['ID','Title','FSC','Barcode','Price','Brochure Selling Price','Sale Price','Status','Stock','Collection'];
         fputcsv($out, $headers);
         $cols = ['p.id','p.title'];
         if ($hasSku) { $cols[] = 'p.fsc'; } else { $cols[] = "'' AS fsc"; }
         if ($hasBarcode) { $cols[] = 'p.barcode'; } else { $cols[] = "'' AS barcode"; }
         $cols[] = 'p.price';
+        $cols[] = 'p.brochure_selling_price';
+        $cols[] = 'p.sale_price';
         $cols[] = 'p.status';
         $cols[] = 'COALESCE(p.stock,0) AS stock';
         $cols[] = 'c.title AS collection';
         $sql = 'SELECT '.implode(',', $cols).' FROM products p LEFT JOIN collections c ON c.id=p.collection_id ORDER BY p.id DESC';
         $stmt = $pdo->query($sql);
         while ($row = $stmt->fetch()) {
-            fputcsv($out, [$row['id'],$row['title'],$row['fsc'] ?? '',$row['barcode'] ?? '',$row['price'],$row['status'],$row['stock'],$row['collection']]);
+            fputcsv($out, [$row['id'],$row['title'],$row['fsc'] ?? '',$row['barcode'] ?? '',$row['price'],$row['brochure_selling_price'],$row['sale_price'],$row['status'],$row['stock'],$row['collection']]);
         }
         fclose($out); exit;
     }

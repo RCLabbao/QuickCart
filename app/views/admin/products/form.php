@@ -65,14 +65,31 @@
           </div>
         </div>
 
-        <!-- Sale Pricing Section -->
+        <!-- Brochure Selling Price Section -->
         <div class="mt-4 pt-4 border-top">
           <h6 class="fw-semibold mb-3">
-            <i class="bi bi-tag me-2"></i>Sale Pricing (Optional)
+            <i class="bi bi-journal-text me-2"></i>Brochure Selling Price
           </h6>
           <div class="row g-3">
             <div class="col-md-4">
-              <label class="form-label fw-semibold">Sale Price</label>
+              <label class="form-label fw-semibold">Brochure Selling Price</label>
+              <div class="input-group">
+                <span class="input-group-text">₱</span>
+                <input class="form-control" type="number" step="0.01" name="brochure_selling_price" value="<?= number_format((float)($product['brochure_selling_price'] ?? 0), 2, '.', '') ?>" placeholder="0.00">
+              </div>
+              <div class="form-text">This will be used as the sale price on the product page. Leave blank or 0 for no sale pricing.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sale Pricing Section -->
+        <div class="mt-4 pt-4 border-top">
+          <h6 class="fw-semibold mb-3">
+            <i class="bi bi-tag me-2"></i>Sale Schedule (Optional)
+          </h6>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Sale Price (Display Only)</label>
               <div class="input-group">
                 <span class="input-group-text">₱</span>
                 <input class="form-control" type="number" step="0.01" name="sale_price" value="<?= number_format((float)($product['sale_price'] ?? 0), 2, '.', '') ?>" placeholder="0.00">
