@@ -24,16 +24,34 @@ class AdminProductsController extends Controller
             // Detect optional FSC/barcode columns
             $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
             $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
-            if (ctype_digit($q)) {
-                $where[] = 'id = ?';
-                $params[] = (int)$q;
-            }
             $like = '%'.$q.'%';
-            $titleCond = 'title LIKE ?';
-            if ($hasSku && $hasBarcode) { $where[] = "($titleCond OR fsc LIKE ? OR barcode LIKE ?)"; $params[]=$like; $params[]=$like; $params[]=$like; }
-            elseif ($hasSku) { $where[] = "($titleCond OR fsc LIKE ?)"; $params[]=$like; $params[]=$like; }
-            elseif ($hasBarcode) { $where[] = "($titleCond OR barcode LIKE ?)"; $params[]=$like; $params[]=$like; }
-            else { $where[] = $titleCond; $params[]=$like; }
+
+            // Build search condition - always search by title and available fields
+            if ($hasSku && $hasBarcode) {
+                $where[] = "(title LIKE ? OR fsc LIKE ? OR barcode LIKE ?)";
+                $params[]=$like; $params[]=$like; $params[]=$like;
+            }
+            elseif ($hasSku) {
+                $where[] = "(title LIKE ? OR fsc LIKE ?)";
+                $params[]=$like; $params[]=$like;
+            }
+            elseif ($hasBarcode) {
+                $where[] = "(title LIKE ? OR barcode LIKE ?)";
+                $params[]=$like; $params[]=$like;
+            }
+            else {
+                $where[] = "title LIKE ?";
+                $params[]=$like;
+            }
+
+            // If it's a pure number, also search by ID (as an additional OR condition)
+            if (ctype_digit($q)) {
+                // Wrap the previous condition with ID search
+                $lastIndex = count($where) - 1;
+                $where[$lastIndex] = "(id = ? OR " . $where[$lastIndex] . ")";
+                // Add ID parameter at the beginning
+                array_unshift($params, (int)$q);
+            }
         }
         if (!empty($_GET['low'])) {
             $where[] = 'COALESCE(stock,0) <= 3';

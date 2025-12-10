@@ -13,7 +13,7 @@
       <i class="bi bi-arrow-left me-2"></i>Back to Products
     </a>
     <?php if (isset($product)): ?>
-      <a class="btn btn-outline-info" href="/products/<?= (int)$product['id'] ?>" target="_blank">
+      <a class="btn btn-outline-info" href="/products/<?= htmlspecialchars($product['slug']) ?>" target="_blank">
         <i class="bi bi-eye me-2"></i>View Product
       </a>
     <?php endif; ?>
