@@ -13,17 +13,18 @@
     <!-- Main Image Carousel -->
     <div class="position-relative">
       <?php
-      $images = !empty($gallery) ? $gallery : [['url' => 'https://picsum.photos/seed/'.(int)$product['id'].'/1000/1000']];
+      $images = !empty($gallery) ? $gallery : [];
       $hasMultipleImages = count($images) > 1;
       ?>
 
+      <?php if (!empty($images)): ?>
       <div id="productCarousel" class="carousel slide" data-bs-ride="false">
         <div class="carousel-inner">
           <?php foreach ($images as $index => $img): ?>
             <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
               <div class="ratio ratio-1x1 bg-light rounded" style="overflow:hidden;">
                 <img loading="lazy"
-                     src="<?= e($img['url'] ?: ('https://picsum.photos/seed/'.(int)$product['id'].'/1000/1000')) ?>"
+                     src="<?= e($img['url']) ?>"
                      class="w-100 h-100 object-fit-cover"
                      alt="<?= e($product['title']) ?> - Image <?= $index + 1 ?>"
                      onclick="openImageModal(<?= $index ?>)"/>
@@ -79,8 +80,18 @@
         <?php endforeach; ?>
       </div>
     </div>
+    <?php else: ?>
+      <!-- No Images Placeholder -->
+      <div class="ratio ratio-1x1 bg-light rounded d-flex align-items-center justify-content-center">
+        <div class="text-center">
+          <i class="bi bi-image text-muted" style="font-size: 64px;"></i>
+          <p class="text-muted mt-3">No images available</p>
+        </div>
+      </div>
     <?php endif; ?>
 
+    <!-- Image Modal for Full Screen View -->
+    <?php if (!empty($images)): ?>
     <!-- Image Modal for Full Screen View -->
     <div class="modal fade" id="imageModal" tabindex="-1">
       <div class="modal-dialog modal-xl modal-dialog-centered">
@@ -93,7 +104,7 @@
               <div class="carousel-inner">
                 <?php foreach ($images as $index => $img): ?>
                   <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
-                    <img src="<?= e($img['url'] ?: ('https://picsum.photos/seed/'.(int)$product['id'].'/1000/1000')) ?>"
+                    <img src="<?= e($img['url']) ?>"
                          class="img-fluid rounded"
                          alt="<?= e($product['title']) ?> - Full Size"
                          style="max-height: 80vh; object-fit: contain;"/>
@@ -115,6 +126,7 @@
       </div>
     </div>
   </div>
+  <?php endif; ?>
   <div class="col-md-6">
     <h1 class="h3 mb-1"><?= e($product['title']) ?></h1>
     <?php $stk=(int)($product['stock']??0); ?>

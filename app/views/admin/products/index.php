@@ -274,9 +274,15 @@ $draftProducts = $stats['draft_products'] ?? 0;
               <td>
                 <div class="d-flex align-items-center">
                   <div class="bg-light rounded me-3" style="width: 50px; height: 50px; overflow: hidden;">
-                    <img src="https://picsum.photos/seed/<?= (int)$p['id'] ?>/100/100"
-                         class="w-100 h-100 object-fit-cover"
-                         alt="Product image">
+                    <?php if (!empty($p['image_url'])): ?>
+                      <img src="<?= htmlspecialchars($p['image_url']) ?>"
+                           class="w-100 h-100 object-fit-cover"
+                           alt="Product image">
+                    <?php else: ?>
+                      <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted">
+                        <i class="bi bi-image" style="font-size: 20px;"></i>
+                      </div>
+                    <?php endif; ?>
                   </div>
                   <div>
                     <h6 class="mb-1"><?= htmlspecialchars($p['title']) ?></h6>

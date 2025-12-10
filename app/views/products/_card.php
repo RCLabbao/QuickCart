@@ -3,8 +3,13 @@
   <div class="card h-100 text-decoration-none text-dark shadow-sm hover-lift">
     <a href="/products/<?= e($p['slug']) ?>" class="text-decoration-none text-dark">
       <div class="position-relative">
-        <?php $img = e($p['image_url'] ?? '') ?: 'https://picsum.photos/seed/'.(int)$p['id'].'/600/600'; ?>
-        <img loading="lazy" src="<?= thumb_url($img) ?>" class="card-img-top" alt="<?= e($p['title']) ?>"/>
+        <?php if (!empty($p['image_url'])): ?>
+          <img loading="lazy" src="<?= thumb_url(e($p['image_url'])) ?>" class="card-img-top" alt="<?= e($p['title']) ?>"/>
+        <?php else: ?>
+          <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+            <i class="bi bi-image text-muted" style="font-size: 48px;"></i>
+          </div>
+        <?php endif; ?>
 
         <!-- Badge container with proper spacing -->
         <div class="position-absolute top-0 start-0 end-0 p-2 d-flex justify-content-between align-items-start flex-wrap" style="gap: 0.25rem;">

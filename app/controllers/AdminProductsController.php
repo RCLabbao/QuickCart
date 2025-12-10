@@ -81,10 +81,10 @@ class AdminProductsController extends Controller
         // Include FSC/barcode columns when available for display
         $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
         $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
-        $cols = ['id','title','price','status','COALESCE(stock,0) AS stock','collection_id'];
+        $cols = ['id','title','price','status','COALESCE(stock,0) AS stock','collection_id', '(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url'];
         if ($hasSku) { $cols[] = 'fsc AS sku'; }
         if ($hasBarcode) { $cols[] = 'barcode'; }
-        $sql = 'SELECT '.implode(',', $cols).' FROM products WHERE ' . implode(' AND ', $where) . ' ORDER BY created_at DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
+        $sql = 'SELECT '.implode(',', $cols).' FROM products p WHERE ' . implode(' AND ', $where) . ' ORDER BY created_at DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
         $st = $pdo->prepare($sql);
         $st->execute($params);
         $rows = $st->fetchAll();
