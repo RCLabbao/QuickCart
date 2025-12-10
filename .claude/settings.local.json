@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(dir:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "WebSearch",
+      "Bash(php:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

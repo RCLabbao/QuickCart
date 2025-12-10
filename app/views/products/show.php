@@ -1,7 +1,6 @@
 <?php use function App\Core\price; use function App\Core\e; use function App\Core\is_on_sale; use function App\Core\effective_price; ?>
 <div class="row g-4">
   <div class="col-md-6">
-    <!-- Sale Badge - positioned above image -->
     <?php if (is_on_sale($product)): ?>
       <div class="mb-2">
         <span class="badge bg-danger fs-6 px-3 py-2">
@@ -10,78 +9,107 @@
       </div>
     <?php endif; ?>
 
-    <!-- Main Image Carousel -->
-    <div class="position-relative">
-      <?php
-      $images = !empty($gallery) ? $gallery : [];
-      $hasMultipleImages = count($images) > 1;
-      ?>
+    <?php
+    $images = !empty($gallery) ? $gallery : [];
+    $hasMultipleImages = count($images) > 1;
+    ?>
 
-      <?php if (!empty($images)): ?>
-      <div id="productCarousel" class="carousel slide" data-bs-ride="false">
-        <div class="carousel-inner">
-          <?php foreach ($images as $index => $img): ?>
-            <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
-              <div class="ratio ratio-1x1 bg-light rounded" style="overflow:hidden;">
-                <img loading="lazy"
-                     src="<?= e($img['url']) ?>"
-                     class="w-100 h-100 object-fit-cover"
-                     alt="<?= e($product['title']) ?> - Image <?= $index + 1 ?>"
-                     onclick="openImageModal(<?= $index ?>)"/>
+    <?php if (!empty($images)): ?>
+      <div class="position-relative">
+        <div id="productCarousel" class="carousel slide" data-bs-ride="false">
+          <div class="carousel-inner">
+            <?php foreach ($images as $index => $img): ?>
+              <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
+                <div class="ratio ratio-1x1 bg-light rounded" style="overflow:hidden;">
+                  <img loading="lazy"
+                       src="<?= e($img['url']) ?>"
+                       class="w-100 h-100 object-fit-cover"
+                       alt="<?= e($product['title']) ?> - Image <?= $index + 1 ?>"
+                       onclick="openImageModal(<?= $index ?>)"/>
+                </div>
               </div>
+            <?php endforeach; ?>
+          </div>
+
+          <?php if ($hasMultipleImages): ?>
+            <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev">
+              <div class="bg-dark bg-opacity-75 rounded-circle p-2">
+                <i class="bi bi-chevron-left text-white"></i>
+              </div>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next">
+              <div class="bg-dark bg-opacity-75 rounded-circle p-2">
+                <i class="bi bi-chevron-right text-white"></i>
+              </div>
+            </button>
+
+            <div class="position-absolute bottom-0 end-0 m-3">
+              <span class="badge bg-dark bg-opacity-75 px-3 py-2">
+                <span id="currentImageIndex">1</span> / <?= count($images) ?>
+              </span>
+            </div>
+          <?php endif; ?>
+
+          <div class="position-absolute top-0 end-0 m-3">
+            <button class="btn btn-dark btn-sm rounded-circle" onclick="openImageModal(0)" title="View full size">
+              <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <?php if ($hasMultipleImages): ?>
+      <div class="mt-3">
+        <div class="d-flex gap-2 flex-wrap" id="thumbnailNav">
+          <?php foreach ($images as $index => $img): ?>
+            <div class="thumbnail-item <?= $index === 0 ? 'active' : '' ?>"
+                 onclick="goToSlide(<?= $index ?>)"
+                 style="cursor: pointer;">
+              <img loading="lazy"
+                   src="<?= e($img['url'] ?: ('https://picsum.photos/seed/'.(int)$product['id'].'/1000/1000')) ?>"
+                   class="rounded border"
+                   style="width:80px;height:80px;object-fit:cover;transition:all 0.2s ease;"
+                   alt="Thumbnail <?= $index + 1 ?>"/>
             </div>
           <?php endforeach; ?>
         </div>
+      </div>
+      <?php endif; ?>
 
-        <?php if ($hasMultipleImages): ?>
-          <!-- Carousel Controls -->
-          <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev">
-            <div class="bg-dark bg-opacity-75 rounded-circle p-2">
-              <i class="bi bi-chevron-left text-white"></i>
+      <div class="modal fade" id="imageModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+          <div class="modal-content bg-transparent border-0">
+            <div class="modal-header border-0 pb-0">
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-          </button>
-          <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next">
-            <div class="bg-dark bg-opacity-75 rounded-circle p-2">
-              <i class="bi bi-chevron-right text-white"></i>
-            </div>
-          </button>
+            <div class="modal-body text-center p-0">
+              <div id="modalCarousel" class="carousel slide" data-bs-ride="false">
+                <div class="carousel-inner">
+                  <?php foreach ($images as $index => $img): ?>
+                    <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
+                      <img src="<?= e($img['url']) ?>"
+                           class="img-fluid rounded"
+                           alt="<?= e($product['title']) ?> - Full Size"
+                           style="max-height: 80vh; object-fit: contain;"/>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
 
-          <!-- Image Counter -->
-          <div class="position-absolute bottom-0 end-0 m-3">
-            <span class="badge bg-dark bg-opacity-75 px-3 py-2">
-              <span id="currentImageIndex">1</span> / <?= count($images) ?>
-            </span>
+                <?php if ($hasMultipleImages): ?>
+                  <button class="carousel-control-prev" type="button" data-bs-target="#modalCarousel" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon"></span>
+                  </button>
+                  <button class="carousel-control-next" type="button" data-bs-target="#modalCarousel" data-bs-slide="next">
+                    <span class="carousel-control-next-icon"></span>
+                  </button>
+                <?php endif; ?>
+              </div>
+            </div>
           </div>
-        <?php endif; ?>
-
-        <!-- Zoom Icon -->
-        <div class="position-absolute top-0 end-0 m-3">
-          <button class="btn btn-dark btn-sm rounded-circle" onclick="openImageModal(0)" title="View full size">
-            <i class="bi bi-arrows-fullscreen"></i>
-          </button>
         </div>
       </div>
-    </div>
 
-    <!-- Thumbnail Navigation -->
-    <?php if ($hasMultipleImages): ?>
-    <div class="mt-3">
-      <div class="d-flex gap-2 flex-wrap" id="thumbnailNav">
-        <?php foreach ($images as $index => $img): ?>
-          <div class="thumbnail-item <?= $index === 0 ? 'active' : '' ?>"
-               onclick="goToSlide(<?= $index ?>)"
-               style="cursor: pointer;">
-            <img loading="lazy"
-                 src="<?= e($img['url'] ?: ('https://picsum.photos/seed/'.(int)$product['id'].'/1000/1000')) ?>"
-                 class="rounded border"
-                 style="width:80px;height:80px;object-fit:cover;transition:all 0.2s ease;"
-                 alt="Thumbnail <?= $index + 1 ?>"/>
-          </div>
-        <?php endforeach; ?>
-      </div>
-    </div>
     <?php else: ?>
-      <!-- No Images Placeholder -->
       <div class="ratio ratio-1x1 bg-light rounded d-flex align-items-center justify-content-center">
         <div class="text-center">
           <i class="bi bi-image text-muted" style="font-size: 64px;"></i>
@@ -89,44 +117,8 @@
         </div>
       </div>
     <?php endif; ?>
-
-    <!-- Image Modal for Full Screen View -->
-    <?php if (!empty($images)): ?>
-    <!-- Image Modal for Full Screen View -->
-    <div class="modal fade" id="imageModal" tabindex="-1">
-      <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content bg-transparent border-0">
-          <div class="modal-header border-0 pb-0">
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body text-center p-0">
-            <div id="modalCarousel" class="carousel slide" data-bs-ride="false">
-              <div class="carousel-inner">
-                <?php foreach ($images as $index => $img): ?>
-                  <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
-                    <img src="<?= e($img['url']) ?>"
-                         class="img-fluid rounded"
-                         alt="<?= e($product['title']) ?> - Full Size"
-                         style="max-height: 80vh; object-fit: contain;"/>
-                  </div>
-                <?php endforeach; ?>
-              </div>
-
-              <?php if ($hasMultipleImages): ?>
-                <button class="carousel-control-prev" type="button" data-bs-target="#modalCarousel" data-bs-slide="prev">
-                  <span class="carousel-control-prev-icon"></span>
-                </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#modalCarousel" data-bs-slide="next">
-                  <span class="carousel-control-next-icon"></span>
-                </button>
-              <?php endif; ?>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
-  <?php endif; ?>
+
   <div class="col-md-6">
     <h1 class="h3 mb-1"><?= e($product['title']) ?></h1>
     <?php $stk=(int)($product['stock']??0); ?>
@@ -171,6 +163,7 @@
     <?php endif; ?>
   </div>
 </div>
+
 <div class="sticky-cta d-md-none">
   <button class="btn btn-dark w-100" data-submit-form="#pdpAddToCartForm">Add to cart</button>
 </div>
@@ -316,5 +309,3 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
-<?php // End of file ?>
-
