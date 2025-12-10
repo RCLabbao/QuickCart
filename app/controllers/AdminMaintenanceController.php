@@ -70,6 +70,15 @@ class AdminMaintenanceController extends Controller
         // Add orders.coupon_code if missing
         $this->ensureColumn($pdo, 'orders','coupon_code','ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(64) NULL AFTER discount');
 
+        // Add FSC and barcode columns if missing
+        $this->ensureColumn($pdo, 'products','fsc','ALTER TABLE products ADD COLUMN fsc VARCHAR(64) NULL UNIQUE');
+        $this->ensureColumn($pdo, 'products','barcode','ALTER TABLE products ADD COLUMN barcode VARCHAR(64) NULL UNIQUE');
+
+        // Fix image URLs - add /public prefix if missing
+        try {
+            $pdo->exec("UPDATE product_images SET url = CONCAT('/public', url) WHERE url NOT LIKE '/public%' AND url LIKE '/uploads/%'");
+        } catch (\Throwable $e) { /* ignore */ }
+
         // Rename products.sku -> products.fsc if needed
         try {
             $hasSku = $this->columnExists($pdo, 'products', 'sku');
