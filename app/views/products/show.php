@@ -131,7 +131,13 @@
     <h1 class="h3 mb-1"><?= e($product['title']) ?></h1>
     <?php $stk=(int)($product['stock']??0); ?>
     <div class="small mb-2">
-      <?php if($stk<=0): ?><span class="badge bg-secondary">Out of stock</span><?php elseif($stk<=3): ?><span class="badge bg-warning text-dark">Low stock</span><?php else: ?><span class="text-muted">In stock</span><?php endif; ?>
+      <?php if($stk<=0): ?>
+        <span class="badge bg-secondary">Out of stock</span>
+      <?php elseif($stk<=3): ?>
+        <span class="badge bg-warning text-dark">Low stock</span>
+      <?php else: ?>
+        <span class="text-muted">In stock</span>
+      <?php endif; ?>
       <span class="text-muted"> • Free pickup available</span>
     </div>
     <div class="fs-3 fw-bold mb-3">

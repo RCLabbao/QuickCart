@@ -155,6 +155,14 @@ class AdminProductsController extends Controller
         $stock = max(0, (int)($_POST['stock'] ?? 0));
         $collection_id = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
 
+        // Check if slug already exists
+        $slugCheck = DB::pdo()->prepare('SELECT id FROM products WHERE slug=? LIMIT 1');
+        $slugCheck->execute([$slug]);
+        if ($slugCheck->fetch()) {
+            // Make slug unique by appending random string
+            $slug = $slug . '-' . substr(md5(uniqid('', true)), 0, 6);
+        }
+
         // Optional FSC/Barcode + duplicate checks
         $pdo = DB::pdo();
         $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
@@ -233,6 +241,15 @@ class AdminProductsController extends Controller
         $price = (float)($_POST['price'] ?? 0); $status = $_POST['status'] ?? 'active';
         $stock = max(0, (int)($_POST['stock'] ?? 0));
         $collection_id = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
+
+        // Check if slug already exists for another product
+        $slugCheck = DB::pdo()->prepare('SELECT id FROM products WHERE slug=? AND id<>? LIMIT 1');
+        $slugCheck->execute([$slug, (int)$params['id']]);
+        if ($slugCheck->fetch()) {
+            // Make slug unique by appending ID
+            $slug = $slug . '-' . (int)$params['id'];
+        }
+
         DB::pdo()->prepare('UPDATE products SET title=?, slug=?, description=?, price=?, status=?, stock=?, collection_id=? WHERE id=?')
             ->execute([$title,$slug,$_POST['description'] ?? '',$price,$status,$stock,$collection_id,$params['id']]);
         // Optional: SKU / Barcode with duplicate check
