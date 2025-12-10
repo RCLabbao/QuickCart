@@ -7,22 +7,18 @@ function price(float $p): string { return '₱' . number_format($p, 2); }
 function csrf_field(): string { return '<input type="hidden" name="_token" value="' . CSRF::token() . '">'; }
 
 function is_on_sale(array $p): bool {
-    // Rule 1: If brochure_selling_price is blank or zero, no sale
-    if (!isset($p['brochure_selling_price']) || $p['brochure_selling_price'] === null || (float)$p['brochure_selling_price'] <= 0) {
+    // Rule 1: If sale_price is blank or zero, no sale
+    if (!isset($p['sale_price']) || $p['sale_price'] === null || (float)$p['sale_price'] <= 0) {
         return false;
     }
 
     $regularPrice = isset($p['price']) ? (float)$p['price'] : 0;
-    $salePrice = isset($p['sale_price']) ? (float)$p['sale_price'] : 0;
-    $brochurePrice = (float)$p['brochure_selling_price'];
-
-    // Rule 2: Sale price should be brochure_selling_price
-    $salePrice = $brochurePrice;
+    $salePrice = (float)$p['sale_price'];
 
     // Require a valid regular price
     if ($regularPrice <= 0) return false;
 
-    // Rule 3: Don't show sale if prices are equal
+    // Rule 2: Don't show sale if prices are equal
     if (abs($regularPrice - $salePrice) < 0.01) return false;
 
     // Additional check: sale price must be less than regular price
@@ -36,18 +32,15 @@ function is_on_sale(array $p): bool {
 }
 
 function effective_price(array $p): float {
-    // Use brochure selling price as sale price if available
-    if (isset($p['brochure_selling_price']) && $p['brochure_selling_price'] !== null && (float)$p['brochure_selling_price'] > 0) {
-        return (float)$p['brochure_selling_price'];
+    // Use sale price if available and greater than 0
+    if (isset($p['sale_price']) && $p['sale_price'] !== null && (float)$p['sale_price'] > 0) {
+        return (float)$p['sale_price'];
     }
     return (float)($p['price'] ?? 0);
 }
 
 function get_sale_price(array $p): float {
-    // Return the brochure selling price as the sale price
-    if (isset($p['brochure_selling_price']) && $p['brochure_selling_price'] !== null && (float)$p['brochure_selling_price'] > 0) {
-        return (float)$p['brochure_selling_price'];
-    }
+    // Return the sale price
     return (float)($p['sale_price'] ?? 0);
 }
 

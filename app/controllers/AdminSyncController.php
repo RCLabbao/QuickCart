@@ -192,6 +192,7 @@ class AdminSyncController extends Controller
                         'Categorycode' => $pick($r,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
                         'ProductType' => $pick($r,$map,['producttype','product_type','product type','type']),
                         'RegPrice' => $pick($r,$map,['regprice','listprice','list price','price']),
+                        'BrochurePrice' => $pick($r,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
                     ];
                 }
                 fclose($h);
@@ -395,9 +396,10 @@ class AdminSyncController extends Controller
                     while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($slugTitle))->fetchColumn() > 0) {
                         $slugTitle = $baseSlug.'-'.$suffix++; if ($suffix>1000) break; // safety
                     }
-                    $brochurePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : null;
-                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,brochure_selling_price,status,stock,collection_id,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NOW())')
-                        ->execute([$title,$slugTitle,$fsc,$price,$brochurePrice,$stock,$collectionId]);
+                    // Map brochure price to sale_price field
+                    $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;
+                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NOW())')
+                        ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId]);
                     $created++;
                 } else {
                     // Update
@@ -427,11 +429,10 @@ class AdminSyncController extends Controller
                     if ($dryRun) { $updated++; continue; }
                     $fields = ['stock = ?']; $vals = [$stock];
                     if ($updatePrice) { $fields[] = 'price = ?'; $vals[] = $price; }
-                    // Always update brochure price if present in CSV
-                    if (!empty($row['BrochurePrice'])) {
-                        $fields[] = 'brochure_selling_price = ?';
-                        $vals[] = (float)$row['BrochurePrice'];
-                    }
+                    // Always update sale price from brochure price in CSV
+                    $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;
+                    $fields[] = 'sale_price = ?';
+                    $vals[] = $salePrice;
                     if ($updateTitle) { $fields[] = 'title = ?'; $vals[] = $title; }
                     if ($updateCollection && $collectionId) { $fields[] = 'collection_id = ?'; $vals[] = $collectionId; }
                     $vals[] = (int)$p['id'];
