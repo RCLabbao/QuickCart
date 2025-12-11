@@ -100,8 +100,14 @@ class AdminSyncController extends Controller
                     foreach ($sheet->toArray(null, true, true, true) as $row) {
                         $arr = array_values($row);
                         if ($header === null) {
-                            // Normalize header keys to be robust (trim, lowercase)
-                            $header = array_map(fn($h)=> strtolower(trim((string)$h)), $arr);
+                            // Normalize header keys to be robust (trim, lowercase, remove newlines)
+                            $header = array_map(function($h) {
+                                $h = (string)$h;
+                                // Remove newlines and extra spaces
+                                $h = preg_replace('/\s+/', ' ', $h);
+                                // Trim and lowercase
+                                return strtolower(trim($h));
+                            }, $arr);
                             $map = array_flip($header);
                             // helper to pick value by any of the candidate keys
                             $pick = function(array $rowVals, array $map, array $keys) {
@@ -133,7 +139,14 @@ class AdminSyncController extends Controller
                 try {
                     $parsed = $this->parseXlsx($tmp);
                     if (!$parsed) { throw new \RuntimeException('Empty XLSX or unsupported format'); }
-                    $header = array_map(fn($h)=> strtolower(trim((string)$h)), array_shift($parsed));
+                    $rawHeader = array_shift($parsed);
+                    $header = array_map(function($h) {
+                        $h = (string)$h;
+                        // Remove newlines and extra spaces
+                        $h = preg_replace('/\s+/', ' ', $h);
+                        // Trim and lowercase
+                        return strtolower(trim($h));
+                    }, $rawHeader);
                     $map = array_flip($header);
                     $pick = function(array $rowVals, array $map, array $keys) {
                         foreach ($keys as $k) { if (isset($map[$k])) { return $rowVals[$map[$k]] ?? ''; } }
@@ -174,8 +187,17 @@ class AdminSyncController extends Controller
                 if (!$header) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
                 // Remove UTF-8 BOM if present on first cell
                 if (isset($header[0])) { $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$header[0]); }
+                // Clean up headers: remove newlines, extra spaces, and normalize
+                $headerClean = array_map(function($v) {
+                    $v = (string)$v;
+                    // Remove newlines and extra spaces
+                    $v = preg_replace('/\s+/', ' ', $v);
+                    // Trim spaces
+                    $v = trim($v);
+                    return $v;
+                }, $header);
                 // Normalize header keys (trim + lowercase) and map flexible names
-                $headerNorm = array_map(fn($v)=> strtolower(trim((string)$v)), $header);
+                $headerNorm = array_map(fn($v)=> strtolower(trim((string)$v)), $headerClean);
                 $map = array_flip($headerNorm);
                 $pick = function(array $rowVals, array $map, array $keys) {
                     foreach ($keys as $k) { if (isset($map[$k])) { return $rowVals[$map[$k]] ?? ''; } }
@@ -192,7 +214,7 @@ class AdminSyncController extends Controller
                         'Categorycode' => $pick($r,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
                         'ProductType' => $pick($r,$map,['producttype','product_type','product type','type']),
                         'RegPrice' => $pick($r,$map,['regprice','listprice','list price','price']),
-                        'BrochurePrice' => $pick($r,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
+                        'BrochurePrice' => $pick($r,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure','brochure\nselling price','brochure \nselling price']),
                     ];
                 }
                 fclose($h);
@@ -201,8 +223,11 @@ class AdminSyncController extends Controller
                     $debugInfo = [
                         'source' => 'csv',
                         'delimiter' => $bestDelim,
+                        'header_raw' => $header,
+                        'header_clean' => $headerClean,
                         'header_norm' => $headerNorm,
                         'category_index' => $map['category'] ?? ($map['category code'] ?? ($map['category_code'] ?? ($map['categorycode'] ?? null))),
+                        'brochure_price_index' => $map['brochure selling price'] ?? ($map['brochureprice'] ?? ($map['brochure price'] ?? null)),
                     ];
                 }
             }
@@ -431,6 +456,13 @@ class AdminSyncController extends Controller
                     if ($updatePrice) { $fields[] = 'price = ?'; $vals[] = $price; }
                     // Always update sale price from brochure price in CSV
                     $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;
+
+                    // Debug: Log brochure price processing
+                    if ($collectDebug && count($debugRows) < 500) {
+                        if (!empty($row['BrochurePrice'])) {
+                            error_log("FSC: $fsc, Raw BrochurePrice: '" . $row['BrochurePrice'] . "', Parsed Sale Price: $salePrice");
+                        }
+                    }
                     $fields[] = 'sale_price = ?';
                     $vals[] = $salePrice;
                     if ($updateTitle) { $fields[] = 'title = ?'; $vals[] = $title; }
