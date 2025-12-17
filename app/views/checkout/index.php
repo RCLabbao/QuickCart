@@ -350,86 +350,37 @@ document.addEventListener('DOMContentLoaded', function() {
   const codOption = document.getElementById('codOption');
   const pickupOption = document.getElementById('pickupOption');
 
-  // Build whitelists from fresh settings (not cached)
-  <?php
-    $freshSettings = \App\Core\fresh_settings();
-  ?>
-  const codWhitelistRaw = "<?= addslashes((string)($freshSettings['cod_city_whitelist'] ?? '')) ?>";
-  const pickupWhitelistRaw = "<?= addslashes((string)($freshSettings['pickup_city_whitelist'] ?? '')) ?>";
-  //console.log('Raw COD whitelist:', JSON.stringify(codWhitelistRaw));
-  //console.log('Raw Pickup whitelist:', JSON.stringify(pickupWhitelistRaw));
-
-  const codWhitelist = codWhitelistRaw.trim();
-  const pickupWhitelist = pickupWhitelistRaw.trim();
-  // Split by comma OR newline to handle both formats
-  const codList = codWhitelist ? codWhitelist.split(/[\r\n,]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
-  const pickupList = pickupWhitelist ? pickupWhitelist.split(/[\r\n,]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
-
-  // Remove duplicates
-  const uniqueCodList = [...new Set(codList)];
-  const uniquePickupList = [...new Set(pickupList)];
-
-  //console.log('Unique COD list:', uniqueCodList);
-  //console.log('Unique Pickup list:', uniquePickupList);
-
-  function isAllowed(list, city){
-    // If whitelist is empty, allow all cities
-    if (!list || list.length === 0) return true;
-    return list.includes((city||'').toLowerCase());
-  }
-
-  function updateMethodVisibility(){
+  // Real-time shipping settings from API - no caching
+  async function updateMethodVisibility(){
     const cityInput = document.querySelector('input[name="city"]');
     const city = cityInput ? cityInput.value.trim() : '';
-    //console.log('Checking city:', JSON.stringify(city));
 
-    // Check global availability settings from fresh settings
-    const codEnabled = <?= ($freshSettings['shipping_enable_cod'] ?? '1') === '1' ? 'true' : 'false' ?>;
-    const pickupEnabled = <?= ($freshSettings['shipping_enable_pickup'] ?? '1') === '1' ? 'true' : 'false' ?>;
+    try {
+      const url = '/api/shipping-settings?city=' + encodeURIComponent(city);
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error('Failed to fetch shipping settings');
 
-    const codCityAllowed = codEnabled && isAllowed(uniqueCodList, city);
-    const pickupCityAllowed = pickupEnabled && isAllowed(uniquePickupList, city);
+      const data = await res.json();
+      const codOption = document.getElementById('codOption');
+      const pickupOption = document.getElementById('pickupOption');
+      const codInput = document.getElementById('cod');
+      const pickupInput = document.getElementById('pickup');
+      const codMsg = document.getElementById('codUnavailableMsg');
+      const placeBtn = document.getElementById('placeOrderBtn');
+      const shipEl = document.getElementById('shippingAmount');
 
-    //console.log('COD enabled:', codEnabled, 'COD allowed by city:', isAllowed(uniqueCodList, city));
-    //console.log('Pickup enabled:', pickupEnabled, 'Pickup allowed by city:', isAllowed(uniquePickupList, city));
+      // Update COD option
+      if (codOption && codInput) {
+        const codData = data.methods.cod;
+        if (!codData.enabled) {
+          codOption.style.display = 'none';
+          codInput.checked = false;
+        } else {
+          codOption.style.display = '';
+          codInput.disabled = !codData.allowed_for_city;
 
-    // Hide or show options based on global settings
-    const codOption = document.getElementById('codOption');
-    const pickupOption = document.getElementById('pickupOption');
-    const codInput = document.getElementById('cod');
-    const pickupInput = document.getElementById('pickup');
-    const codMsg = document.getElementById('codUnavailableMsg');
-    const placeBtn = document.getElementById('placeOrderBtn');
-
-    // Add visual debug info
-    //const debugDiv = document.getElementById('deliveryDebug');
-    //if (debugDiv) {
-    //  debugDiv.innerHTML = `
-    //    <div style="background: #f8f9fa; padding: 10px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px;">
-    //      <strong>Debug Info:</strong><br>
-    //      City: "${city}"<br>
-    //      COD List: [${uniqueCodList.join(', ')}]<br>
-    //      Pickup List: [${uniquePickupList.join(', ')}]<br>
-    //      COD Allowed: ${codAllowed}<br>
-    //      Pickup Allowed: ${pickupAllowed}
-    //    </div>
-    //  `;
-    //}
-
-    // Handle COD option
-    if (codOption) {
-      if (!codEnabled) {
-        // Completely hide if disabled in settings
-        codOption.style.display = 'none';
-        if (codInput) codInput.checked = false;
-      } else {
-        // Show and check city restrictions
-        codOption.style.display = '';
-        if (codInput) {
-          codInput.disabled = !codCityAllowed;
-          if (!codCityAllowed) {
+          if (!codData.allowed_for_city) {
             if (codMsg) codMsg.style.display = '';
-            // If COD is selected but not allowed, disable submission
             if (placeBtn) placeBtn.disabled = codInput.checked;
           } else {
             if (codMsg) codMsg.style.display = 'none';
@@ -437,36 +388,50 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
       }
-    }
 
-    // Handle Pickup option
-    if (pickupOption) {
-      if (!pickupEnabled) {
-        // Completely hide if disabled in settings
-        pickupOption.style.display = 'none';
-        if (pickupInput) pickupInput.checked = false;
-      } else {
-        // Show and check city restrictions
-        pickupOption.style.display = '';
-        if (pickupInput) {
-          pickupInput.disabled = !pickupCityAllowed;
-          // If pickup is not allowed and currently selected, prevent submit
-          if (!pickupCityAllowed && pickupInput.checked && placeBtn) {
+      // Update Pickup option
+      if (pickupOption && pickupInput) {
+        const pickupData = data.methods.pickup;
+        if (!pickupData.enabled) {
+          pickupOption.style.display = 'none';
+          pickupInput.checked = false;
+        } else {
+          pickupOption.style.display = '';
+          pickupInput.disabled = !pickupData.allowed_for_city;
+
+          if (!pickupData.allowed_for_city && pickupInput.checked && placeBtn) {
             placeBtn.disabled = true;
           } else if (pickupInput.checked && placeBtn) {
             placeBtn.disabled = false;
           }
         }
       }
-    }
 
-    // If only one method is available, select it automatically
-    if (codEnabled && !pickupEnabled && codInput) {
-      codInput.checked = true;
-      toggleAddressFields();
-    } else if (!codEnabled && pickupEnabled && pickupInput) {
-      pickupInput.checked = true;
-      toggleAddressFields();
+      // Auto-select available method if only one is enabled
+      if (data.methods.cod.enabled && !data.methods.pickup.enabled && codInput) {
+        codInput.checked = true;
+        toggleAddressFields();
+      } else if (!data.methods.cod.enabled && data.methods.pickup.enabled && pickupInput) {
+        pickupInput.checked = true;
+        toggleAddressFields();
+      }
+
+      // Update shipping fees display
+      if (shipEl) {
+        const method = (document.getElementById('pickup')?.checked) ? 'pickup' : 'cod';
+        const fee = method === 'pickup' ? data.methods.pickup.fee : data.methods.cod.fee;
+        shipEl.textContent = fee > 0 ? '₱' + fee.toFixed(2) : 'Free';
+
+        // Update total
+        const subtotal = parseFloat(document.getElementById('subtotalValue')?.value || '0');
+        const discount = parseFloat(document.getElementById('discountValue')?.value || '0');
+        const total = Math.max(0, subtotal - discount) + fee;
+        const totalEl = document.getElementById('totalAmount');
+        if (totalEl) totalEl.textContent = '₱' + total.toFixed(2);
+      }
+
+    } catch (e) {
+      console.error('Error fetching shipping settings:', e);
     }
   }
 
@@ -485,70 +450,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  codRadio.addEventListener('change', toggleAddressFields);
-  pickupRadio.addEventListener('change', toggleAddressFields);
-
   // Initialize
   toggleAddressFields();
   updateMethodVisibility();
 
-  // Update order summary (shipping + total) when method changes
-  async function fetchFeeAndUpdate() {
-    const shipEl = document.getElementById('shippingAmount');
-    if (!shipEl) return;
-    const pickupFee = parseFloat(shipEl.dataset.pickupFee || '0');
-    const subtotal = parseFloat(document.getElementById('subtotalValue')?.value || '0');
-    const discount = parseFloat(document.getElementById('discountValue')?.value || '0');
-    const method = (document.getElementById('pickup')?.checked) ? 'pickup' : 'cod';
+  // Event listeners for method changes (now handled by updateMethodVisibility)
+  codRadio.addEventListener('change', () => {
+    toggleAddressFields();
+    updateMethodVisibility();
+  });
+  pickupRadio.addEventListener('change', () => {
+    toggleAddressFields();
+    updateMethodVisibility();
+  });
 
-    let fee = pickupFee; // default for pickup
-    if (method === 'cod') {
-      const cityInput = document.querySelector('input[name="city"]');
-      const city = cityInput ? cityInput.value.trim() : '';
-      try {
-        const url = '/api/shipping-fee?method=cod&city=' + encodeURIComponent(city);
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (res.ok) {
-          const data = await res.json();
-          if (typeof data.fee === 'number') fee = data.fee;
-          else fee = parseFloat(shipEl.dataset.codFee || '0');
-        } else {
-          fee = parseFloat(shipEl.dataset.codFee || '0');
-        }
-      } catch (e) {
-        fee = parseFloat(shipEl.dataset.codFee || '0');
-      }
-    }
-
-    shipEl.textContent = fee > 0 ? '₱' + Number(fee).toFixed(2) : 'Free';
-    const total = Math.max(0, subtotal - discount) + Number(fee);
-    const totalEl = document.getElementById('totalAmount');
-    if (totalEl) totalEl.textContent = '₱' + total.toFixed(2);
-  }
-
-  const updateSummary = () => fetchFeeAndUpdate();
-
-  codRadio.addEventListener('change', updateSummary);
-  pickupRadio.addEventListener('change', updateSummary);
-  updateSummary();
   // Recalculate when city changes (debounced)
   const cityInput = document.querySelector('input[name="city"]');
   let debounceTimer;
   if (cityInput) {
     cityInput.addEventListener('input', function(){
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(function(){ updateMethodVisibility(); updateSummary(); }, 300);
+      debounceTimer = setTimeout(updateMethodVisibility, 300);
     });
-    cityInput.addEventListener('blur', function(){ updateMethodVisibility(); updateSummary(); });
+    cityInput.addEventListener('blur', updateMethodVisibility);
   }
 
-
-  codRadio.addEventListener('change', toggleAddressFields);
-  pickupRadio.addEventListener('change', toggleAddressFields);
-
-  // Initialize
-  toggleAddressFields();
-  updateMethodVisibility();
+  // Refresh shipping settings every 30 seconds to catch admin changes
+  setInterval(updateMethodVisibility, 30000);
 
   // Form validation
   const form = document.getElementById('checkoutForm');

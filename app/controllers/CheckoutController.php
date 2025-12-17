@@ -303,5 +303,68 @@ class CheckoutController extends Controller
         }
         echo json_encode(['fee' => round((float)$fee, 2)]);
     }
+
+    // API endpoint to get all fresh shipping settings in real-time
+    public function shippingSettings(): void
+    {
+        header('Content-Type: application/json');
+        $pdo = DB::pdo();
+        $city = trim($_GET['city'] ?? '');
+
+        // Load fresh settings (no cache)
+        $s = $pdo->query("SELECT `key`,`value` FROM settings")->fetchAll();
+        $settings = []; foreach($s as $row){ $settings[$row['key']]=$row['value']; }
+
+        // Parse city whitelists
+        $codWhitelist = array_filter(array_map('trim', preg_split('/[\r\n,]+/', (string)($settings['cod_city_whitelist'] ?? ''))));
+        $pickupWhitelist = array_filter(array_map('trim', preg_split('/[\r\n,]+/', (string)($settings['pickup_city_whitelist'] ?? ''))));
+
+        $cityLower = strtolower($city);
+        $inList = function(array $list, string $val): bool {
+            if (empty($list)) return true;
+            foreach ($list as $x) {
+                if (strtolower($x) === $val) return true;
+            }
+            return false;
+        };
+
+        // Check city-based availability
+        $codEnabled = ($settings['shipping_enable_cod'] ?? '1') === '1';
+        $pickupEnabled = ($settings['shipping_enable_pickup'] ?? '1') === '1';
+
+        $codCityAllowed = $codEnabled && $inList($codWhitelist, $cityLower);
+        $pickupCityAllowed = $pickupEnabled && $inList($pickupWhitelist, $cityLower);
+
+        // Get city-specific COD fee if available
+        $codFee = (float)($settings['shipping_fee_cod'] ?? 0.00);
+        if ($city !== '') {
+            try {
+                $feeStmt = $pdo->prepare('SELECT fee FROM delivery_fees WHERE city = ?');
+                $feeStmt->execute([$city]);
+                $rowFee = $feeStmt->fetch();
+                if ($rowFee) { $codFee = (float)$rowFee['fee']; }
+            } catch (\Throwable $e) {}
+        }
+
+        $response = [
+            'methods' => [
+                'cod' => [
+                    'enabled' => $codEnabled,
+                    'allowed_for_city' => $codCityAllowed,
+                    'fee' => $codFee,
+                    'city_whitelist' => $codWhitelist
+                ],
+                'pickup' => [
+                    'enabled' => $pickupEnabled,
+                    'allowed_for_city' => $pickupCityAllowed,
+                    'fee' => (float)($settings['shipping_fee_pickup'] ?? 0.00),
+                    'city_whitelist' => $pickupWhitelist
+                ]
+            ],
+            'current_city' => $city
+        ];
+
+        echo json_encode($response);
+    }
 }
 

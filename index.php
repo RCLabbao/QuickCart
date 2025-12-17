@@ -151,6 +151,7 @@ $router->get('/admin/settings', 'AdminSettingsController@index', ['perm' => 'set
 $router->post('/admin/settings', 'AdminSettingsController@update', ['perm' => 'settings.write']);
 $router->post('/admin/settings/fees', 'AdminSettingsController@addCityFee', ['perm' => 'settings.write']);
 $router->post('/admin/settings/fees/(?P<id>\d+)/delete', 'AdminSettingsController@deleteCityFee', ['perm' => 'settings.write']);
+$router->get('/api/shipping-settings', 'CheckoutController@shippingSettings');
 
 // Public API
 $router->get('/api/shipping-fee', 'CheckoutController@fee');
