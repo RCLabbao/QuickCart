@@ -141,7 +141,7 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
     <div class="card-body">
       <form method="post" action="/admin/settings" class="row g-3">
         <?= csrf_field() ?>
-        <input type="hidden" name="scope" value="shipping_methods">
+        <input type="hidden" name="scope" value="shipping">
 
         <div class="col-12">
           <div class="alert alert-info">
@@ -193,7 +193,7 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
     <div class="card-body">
       <form method="post" action="/admin/settings" class="row g-3">
         <?= csrf_field() ?>
-        <input type="hidden" name="scope" value="shipping_fees">
+        <input type="hidden" name="scope" value="shipping">
         <div class="col-md-6">
           <label class="form-label">General Shipping Fee (COD)</label>
           <input class="form-control" type="number" step="0.01" name="shipping_fee_cod" value="<?= htmlspecialchars($settings['shipping_fee_cod'] ?? '0.00') ?>">
@@ -221,7 +221,7 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
     <div class="card-body">
       <form method="post" action="/admin/settings" class="row g-3">
         <?= csrf_field() ?>
-        <input type="hidden" name="scope" value="shipping_cities">
+        <input type="hidden" name="scope" value="shipping">
         <div class="col-md-6">
           <label class="form-label">COD available only in these cities</label>
           <textarea class="form-control" name="cod_city_whitelist" rows="3" placeholder="One city per line (leave empty to allow all)"><?= htmlspecialchars($settings['cod_city_whitelist'] ?? '') ?></textarea>

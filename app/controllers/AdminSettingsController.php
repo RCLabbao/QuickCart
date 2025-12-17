@@ -61,21 +61,6 @@ class AdminSettingsController extends Controller
                 'shipping_enable_cod' => isset($_POST['shipping_enable_cod']) ? '1' : '0',
                 'shipping_enable_pickup' => isset($_POST['shipping_enable_pickup']) ? '1' : '0',
             ];
-        } elseif ($scope === 'shipping_methods') {
-            $pairs = [
-                'shipping_enable_cod' => isset($_POST['shipping_enable_cod']) ? '1' : '0',
-                'shipping_enable_pickup' => isset($_POST['shipping_enable_pickup']) ? '1' : '0',
-            ];
-        } elseif ($scope === 'shipping_fees') {
-            $pairs = [
-                'shipping_fee_cod' => $_POST['shipping_fee_cod'] ?? '0',
-                'shipping_fee_pickup' => $_POST['shipping_fee_pickup'] ?? '0',
-            ];
-        } elseif ($scope === 'shipping_cities') {
-            $pairs = [
-                'cod_city_whitelist' => trim((string)($_POST['cod_city_whitelist'] ?? '')),
-                'pickup_city_whitelist' => trim((string)($_POST['pickup_city_whitelist'] ?? '')),
-            ];
         } elseif ($scope === 'email') {
             $pairs = [
                 'smtp_enabled' => isset($_POST['smtp_enabled']) ? '1' : '0',
