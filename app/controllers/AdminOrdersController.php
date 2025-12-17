@@ -57,14 +57,70 @@ class AdminOrdersController extends Controller
         $status = $_POST['status'] ?? 'pending';
         $oid = (int)$params['id'];
         $pdo = DB::pdo();
-        $pdo->prepare('UPDATE orders SET status=? WHERE id=?')->execute([$status, $oid]);
-        // log event (best-effort)
-        try {
-            $this->ensureOrderEvents($pdo);
-            $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
-                ->execute([$oid, Auth::userId(), 'status', 'Status changed to '. $status]);
-        } catch (\Throwable $e) {}
-        $_SESSION['success'] = 'Order status updated.';
+
+        // Get current status before update
+        $currentStatus = $pdo->prepare('SELECT status FROM orders WHERE id=?')->execute([$oid])->fetchColumn();
+
+        // Check if we're cancelling an order
+        $isCancelling = ($status === 'cancelled') && ($currentStatus !== 'cancelled');
+
+        // If cancelling and order was previously fulfilled, restore stock
+        if ($isCancelling && in_array($currentStatus, ['processing', 'shipped', 'completed'])) {
+            $pdo->beginTransaction();
+            try {
+                // Get order items to restore stock
+                $items = $pdo->prepare('SELECT product_id, quantity FROM order_items WHERE order_id=?');
+                $items->execute([$oid]);
+                $orderItems = $items->fetchAll();
+
+                foreach ($orderItems as $item) {
+                    $pid = (int)$item['product_id'];
+                    $qty = (int)$item['quantity'];
+                    if ($pid > 0 && $qty > 0) {
+                        // Restore stock
+                        $update = $pdo->prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+                        $update->execute([$qty, $pid]);
+
+                        // Log stock restoration event
+                        try {
+                            $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())')
+                                ->execute([$pid, Auth::userId(), $qty, 'Order cancelled - restored stock for order #'.$oid]);
+                        } catch (\Throwable $e) {}
+                    }
+                }
+
+                // Update order status
+                $pdo->prepare('UPDATE orders SET status=? WHERE id=?')->execute([$status, $oid]);
+
+                // Log cancellation event
+                try {
+                    $this->ensureOrderEvents($pdo);
+                    $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
+                        ->execute([$oid, Auth::userId(), 'status', 'Status changed to '.$status.' - stock restored']);
+                } catch (\Throwable $e) {}
+
+                $pdo->commit();
+                $_SESSION['success'] = 'Order cancelled and stock restored successfully.';
+            } catch (\Throwable $e) {
+                $pdo->rollBack();
+                $_SESSION['error'] = 'Failed to cancel order and restore stock: ' . $e->getMessage();
+                $this->redirect('/admin/orders/'.$params['id']);
+                return;
+            }
+        } else {
+            // Regular status update without stock changes
+            $pdo->prepare('UPDATE orders SET status=? WHERE id=?')->execute([$status, $oid]);
+
+            // log event (best-effort)
+            try {
+                $this->ensureOrderEvents($pdo);
+                $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
+                    ->execute([$oid, Auth::userId(), 'status', 'Status changed to '. $status]);
+            } catch (\Throwable $e) {}
+
+            $_SESSION['success'] = 'Order status updated.';
+        }
+
         $this->redirect('/admin/orders/'.$params['id']);
     }
     public function export(): void
@@ -99,17 +155,90 @@ class AdminOrdersController extends Controller
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/orders'); }
         $ids = array_map('intval', $_POST['ids'] ?? []); $status = $_POST['status'] ?? 'pending';
+
         if ($ids) {
-            $in = implode(',', array_fill(0, count($ids), '?'));
-            $st = DB::pdo()->prepare("UPDATE orders SET status=? WHERE id IN ($in)");
-            $params = array_merge([$status], $ids); $st->execute($params);
-            try {
-                $pdo = DB::pdo();
-                $this->ensureOrderEvents($pdo);
-                $evt = $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())');
-                foreach ($ids as $oid) { $evt->execute([$oid, Auth::userId(), 'status', 'Bulk status set to '.$status]); }
-            } catch (\Throwable $e) {}
+            $pdo = DB::pdo();
+
+            // Check if we're bulk cancelling orders
+            $isBulkCancelling = ($status === 'cancelled');
+            $restoredOrders = [];
+
+            if ($isBulkCancelling) {
+                $pdo->beginTransaction();
+                try {
+                    foreach ($ids as $oid) {
+                        // Get current status before update
+                        $currentStatus = $pdo->prepare('SELECT status FROM orders WHERE id=?')->execute([$oid])->fetchColumn();
+
+                        // If order was fulfilled, restore stock
+                        if (in_array($currentStatus, ['processing', 'shipped', 'completed'])) {
+                            // Get order items to restore stock
+                            $items = $pdo->prepare('SELECT product_id, quantity FROM order_items WHERE order_id=?');
+                            $items->execute([$oid]);
+                            $orderItems = $items->fetchAll();
+
+                            foreach ($orderItems as $item) {
+                                $pid = (int)$item['product_id'];
+                                $qty = (int)$item['quantity'];
+                                if ($pid > 0 && $qty > 0) {
+                                    // Restore stock
+                                    $update = $pdo->prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+                                    $update->execute([$qty, $pid]);
+
+                                    // Log stock restoration event
+                                    try {
+                                        $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())')
+                                            ->execute([$pid, Auth::userId(), $qty, 'Bulk cancel - restored stock for order #'.$oid]);
+                                    } catch (\Throwable $e) {}
+                                }
+                            }
+                            $restoredOrders[] = $oid;
+                        }
+                    }
+
+                    // Update all orders status
+                    $in = implode(',', array_fill(0, count($ids), '?'));
+                    $st = $pdo->prepare("UPDATE orders SET status=? WHERE id IN ($in)");
+                    $params = array_merge([$status], $ids); $st->execute($params);
+
+                    // Log bulk status change events
+                    try {
+                        $this->ensureOrderEvents($pdo);
+                        $evt = $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())');
+                        foreach ($ids as $oid) {
+                            $message = 'Bulk status set to '.$status;
+                            if (in_array($oid, $restoredOrders)) {
+                                $message .= ' - stock restored';
+                            }
+                            $evt->execute([$oid, Auth::userId(), 'status', $message]);
+                        }
+                    } catch (\Throwable $e) {}
+
+                    $pdo->commit();
+
+                    if (count($restoredOrders) > 0) {
+                        $_SESSION['success'] = count($ids).' orders updated. Stock restored for '.count($restoredOrders).' cancelled orders.';
+                    } else {
+                        $_SESSION['success'] = count($ids).' orders updated.';
+                    }
+                } catch (\Throwable $e) {
+                    $pdo->rollBack();
+                    $_SESSION['error'] = 'Failed to update orders: ' . $e->getMessage();
+                }
+            } else {
+                // Regular bulk status update without stock changes
+                $in = implode(',', array_fill(0, count($ids), '?'));
+                $st = $pdo->prepare("UPDATE orders SET status=? WHERE id IN ($in)");
+                $params = array_merge([$status], $ids); $st->execute($params);
+                try {
+                    $this->ensureOrderEvents($pdo);
+                    $evt = $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())');
+                    foreach ($ids as $oid) { $evt->execute([$oid, Auth::userId(), 'status', 'Bulk status set to '.$status]); }
+                } catch (\Throwable $e) {}
+                $_SESSION['success'] = count($ids).' orders updated.';
+            }
         }
+
         // Redirect back to the referring page or default to orders
         $referer = $_SERVER['HTTP_REFERER'] ?? '/admin/orders';
         if (strpos($referer, '/admin/orders') !== false) {
@@ -275,10 +404,54 @@ class AdminOrdersController extends Controller
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/orders'); }
         $oid = (int)$params['id'];
-        // Simple refund: mark cancelled (placeholder)
         $pdo = DB::pdo();
-        $pdo->prepare('UPDATE orders SET status="cancelled" WHERE id=?')->execute([$oid]);
-        try { $this->ensureOrderEvents($pdo); $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')->execute([$oid, Auth::userId(), 'refund', 'Order refunded (placeholder)']); } catch (\Throwable $e) {}
+
+        // Get current status before cancellation
+        $currentStatus = $pdo->prepare('SELECT status FROM orders WHERE id=?')->execute([$oid])->fetchColumn();
+
+        $pdo->beginTransaction();
+        try {
+            // If order was fulfilled, restore stock
+            if (in_array($currentStatus, ['processing', 'shipped', 'completed'])) {
+                // Get order items to restore stock
+                $items = $pdo->prepare('SELECT product_id, quantity FROM order_items WHERE order_id=?');
+                $items->execute([$oid]);
+                $orderItems = $items->fetchAll();
+
+                foreach ($orderItems as $item) {
+                    $pid = (int)$item['product_id'];
+                    $qty = (int)$item['quantity'];
+                    if ($pid > 0 && $qty > 0) {
+                        // Restore stock
+                        $update = $pdo->prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+                        $update->execute([$qty, $pid]);
+
+                        // Log stock restoration event
+                        try {
+                            $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())')
+                                ->execute([$pid, Auth::userId(), $qty, 'Order refunded - restored stock for order #'.$oid]);
+                        } catch (\Throwable $e) {}
+                    }
+                }
+            }
+
+            // Mark order as cancelled
+            $pdo->prepare('UPDATE orders SET status="cancelled" WHERE id=?')->execute([$oid]);
+
+            // Log refund event
+            try {
+                $this->ensureOrderEvents($pdo);
+                $pdo->prepare('INSERT INTO order_events (order_id,user_id,type,message,created_at) VALUES (?,?,?,?,NOW())')
+                    ->execute([$oid, Auth::userId(), 'refund', 'Order refunded and cancelled']);
+            } catch (\Throwable $e) {}
+
+            $pdo->commit();
+            $_SESSION['success'] = 'Order refunded successfully. Stock has been restored.';
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            $_SESSION['error'] = 'Failed to refund order: ' . $e->getMessage();
+        }
+
         $this->redirect('/admin/orders/'.$oid);
     }
     public function resendEmail(array $params): void
