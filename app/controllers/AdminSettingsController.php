@@ -53,14 +53,27 @@ class AdminSettingsController extends Controller
                 'checkout_enable_postal' => isset($_POST['checkout_enable_postal']) ? '1' : '0',
             ];
         } elseif ($scope === 'shipping') {
-            $pairs = [
-                'shipping_fee_cod' => $_POST['shipping_fee_cod'] ?? '0',
-                'shipping_fee_pickup' => $_POST['shipping_fee_pickup'] ?? '0',
-                'cod_city_whitelist' => trim((string)($_POST['cod_city_whitelist'] ?? '')),
-                'pickup_city_whitelist' => trim((string)($_POST['pickup_city_whitelist'] ?? '')),
-                'shipping_enable_cod' => isset($_POST['shipping_enable_cod']) ? '1' : '0',
-                'shipping_enable_pickup' => isset($_POST['shipping_enable_pickup']) ? '1' : '0',
-            ];
+            $pairs = [];
+
+            // Only update settings that are actually submitted in the form
+            if (array_key_exists('shipping_fee_cod', $_POST)) {
+                $pairs['shipping_fee_cod'] = $_POST['shipping_fee_cod'];
+            }
+            if (array_key_exists('shipping_fee_pickup', $_POST)) {
+                $pairs['shipping_fee_pickup'] = $_POST['shipping_fee_pickup'];
+            }
+            if (array_key_exists('cod_city_whitelist', $_POST)) {
+                $pairs['cod_city_whitelist'] = trim((string)$_POST['cod_city_whitelist']);
+            }
+            if (array_key_exists('pickup_city_whitelist', $_POST)) {
+                $pairs['pickup_city_whitelist'] = trim((string)$_POST['pickup_city_whitelist']);
+            }
+            if (array_key_exists('shipping_enable_cod', $_POST)) {
+                $pairs['shipping_enable_cod'] = isset($_POST['shipping_enable_cod']) ? '1' : '0';
+            }
+            if (array_key_exists('shipping_enable_pickup', $_POST)) {
+                $pairs['shipping_enable_pickup'] = isset($_POST['shipping_enable_pickup']) ? '1' : '0';
+            }
         } elseif ($scope === 'email') {
             $pairs = [
                 'smtp_enabled' => isset($_POST['smtp_enabled']) ? '1' : '0',
