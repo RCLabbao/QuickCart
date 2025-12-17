@@ -131,18 +131,18 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
 
 </div>
 <div class="tab-pane fade <?= $activeTab==='shipping'?'show active':'' ?>" id="tab-shipping" role="tabpanel">
-  <!-- Delivery Methods Settings -->
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white border-bottom">
-      <h5 class="mb-0">
-        <i class="bi bi-truck me-2"></i>Delivery Methods
-      </h5>
-    </div>
-    <div class="card-body">
-      <form method="post" action="/admin/settings" class="row g-3">
-        <?= csrf_field() ?>
-        <input type="hidden" name="scope" value="shipping">
+  <form method="post" action="/admin/settings" id="shipping-settings-form">
+    <?= csrf_field() ?>
+    <input type="hidden" name="scope" value="shipping">
 
+    <!-- Delivery Methods Settings -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="mb-0">
+          <i class="bi bi-truck me-2"></i>Delivery Methods
+        </h5>
+      </div>
+      <div class="card-body">
         <div class="col-12">
           <div class="alert alert-info">
             <i class="bi bi-info-circle me-2"></i>
@@ -150,96 +150,88 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
           </div>
         </div>
 
-        <div class="col-md-6">
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" name="shipping_enable_cod" id="shipping_enable_cod" <?= !empty($settings['shipping_enable_cod']) && $settings['shipping_enable_cod'] == '1' ? 'checked' : '' ?>>
-            <label class="form-check-label d-flex align-items-start" for="shipping_enable_cod">
-              <div>
-                <strong>Cash on Delivery (COD)</strong>
-                <small class="d-block text-muted">Customers pay when they receive their order</small>
-              </div>
-            </label>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="shipping_enable_cod" id="shipping_enable_cod" <?= !empty($settings['shipping_enable_cod']) && $settings['shipping_enable_cod'] == '1' ? 'checked' : '' ?>>
+              <label class="form-check-label d-flex align-items-start" for="shipping_enable_cod">
+                <div>
+                  <strong>Cash on Delivery (COD)</strong>
+                  <small class="d-block text-muted">Customers pay when they receive their order</small>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="shipping_enable_pickup" id="shipping_enable_pickup" <?= !empty($settings['shipping_enable_pickup']) && $settings['shipping_enable_pickup'] == '1' ? 'checked' : '' ?>>
+              <label class="form-check-label d-flex align-items-start" for="shipping_enable_pickup">
+                <div>
+                  <strong>Store Pickup</strong>
+                  <small class="d-block text-muted">Customers pick up from your store location</small>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
 
-        <div class="col-md-6">
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" name="shipping_enable_pickup" id="shipping_enable_pickup" <?= !empty($settings['shipping_enable_pickup']) && $settings['shipping_enable_pickup'] == '1' ? 'checked' : '' ?>>
-            <label class="form-check-label d-flex align-items-start" for="shipping_enable_pickup">
-              <div>
-                <strong>Store Pickup</strong>
-                <small class="d-block text-muted">Customers pick up from your store location</small>
-              </div>
-            </label>
+    <!-- Shipping Fees -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="mb-0">
+          <i class="bi bi-currency-dollar me-2"></i>Shipping Fees
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">General Shipping Fee (COD)</label>
+            <input class="form-control" type="number" step="0.01" name="shipping_fee_cod" value="<?= htmlspecialchars($settings['shipping_fee_cod'] ?? '0.00') ?>">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">General Shipping Fee (Pickup)</label>
+            <input class="form-control" type="number" step="0.01" name="shipping_fee_pickup" value="<?= htmlspecialchars($settings['shipping_fee_pickup'] ?? '0.00') ?>">
           </div>
         </div>
+      </div>
+    </div>
 
-        <div class="col-12 mt-3 pt-3 border-top">
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-check-circle me-2"></i>Save Delivery Methods
-          </button>
+    <!-- City Restrictions -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="mb-0">
+          <i class="bi bi-geo-alt me-2"></i>City Restrictions
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">COD available only in these cities</label>
+            <textarea class="form-control" name="cod_city_whitelist" rows="3" placeholder="One city per line (leave empty to allow all)"><?= htmlspecialchars($settings['cod_city_whitelist'] ?? '') ?></textarea>
+            <small class="text-muted">If not empty, Cash on Delivery will be available only when the customer's city matches one of these entries (case-insensitive).</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Pickup available only in these cities</label>
+            <textarea class="form-control" name="pickup_city_whitelist" rows="3" placeholder="One city per line (leave empty to allow all)"><?= htmlspecialchars($settings['pickup_city_whitelist'] ?? '') ?></textarea>
+            <small class="text-muted">If not empty, Store Pickup will be available only when the customer's city matches one of these entries. Otherwise it will be hidden.</small>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
-  </div>
 
-  <!-- Shipping Fees -->
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white border-bottom">
-      <h5 class="mb-0">
-        <i class="bi bi-currency-dollar me-2"></i>Shipping Fees
-      </h5>
+    <!-- Save Button -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <button type="submit" class="btn btn-primary btn-lg">
+          <i class="bi bi-check-circle me-2"></i>Save All Shipping Settings
+        </button>
+        <small class="text-muted ms-3">All shipping settings will be saved together</small>
+      </div>
     </div>
-    <div class="card-body">
-      <form method="post" action="/admin/settings" class="row g-3">
-        <?= csrf_field() ?>
-        <input type="hidden" name="scope" value="shipping">
-        <div class="col-md-6">
-          <label class="form-label">General Shipping Fee (COD)</label>
-          <input class="form-control" type="number" step="0.01" name="shipping_fee_cod" value="<?= htmlspecialchars($settings['shipping_fee_cod'] ?? '0.00') ?>">
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">General Shipping Fee (Pickup)</label>
-          <input class="form-control" type="number" step="0.01" name="shipping_fee_pickup" value="<?= htmlspecialchars($settings['shipping_fee_pickup'] ?? '0.00') ?>">
-        </div>
-        <div class="col-12">
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-save me-2"></i>Save Shipping Fees
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- City Restrictions -->
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white border-bottom">
-      <h5 class="mb-0">
-        <i class="bi bi-geo-alt me-2"></i>City Restrictions
-      </h5>
-    </div>
-    <div class="card-body">
-      <form method="post" action="/admin/settings" class="row g-3">
-        <?= csrf_field() ?>
-        <input type="hidden" name="scope" value="shipping">
-        <div class="col-md-6">
-          <label class="form-label">COD available only in these cities</label>
-          <textarea class="form-control" name="cod_city_whitelist" rows="3" placeholder="One city per line (leave empty to allow all)"><?= htmlspecialchars($settings['cod_city_whitelist'] ?? '') ?></textarea>
-          <small class="text-muted">If not empty, Cash on Delivery will be available only when the customer's city matches one of these entries (case-insensitive).</small>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Pickup available only in these cities</label>
-          <textarea class="form-control" name="pickup_city_whitelist" rows="3" placeholder="One city per line (leave empty to allow all)"><?= htmlspecialchars($settings['pickup_city_whitelist'] ?? '') ?></textarea>
-          <small class="text-muted">If not empty, Store Pickup will be available only when the customer's city matches one of these entries. Otherwise it will be hidden.</small>
-        </div>
-        <div class="col-12">
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-save me-2"></i>Save City Restrictions
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+  </form>
 
 
 <!-- Delivery Fees per City -->
