@@ -50,11 +50,11 @@
         <table class="table m-0">
           <thead><tr><th>Product</th><th>Qty</th><th class="text-end">Unit</th><th class="text-end">Line</th></tr></thead>
           <tbody>
-          <?php $subtotal=0; foreach ($items as $it): $line=$it['unit_price']*$it['quantity']; $subtotal+=$line; ?>
+          <?php $subtotal=0; foreach ($items as $it): $line=($it['unit_price']??0)*($it['quantity']??0); $subtotal+=$line; ?>
             <tr>
-              <td><?= htmlspecialchars($it['title']) ?></td>
-              <td><?= (int)$it['quantity'] ?></td>
-              <td class="text-end"><?= number_format((float)$it['unit_price'],2) ?></td>
+              <td><?= htmlspecialchars($it['title'] ?? '') ?></td>
+              <td><?= (int)($it['quantity'] ?? 0) ?></td>
+              <td class="text-end"><?= number_format((float)($it['unit_price'] ?? 0),2) ?></td>
               <td class="text-end"><?= number_format((float)$line,2) ?></td>
             </tr>
           <?php endforeach; ?>
@@ -123,8 +123,8 @@
           <ul class="list-group list-group-flush">
             <?php foreach ($events as $ev): ?>
               <li class="list-group-item small d-flex justify-content-between">
-                <span><?= htmlspecialchars($ev['message']) ?><?php if(!empty($ev['user_name'])): ?> · <em><?= htmlspecialchars($ev['user_name']) ?></em><?php endif; ?></span>
-                <span class="text-muted"><?= htmlspecialchars($ev['created_at']) ?></span>
+                <span><?= htmlspecialchars($ev['message'] ?? '') ?><?php if(!empty($ev['user_name'])): ?> · <em><?= htmlspecialchars($ev['user_name'] ?? '') ?></em><?php endif; ?></span>
+                <span class="text-muted"><?= htmlspecialchars($ev['created_at'] ?? '') ?></span>
               </li>
             <?php endforeach; ?>
           </ul>
@@ -138,20 +138,20 @@
     <div class="card">
       <div class="card-header">Customer</div>
       <div class="card-body">
-        <?php $custName = htmlspecialchars(($address['name'] ?? '') !== '' ? $address['name'] : 'Guest Customer'); ?>
+        <?php $custName = htmlspecialchars(($address['name'] ?? '') !== '' ? ($address['name'] ?? '') : 'Guest Customer'); ?>
         <div><strong>Name:</strong> <?= $custName ?></div>
         <div><strong>Email:</strong> <?= htmlspecialchars($order['email'] ?? '—') ?></div>
-        <div><strong>Method:</strong> <?= htmlspecialchars(strtoupper($order['shipping_method'])) ?></div>
+        <div><strong>Method:</strong> <?= htmlspecialchars(strtoupper($order['shipping_method'] ?? '')) ?></div>
       </div>
     </div>
     <?php if ($address): ?>
     <div class="card mt-3">
       <div class="card-header">Shipping Address</div>
       <div class="card-body">
-        <div><?= htmlspecialchars($address['name']) ?> (<?= htmlspecialchars($address['phone']) ?>)</div>
-        <div><?= htmlspecialchars($address['street']) ?></div>
-        <div><?= htmlspecialchars($address['barangay']) ?>, <?= htmlspecialchars($address['city']) ?>, <?= htmlspecialchars($address['province']) ?></div>
-        <div><?= htmlspecialchars($address['region']) ?> <?= htmlspecialchars($address['postal_code']) ?></div>
+        <div><?= htmlspecialchars($address['name'] ?? '') ?> (<?= htmlspecialchars($address['phone'] ?? '') ?>)</div>
+        <div><?= htmlspecialchars($address['street'] ?? '') ?></div>
+        <div><?= htmlspecialchars($address['barangay'] ?? '') ?>, <?= htmlspecialchars($address['city'] ?? '') ?>, <?= htmlspecialchars($address['province'] ?? '') ?></div>
+        <div><?= htmlspecialchars($address['region'] ?? '') ?> <?= htmlspecialchars($address['postal_code'] ?? '') ?></div>
       </div>
     </div>
     <?php endif; ?>
