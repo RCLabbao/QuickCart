@@ -193,6 +193,53 @@
               </div>
             </div>
 
+            <!-- Store Pickup Location (Hidden by default, shown when pickup is selected) -->
+            <div class="card border-0 shadow-sm mt-4" id="pickupLocationCard" style="display: none;">
+              <div class="card-header bg-white border-bottom">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-shop me-2"></i>Pickup Location
+                </h5>
+              </div>
+              <div class="card-body">
+                <div class="row">
+                  <div class="col-md-6">
+                    <h6 class="fw-bold"><?= htmlspecialchars(\App\Core\setting('store_name', 'QuickCart')) ?></h6>
+                    <p class="mb-2"><?= htmlspecialchars(\App\Core\setting('pickup_location', '')) ?></p>
+                    <div class="text-muted small">
+                      <i class="bi bi-clock me-1"></i>
+                      Usually ready within 24-48 hours
+                    </div>
+                    <div class="text-muted small mt-1">
+                      <i class="bi bi-phone me-1"></i>
+                      You'll receive a notification when your order is ready for pickup
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <!-- Google Map for pickup location -->
+                    <div class="map-container rounded border" style="height: 200px; overflow: hidden;">
+                      <iframe
+                        width="100%"
+                        height="100%"
+                        frameborder="0"
+                        style="border:0"
+                        src="https://www.google.com/maps/embed/v1/place?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&q=<?= urlencode(\App\Core\setting('pickup_location', 'Manila, Philippines')) ?>&zoom=15"
+                        allowfullscreen>
+                      </iframe>
+                    </div>
+                    <div class="mt-2">
+                      <a href="https://www.google.com/maps/search/?api=1&query=<?= urlencode(\App\Core\setting('pickup_location', 'Manila, Philippines')) ?>" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-map me-1"></i>Open in Google Maps
+                      </a>
+                    </div>
+                    <small class="text-muted mt-2 d-block">
+                      <i class="bi bi-info-circle me-1"></i>
+                      Please bring your order confirmation and valid ID for pickup
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Coupon Code -->
             <div class="card border-0 shadow-sm mt-4">
               <div class="card-header bg-white border-bottom">
@@ -436,17 +483,35 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function toggleAddressFields() {
-    // Do not hide the address card; only toggle required attributes for COD
+    const addressCard = document.getElementById('addressCard');
+    const pickupLocationCard = document.getElementById('pickupLocationCard');
     const requiredFields = ['region', 'province', 'city', 'barangay', 'street'];
+
     if (pickupRadio.checked) {
-      addressCard.style.display = 'block';
-      addressCard.querySelectorAll('input').forEach(input => { input.removeAttribute('required'); });
+      // Show pickup location card, hide address card
+      if (addressCard) addressCard.style.display = 'none';
+      if (pickupLocationCard) pickupLocationCard.style.display = 'block';
+
+      // Remove required attributes from address fields (they're hidden)
+      if (addressCard) {
+        addressCard.querySelectorAll('input').forEach(input => {
+          input.removeAttribute('required');
+        });
+      }
     } else {
-      addressCard.style.display = 'block';
-      requiredFields.forEach(fieldName => {
-        const field = addressCard.querySelector(`input[name="${fieldName}"]`);
-        if (field) field.setAttribute('required', 'required');
-      });
+      // Show address card, hide pickup location card
+      if (addressCard) addressCard.style.display = 'block';
+      if (pickupLocationCard) pickupLocationCard.style.display = 'none';
+
+      // Add required attributes for COD delivery
+      if (addressCard) {
+        requiredFields.forEach(fieldName => {
+          const field = addressCard.querySelector(`input[name="${fieldName}"]`);
+          if (field && field.offsetParent !== null) { // Only if field is visible
+            field.setAttribute('required', 'required');
+          }
+        });
+      }
     }
   }
 
@@ -481,10 +546,14 @@ document.addEventListener('DOMContentLoaded', function() {
   // Form validation
   const form = document.getElementById('checkoutForm');
   form.addEventListener('submit', function(e) {
-    const requiredFields = form.querySelectorAll('input[required]');
+    // Only validate visible fields
+    const visibleRequiredFields = Array.from(form.querySelectorAll('input[required]')).filter(field => {
+      return field.offsetParent !== null; // Check if field is visible
+    });
+
     let isValid = true;
 
-    requiredFields.forEach(field => {
+    visibleRequiredFields.forEach(field => {
       if (!field.value.trim()) {
         field.classList.add('is-invalid');
         isValid = false;
