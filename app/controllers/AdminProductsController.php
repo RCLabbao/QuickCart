@@ -507,14 +507,20 @@ class AdminProductsController extends Controller
     public function export(): void
     {
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename=products.csv');
+        header('Content-Disposition: attachment; filename=products_with_images.csv');
         $out = fopen('php://output', 'w');
-        // Detect optional columns
         $pdo = DB::pdo();
+
+        // Detect optional columns
         $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
         $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
-        $headers = ['ID','Title','FSC','Barcode','Price','Sale Price','Status','Stock','Collection'];
+        $hasProductImages = $pdo->query("SHOW TABLES LIKE 'product_images'")->rowCount() > 0;
+
+        // Headers including image links
+        $headers = ['ID','Title','FSC','Barcode','Price','Sale Price','Status','Stock','Collection','Image URLs','Primary Image URL'];
         fputcsv($out, $headers);
+
+        // Build query
         $cols = ['p.id','p.title'];
         if ($hasSku) { $cols[] = 'p.fsc'; } else { $cols[] = "'' AS fsc"; }
         if ($hasBarcode) { $cols[] = 'p.barcode'; } else { $cols[] = "'' AS barcode"; }
@@ -523,10 +529,72 @@ class AdminProductsController extends Controller
         $cols[] = 'p.status';
         $cols[] = 'COALESCE(p.stock,0) AS stock';
         $cols[] = 'c.title AS collection';
+        $cols[] = 'p.image_url AS primary_image';
+
         $sql = 'SELECT '.implode(',', $cols).' FROM products p LEFT JOIN collections c ON c.id=p.collection_id ORDER BY p.id DESC';
         $stmt = $pdo->query($sql);
+
+        // Get images for each product
+        $getImages = $pdo->prepare('SELECT url FROM product_images WHERE product_id = ? ORDER BY sort_order, id ASC');
+
         while ($row = $stmt->fetch()) {
-            fputcsv($out, [$row['id'],$row['title'],$row['fsc'] ?? '',$row['barcode'] ?? '',$row['price'],$row['sale_price'],$row['status'],$row['stock'],$row['collection']]);
+            $productId = $row['id'];
+
+            // Get all images for this product
+            $imageUrls = [];
+            if ($hasProductImages) {
+                $getImages->execute([$productId]);
+                $images = $getImages->fetchAll(PDO::FETCH_COLUMN);
+                $imageUrls = $images;
+            }
+
+            // Create comma-separated image URLs
+            $allImages = !empty($imageUrls) ? implode(', ', $imageUrls) : '';
+
+            // Get primary image (first image or product.image_url)
+            $primaryImage = '';
+            if (!empty($imageUrls)) {
+                $primaryImage = $imageUrls[0];
+            } elseif (!empty($row['primary_image'])) {
+                $primaryImage = $row['primary_image'];
+            }
+
+            // Make URLs absolute if they're relative
+            if ($primaryImage && !str_starts_with($primaryImage, 'http')) {
+                $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+                $host = $_SERVER['HTTP_HOST'] ?? '';
+                $primaryImage = $protocol . '://' . $host . $primaryImage;
+            }
+
+            // Convert relative URLs to absolute in all images
+            if ($allImages) {
+                $allImagesArray = explode(', ', $allImages);
+                $absoluteUrls = [];
+                foreach ($allImagesArray as $url) {
+                    $url = trim($url);
+                    if (!str_starts_with($url, 'http')) {
+                        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+                        $host = $_SERVER['HTTP_HOST'] ?? '';
+                        $url = $protocol . '://' . $host . $url;
+                    }
+                    $absoluteUrls[] = $url;
+                }
+                $allImages = implode(', ', $absoluteUrls);
+            }
+
+            fputcsv($out, [
+                $row['id'],
+                $row['title'],
+                $row['fsc'] ?? '',
+                $row['barcode'] ?? '',
+                $row['price'],
+                $row['sale_price'],
+                $row['status'],
+                $row['stock'],
+                $row['collection'] ?? '',
+                $allImages,
+                $primaryImage
+            ]);
         }
         fclose($out); exit;
     }

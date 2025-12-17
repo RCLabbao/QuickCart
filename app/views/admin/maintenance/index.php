@@ -21,6 +21,9 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-actions" type="button" role="tab">Actions</button>
   </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-backup" type="button" role="tab">Backup & Restore</button>
+  </li>
 </ul>
 <div class="tab-content">
   <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
@@ -168,6 +171,146 @@
 
     <!-- Reset, Wipe, Wipe Demo are already below in the file and remain accessible within this tab -->
   </div>
+
+  <div class="tab-pane fade" id="tab-backup" role="tabpanel">
+    <div class="row g-4">
+      <!-- Create Backup -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-cloud-download me-2"></i>Create Backup
+            </h5>
+          </div>
+          <div class="card-body">
+            <form method="post" action="/admin/maintenance/backup">
+              <?= csrf_field() ?>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Backup Type</label>
+                <select class="form-select" name="backup_type" required>
+                  <option value="full">Full Database (All Tables)</option>
+                  <option value="products">Products Only (Products, Images, Tags)</option>
+                  <option value="orders">Orders Only (Orders, Items, Addresses)</option>
+                  <option value="users">Users Only (Users, Roles, Profiles)</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-download me-2"></i>Create Backup
+              </button>
+            </form>
+            <div class="mt-3">
+              <small class="text-muted">
+                <i class="bi bi-info-circle me-1"></i>
+                Backups are saved as SQL files and can be restored later.
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Restore Backup -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-cloud-upload me-2"></i>Restore Backup
+            </h5>
+          </div>
+          <div class="card-body">
+            <form method="post" action="/admin/maintenance/restore" onsubmit="return confirmRestore()">
+              <?= csrf_field() ?>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Select Backup File</label>
+                <select class="form-select" name="backup_file" required>
+                  <option value="">Choose a backup...</option>
+                  <?php foreach ($backup_files ?? [] as $backup): ?>
+                    <option value="<?= htmlspecialchars($backup['filename']) ?>">
+                      <?= htmlspecialchars($backup['filename']) ?>
+                      (<?= number_format($backup['size'] / 1024 / 1024, 2) ?> MB, <?= $backup['created'] ?>)
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-warning w-100" <?= empty($backup_files) ? 'disabled' : '' ?>>
+                <i class="bi bi-arrow-counterclockwise me-2"></i>Restore Backup
+              </button>
+            </form>
+            <?php if (empty($backup_files)): ?>
+              <div class="mt-3">
+                <small class="text-muted">No backup files available. Create a backup first.</small>
+              </div>
+            <?php else: ?>
+              <div class="mt-3">
+                <small class="text-danger">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  <strong>Warning:</strong> Restoring will replace current data!
+                </small>
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backup Files List -->
+    <?php if (!empty($backup_files)): ?>
+    <div class="row g-4 mt-1">
+      <div class="col-12">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-archive me-2"></i>Backup Files
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Filename</th>
+                    <th>Size</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($backup_files as $backup): ?>
+                    <tr>
+                      <td>
+                        <i class="bi bi-file-earmark-text me-2"></i>
+                        <code><?= htmlspecialchars($backup['filename']) ?></code>
+                      </td>
+                      <td><?= number_format($backup['size'] / 1024 / 1024, 2) ?> MB</td>
+                      <td><?= $backup['created'] ?></td>
+                      <td>
+                        <div class="btn-group btn-group-sm">
+                          <form method="post" action="/admin/maintenance/restore" class="d-inline" onsubmit="return confirmRestore()">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="backup_file" value="<?= htmlspecialchars($backup['filename']) ?>">
+                            <button type="submit" class="btn btn-outline-warning" title="Restore">
+                              <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                          </form>
+                          <form method="post" action="/admin/maintenance/delete-backup" class="d-inline" onsubmit="return confirm('Delete this backup file?')">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="backup_file" value="<?= htmlspecialchars($backup['filename']) ?>">
+                            <button type="submit" class="btn btn-outline-danger" title="Delete">
+                              <i class="bi bi-trash"></i>
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
+  </div>
 </div>
 
   </div>
@@ -217,7 +360,8 @@
         </form>
       </div>
     </div>
-
+  </div>
+</div>
 <!-- Wipe Demo Data -->
 <div class="row g-4 mt-1">
   <div class="col-lg-12">
@@ -310,6 +454,10 @@ function confirmAction(action) {
   return confirm(`Are you sure you want to ${action}? This action cannot be undone.`);
 }
 
+function confirmRestore() {
+  return confirm('⚠️ WARNING: Restoring a backup will replace ALL current data in the selected tables.\n\nThis action cannot be undone.\n\nAre you sure you want to continue?');
+}
+
 function refreshStats() {
   window.location.reload();
 }
@@ -325,5 +473,15 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
+
+  // Handle tab selection from URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const tab = urlParams.get('tab');
+  if (tab === 'backup') {
+    const backupTab = document.querySelector('button[data-bs-target="#tab-backup"]');
+    if (backupTab) {
+      backupTab.click();
+    }
+  }
 });
 </script>

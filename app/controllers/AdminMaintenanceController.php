@@ -43,11 +43,33 @@ class AdminMaintenanceController extends Controller
             try { $checks[$tbl.' table'] = $this->tableExists($pdo, $tbl); } catch (\Throwable $e) { $checks[$tbl.' table'] = false; }
         }
 
+        // Get backup files
+        $backupFiles = [];
+        $backupDir = BASE_PATH . '/backups';
+        if (is_dir($backupDir)) {
+            $files = scandir($backupDir);
+            foreach ($files as $file) {
+                if ($file !== '.' && $file !== '..' && str_ends_with($file, '.sql')) {
+                    $filepath = $backupDir . '/' . $file;
+                    $backupFiles[] = [
+                        'filename' => $file,
+                        'size' => filesize($filepath),
+                        'created' => date('Y-m-d H:i:s', filemtime($filepath))
+                    ];
+                }
+            }
+            // Sort by creation date (newest first)
+            usort($backupFiles, function($a, $b) {
+                return strcmp($b['created'], $a['created']);
+            });
+        }
+
         $this->adminView('admin/maintenance/index', [
             'title' => 'System Maintenance',
             'stats' => $stats,
             'table_sizes' => $tableSizes,
-            'checks' => $checks
+            'checks' => $checks,
+            'backup_files' => $backupFiles
         ]);
     }
 
@@ -304,6 +326,183 @@ class AdminMaintenanceController extends Controller
             }
                 $this->redirect('/admin/maintenance?tab=actions');
             }
+
+    public function createBackup(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+
+        $backupType = $_POST['backup_type'] ?? 'full';
+        $pdo = DB::pdo();
+
+        try {
+            // Create backup directory if it doesn't exist
+            $backupDir = BASE_PATH . '/backups';
+            if (!is_dir($backupDir)) {
+                mkdir($backupDir, 0755, true);
+            }
+
+            // Generate backup filename with timestamp
+            $timestamp = date('Y-m-d_H-i-s');
+            $filename = "backup_{$backupType}_{$timestamp}.sql";
+            $filepath = $backupDir . '/' . $filename;
+
+            // Get all tables
+            $tables = [];
+            $result = $pdo->query("SHOW TABLES");
+            while ($row = $result->fetch(PDO::FETCH_NUM)) {
+                $tables[] = $row[0];
+            }
+
+            // Filter tables based on backup type
+            if ($backupType === 'products') {
+                $productTables = ['products', 'product_images', 'product_tags', 'tags', 'product_stock_events'];
+                $tables = array_intersect($tables, $productTables);
+            } elseif ($backupType === 'orders') {
+                $orderTables = ['orders', 'order_items', 'addresses', 'order_events'];
+                $tables = array_intersect($tables, $orderTables);
+            } elseif ($backupType === 'users') {
+                $userTables = ['users', 'user_roles', 'roles', 'customer_profiles'];
+                $tables = array_intersect($tables, $userTables);
+            }
+
+            // Start creating backup
+            $output = "-- Database Backup\n";
+            $output .= "-- Type: {$backupType}\n";
+            $output .= "-- Generated: " . date('Y-m-d H:i:s') . "\n";
+            $output .= "-- Database: " . DB::pdo()->query("SELECT DATABASE()")->fetchColumn() . "\n\n";
+
+            foreach ($tables as $table) {
+                // Drop table if exists (for restore)
+                $output .= "DROP TABLE IF EXISTS `{$table}`;\n";
+
+                // Get table creation statement
+                $createTable = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_NUM);
+                $output .= $createTable[1] . ";\n\n";
+
+                // Get table data
+                $result = $pdo->query("SELECT * FROM `{$table}`");
+                $columnCount = $result->columnCount();
+
+                // Insert statements
+                while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+                    $columns = array_keys($row);
+                    $values = array_values($row);
+
+                    // Escape values
+                    $escapedValues = array_map(function($value) use ($pdo) {
+                        if ($value === null) return 'NULL';
+                        return $pdo->quote($value);
+                    }, $values);
+
+                    $output .= "INSERT INTO `{$table}` (`" . implode('`,`', $columns) . "`) VALUES (" . implode(',', $escapedValues) . ");\n";
+                }
+                $output .= "\n";
+            }
+
+            // Write backup to file
+            file_put_contents($filepath, $output);
+
+            // Set proper permissions
+            chmod($filepath, 0644);
+
+            $_SESSION['success'] = "Backup created successfully: {$filename}";
+
+        } catch (\Throwable $e) {
+            $_SESSION['error'] = 'Failed to create backup: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/maintenance?tab=backup');
+    }
+
+    public function restoreBackup(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+
+        $backupFile = $_POST['backup_file'] ?? '';
+        $pdo = DB::pdo();
+
+        try {
+            // Validate backup file path
+            $backupDir = BASE_PATH . '/backups';
+            $filepath = $backupDir . '/' . basename($backupFile);
+
+            if (!file_exists($filepath)) {
+                throw new \Exception('Backup file not found');
+            }
+
+            if (!is_readable($filepath)) {
+                throw new \Exception('Backup file is not readable');
+            }
+
+            // Read backup file
+            $sqlContent = file_get_contents($filepath);
+            if ($sqlContent === false) {
+                throw new \Exception('Failed to read backup file');
+            }
+
+            // Split SQL statements (simple approach)
+            $statements = array_filter(array_map('trim', preg_split('/;\s*\n/', $sqlContent)));
+
+            // Begin transaction
+            $pdo->beginTransaction();
+
+            $executedCount = 0;
+            foreach ($statements as $statement) {
+                // Skip comments and empty lines
+                if (empty($statement) || strpos(ltrim($statement), '--') === 0) {
+                    continue;
+                }
+
+                try {
+                    $pdo->exec($statement);
+                    $executedCount++;
+                } catch (\Throwable $e) {
+                    // Log error but continue with other statements
+                    error_log("Backup restore error: " . $e->getMessage() . " SQL: " . $statement);
+                }
+            }
+
+            $pdo->commit();
+
+            $_SESSION['success'] = "Backup restored successfully! Executed {$executedCount} statements.";
+
+        } catch (\Throwable $e) {
+            if (isset($pdo) && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $_SESSION['error'] = 'Failed to restore backup: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/maintenance?tab=backup');
+    }
+
+    public function deleteBackup(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+
+        $backupFile = $_POST['backup_file'] ?? '';
+
+        try {
+            // Validate backup file path
+            $backupDir = BASE_PATH . '/backups';
+            $filepath = $backupDir . '/' . basename($backupFile);
+
+            if (!file_exists($filepath)) {
+                throw new \Exception('Backup file not found');
+            }
+
+            if (!unlink($filepath)) {
+                throw new \Exception('Failed to delete backup file');
+            }
+
+            $_SESSION['success'] = "Backup file deleted successfully.";
+
+        } catch (\Throwable $e) {
+            $_SESSION['error'] = 'Failed to delete backup: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/maintenance?tab=backup');
+    }
 
 private function ensureColumn(\PDO $pdo, string $table, string $column, string $alterSql): void
     {

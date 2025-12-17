@@ -20,7 +20,7 @@
       </button>
       <ul class="dropdown-menu">
         <li><a class="dropdown-item" href="/admin/products/export">
-          <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export CSV
+          <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export CSV with Images
         </a></li>
         <li><hr class="dropdown-divider"></li>
         <li>
