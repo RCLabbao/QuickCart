@@ -356,11 +356,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const codWhitelist = codWhitelistRaw.trim();
   const pickupWhitelist = pickupWhitelistRaw.trim();
-  const codList = codWhitelist ? codWhitelist.split(/[\r\n]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
-  const pickupList = pickupWhitelist ? pickupWhitelist.split(/[\r\n]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
+  // Split by comma OR newline to handle both formats
+  const codList = codWhitelist ? codWhitelist.split(/[\r\n,]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
+  const pickupList = pickupWhitelist ? pickupWhitelist.split(/[\r\n,]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
 
-  console.log('Parsed COD list:', codList);
-  console.log('Parsed Pickup list:', pickupList);
+  // Remove duplicates
+  const uniqueCodList = [...new Set(codList)];
+  const uniquePickupList = [...new Set(pickupList)];
+
+  console.log('Unique COD list:', uniqueCodList);
+  console.log('Unique Pickup list:', uniquePickupList);
 
   function isAllowed(list, city){
     // If whitelist is empty, allow all cities
@@ -373,8 +378,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const city = cityInput ? cityInput.value.trim() : '';
     console.log('Checking city:', JSON.stringify(city));
 
-    const codAllowed = isAllowed(codList, city);
-    const pickupAllowed = isAllowed(pickupList, city);
+    const codAllowed = isAllowed(uniqueCodList, city);
+    const pickupAllowed = isAllowed(uniquePickupList, city);
 
     console.log('COD allowed:', codAllowed);
     console.log('Pickup allowed:', pickupAllowed);
@@ -392,8 +397,8 @@ document.addEventListener('DOMContentLoaded', function() {
         <div style="background: #f8f9fa; padding: 10px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px;">
           <strong>Debug Info:</strong><br>
           City: "${city}"<br>
-          COD List: [${codList.join(', ')}]<br>
-          Pickup List: [${pickupList.join(', ')}]<br>
+          COD List: [${uniqueCodList.join(', ')}]<br>
+          Pickup List: [${uniquePickupList.join(', ')}]<br>
           COD Allowed: ${codAllowed}<br>
           Pickup Allowed: ${pickupAllowed}
         </div>
