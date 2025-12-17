@@ -351,8 +351,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Build whitelists from settings
   const codWhitelistRaw = "<?= addslashes((string)\App\Core\setting('cod_city_whitelist','')) ?>";
   const pickupWhitelistRaw = "<?= addslashes((string)\App\Core\setting('pickup_city_whitelist','')) ?>";
-  console.log('Raw COD whitelist:', JSON.stringify(codWhitelistRaw));
-  console.log('Raw Pickup whitelist:', JSON.stringify(pickupWhitelistRaw));
+  //console.log('Raw COD whitelist:', JSON.stringify(codWhitelistRaw));
+  //console.log('Raw Pickup whitelist:', JSON.stringify(pickupWhitelistRaw));
 
   const codWhitelist = codWhitelistRaw.trim();
   const pickupWhitelist = pickupWhitelistRaw.trim();
@@ -364,8 +364,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const uniqueCodList = [...new Set(codList)];
   const uniquePickupList = [...new Set(pickupList)];
 
-  console.log('Unique COD list:', uniqueCodList);
-  console.log('Unique Pickup list:', uniquePickupList);
+  //console.log('Unique COD list:', uniqueCodList);
+  //console.log('Unique Pickup list:', uniquePickupList);
 
   function isAllowed(list, city){
     // If whitelist is empty, allow all cities
@@ -376,13 +376,13 @@ document.addEventListener('DOMContentLoaded', function() {
   function updateMethodVisibility(){
     const cityInput = document.querySelector('input[name="city"]');
     const city = cityInput ? cityInput.value.trim() : '';
-    console.log('Checking city:', JSON.stringify(city));
+    //console.log('Checking city:', JSON.stringify(city));
 
     const codAllowed = isAllowed(uniqueCodList, city);
     const pickupAllowed = isAllowed(uniquePickupList, city);
 
-    console.log('COD allowed:', codAllowed);
-    console.log('Pickup allowed:', pickupAllowed);
+    //console.log('COD allowed:', codAllowed);
+    //console.log('Pickup allowed:', pickupAllowed);
 
     // Keep both options visible; enable/disable based on whitelist
     const codInput = document.getElementById('cod');
@@ -391,23 +391,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const placeBtn = document.getElementById('placeOrderBtn');
 
     // Add visual debug info
-    const debugDiv = document.getElementById('deliveryDebug');
-    if (debugDiv) {
-      debugDiv.innerHTML = `
-        <div style="background: #f8f9fa; padding: 10px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px;">
-          <strong>Debug Info:</strong><br>
-          City: "${city}"<br>
-          COD List: [${uniqueCodList.join(', ')}]<br>
-          Pickup List: [${uniquePickupList.join(', ')}]<br>
-          COD Allowed: ${codAllowed}<br>
-          Pickup Allowed: ${pickupAllowed}
-        </div>
-      `;
-    }
+    //const debugDiv = document.getElementById('deliveryDebug');
+    //if (debugDiv) {
+    //  debugDiv.innerHTML = `
+    //    <div style="background: #f8f9fa; padding: 10px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px;">
+    //      <strong>Debug Info:</strong><br>
+    //      City: "${city}"<br>
+    //      COD List: [${uniqueCodList.join(', ')}]<br>
+    //      Pickup List: [${uniquePickupList.join(', ')}]<br>
+    //      COD Allowed: ${codAllowed}<br>
+    //      Pickup Allowed: ${pickupAllowed}
+    //    </div>
+    //  `;
+    //}
 
     if (codInput) {
       codInput.disabled = !codAllowed;
-      console.log('COD input disabled:', !codAllowed);
+      //console.log('COD input disabled:', !codAllowed);
       if (!codAllowed) {
         if (codMsg) codMsg.style.display = '';
         // If COD is selected but not allowed, keep it selected but disable submission
@@ -419,7 +419,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (pickupInput) {
       pickupInput.disabled = !pickupAllowed;
-      console.log('Pickup input disabled:', !pickupAllowed);
+      //console.log('Pickup input disabled:', !pickupAllowed);
       // If pickup is not allowed and currently selected, prevent submit too
       if (!pickupAllowed && pickupInput.checked && placeBtn) {
         placeBtn.disabled = true;
