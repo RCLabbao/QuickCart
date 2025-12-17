@@ -40,8 +40,9 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
     <input class="form-control" name="currency" value="<?= htmlspecialchars($settings['currency'] ?? 'PHP') ?>">
   </div>
   <div class="col-12">
-    <label class="form-label">Pickup Location</label>
-    <input class="form-control" name="pickup_location" value="<?= htmlspecialchars($settings['pickup_location'] ?? '') ?>">
+    <label class="form-label">Pickup Location (Store Address)</label>
+    <input class="form-control" name="pickup_location" value="<?= htmlspecialchars($settings['pickup_location'] ?? '') ?>" placeholder="e.g., 123 Main Street, Manila, Philippines">
+    <small class="text-muted">Enter the full store address. This will be displayed on Google Maps for pickup orders.</small>
   </div>
   <div class="col-md-6">
     <label class="form-label">Brand Color</label>
@@ -195,6 +196,52 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
           <div class="col-md-6">
             <label class="form-label">General Shipping Fee (Pickup)</label>
             <input class="form-control" type="number" step="0.01" name="shipping_fee_pickup" value="<?= htmlspecialchars($settings['shipping_fee_pickup'] ?? '0.00') ?>">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pickup Location Preview -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="mb-0">
+          <i class="bi bi-shop me-2"></i>Pickup Location Preview
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Current Pickup Location</label>
+            <div class="alert alert-info">
+              <i class="bi bi-geo-alt me-2"></i>
+              <?php if (!empty($settings['pickup_location'])): ?>
+                <strong><?= htmlspecialchars($settings['pickup_location']) ?></strong>
+              <?php else: ?>
+                <em class="text-muted">No pickup location set</em>
+              <?php endif; ?>
+            </div>
+            <small class="text-muted">Update the pickup location in the General tab above. This address will be shown to customers who select store pickup.</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Google Maps Preview</label>
+            <?php if (!empty($settings['pickup_location'])): ?>
+              <div class="border rounded" style="height: 120px; overflow: hidden;">
+                <iframe
+                  width="100%"
+                  height="100%"
+                  frameborder="0"
+                  style="border:0"
+                  src="https://www.google.com/maps/embed/v1/place?key=AIzaSyDRczbml55FBsJV9deQ68fuiXeA-qMzBPU&q=<?= urlencode($settings['pickup_location']) ?>&zoom=14">
+                </iframe>
+              </div>
+            <?php else: ?>
+              <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height: 120px;">
+                <div class="text-center text-muted">
+                  <i class="bi bi-map display-4"></i>
+                  <p class="mb-0 small">Set pickup location to see map preview</p>
+                </div>
+              </div>
+            <?php endif; ?>
           </div>
         </div>
       </div>

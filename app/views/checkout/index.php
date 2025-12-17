@@ -222,7 +222,7 @@
                         height="100%"
                         frameborder="0"
                         style="border:0"
-                        src="https://www.google.com/maps/embed/v1/place?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&q=<?= urlencode(\App\Core\setting('pickup_location', 'Manila, Philippines')) ?>&zoom=15"
+                        src="https://www.google.com/maps/embed/v1/place?key=AIzaSyDRczbml55FBsJV9deQ68fuiXeA-qMzBPU&q=<?= urlencode(\App\Core\setting('pickup_location', 'Manila, Philippines')) ?>&zoom=15"
                         allowfullscreen>
                       </iframe>
                     </div>
