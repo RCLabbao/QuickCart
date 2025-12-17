@@ -152,7 +152,7 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
 
         <div class="col-md-6">
           <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" name="shipping_enable_cod" id="shipping_enable_cod" <?= ($settings['shipping_enable_cod'] ?? '1') == '1' ? 'checked' : '' ?>>
+            <input class="form-check-input" type="checkbox" name="shipping_enable_cod" id="shipping_enable_cod" <?= !empty($settings['shipping_enable_cod']) && $settings['shipping_enable_cod'] == '1' ? 'checked' : '' ?>>
             <label class="form-check-label d-flex align-items-start" for="shipping_enable_cod">
               <div>
                 <strong>Cash on Delivery (COD)</strong>
@@ -164,7 +164,7 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
 
         <div class="col-md-6">
           <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" name="shipping_enable_pickup" id="shipping_enable_pickup" <?= ($settings['shipping_enable_pickup'] ?? '1') == '1' ? 'checked' : '' ?>>
+            <input class="form-check-input" type="checkbox" name="shipping_enable_pickup" id="shipping_enable_pickup" <?= !empty($settings['shipping_enable_pickup']) && $settings['shipping_enable_pickup'] == '1' ? 'checked' : '' ?>>
             <label class="form-check-label d-flex align-items-start" for="shipping_enable_pickup">
               <div>
                 <strong>Store Pickup</strong>
