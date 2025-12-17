@@ -121,7 +121,9 @@ class AdminOrdersController extends Controller
                 $totalItems = array_sum(array_column($orderItems, 'quantity'));
                 $_SESSION['success'] = "Order cancelled and $totalItems items restored to inventory successfully.";
             } catch (\Throwable $e) {
-                $pdo->rollBack();
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 $_SESSION['error'] = 'Failed to cancel order and restore stock: ' . $e->getMessage();
                 $this->redirect('/admin/orders/'.$params['id']);
                 return;
@@ -255,7 +257,9 @@ class AdminOrdersController extends Controller
                         $_SESSION['success'] = count($ids).' orders updated.';
                     }
                 } catch (\Throwable $e) {
-                    $pdo->rollBack();
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     $_SESSION['error'] = 'Failed to update orders: ' . $e->getMessage();
                 }
             } else {
@@ -500,7 +504,9 @@ class AdminOrdersController extends Controller
             $totalItems = array_sum(array_column($orderItems, 'quantity'));
             $_SESSION['success'] = "Order refunded and $totalItems items restored to inventory successfully.";
         } catch (\Throwable $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $_SESSION['error'] = 'Failed to refund order: ' . $e->getMessage();
         }
 
