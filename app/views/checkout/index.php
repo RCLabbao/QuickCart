@@ -348,10 +348,13 @@ document.addEventListener('DOMContentLoaded', function() {
   const pickupOption = document.getElementById('pickupOption');
 
   // Build whitelists from settings
-  const codList = (<?= json_encode(array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string)\App\Core\setting('cod_city_whitelist','')))))) ?>).map(s => s.toLowerCase());
-  const pickupList = (<?= json_encode(array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string)\App\Core\setting('pickup_city_whitelist','')))))) ?>).map(s => s.toLowerCase());
+  const codWhitelist = "<?= trim((string)\App\Core\setting('cod_city_whitelist','')) ?>";
+  const pickupWhitelist = "<?= trim((string)\App\Core\setting('pickup_city_whitelist','')) ?>";
+  const codList = codWhitelist ? codWhitelist.split(/[\r\n]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
+  const pickupList = pickupWhitelist ? pickupWhitelist.split(/[\r\n]+/).map(s => s.trim().toLowerCase()).filter(s => s !== '') : [];
 
   function isAllowed(list, city){
+    // If whitelist is empty, allow all cities
     if (!list || list.length === 0) return true;
     return list.includes((city||'').toLowerCase());
   }
