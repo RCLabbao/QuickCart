@@ -32,8 +32,25 @@ class CheckoutController extends Controller
             return;
         }
 
+        // Load shipping method availability settings
+        $settings = [];
+        $st = DB::pdo()->query("SELECT `key`,`value` FROM settings");
+        foreach($st->fetchAll() as $r){ $settings[$r['key']]=$r['value']; }
+
         $method = $_POST['shipping_method'] ?? 'cod';
         $method = in_array($method, ['cod','pickup'], true) ? $method : 'cod';
+
+        // Check if the selected method is enabled
+        if ($method === 'cod' && ($settings['shipping_enable_cod'] ?? '1') !== '1') {
+            $_SESSION['checkout_error'] = 'Cash on Delivery is currently unavailable. Please choose another delivery method.';
+            $this->redirect('/checkout');
+            return;
+        }
+        if ($method === 'pickup' && ($settings['shipping_enable_pickup'] ?? '1') !== '1') {
+            $_SESSION['checkout_error'] = 'Store Pickup is currently unavailable. Please choose another delivery method.';
+            $this->redirect('/checkout');
+            return;
+        }
         $name = trim($_POST['name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');

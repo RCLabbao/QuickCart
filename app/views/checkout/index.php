@@ -378,13 +378,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const city = cityInput ? cityInput.value.trim() : '';
     //console.log('Checking city:', JSON.stringify(city));
 
-    const codAllowed = isAllowed(uniqueCodList, city);
-    const pickupAllowed = isAllowed(uniquePickupList, city);
+    // Check global availability settings
+    const codEnabled = <?= \App\Core\setting('shipping_enable_cod', '1') === '1' ? 'true' : 'false' ?>;
+    const pickupEnabled = <?= \App\Core\setting('shipping_enable_pickup', '1') === '1' ? 'true' : 'false' ?>;
 
-    //console.log('COD allowed:', codAllowed);
-    //console.log('Pickup allowed:', pickupAllowed);
+    const codCityAllowed = codEnabled && isAllowed(uniqueCodList, city);
+    const pickupCityAllowed = pickupEnabled && isAllowed(uniquePickupList, city);
 
-    // Keep both options visible; enable/disable based on whitelist
+    //console.log('COD enabled:', codEnabled, 'COD allowed by city:', isAllowed(uniqueCodList, city));
+    //console.log('Pickup enabled:', pickupEnabled, 'Pickup allowed by city:', isAllowed(uniquePickupList, city));
+
+    // Hide or show options based on global settings
+    const codOption = document.getElementById('codOption');
+    const pickupOption = document.getElementById('pickupOption');
     const codInput = document.getElementById('cod');
     const pickupInput = document.getElementById('pickup');
     const codMsg = document.getElementById('codUnavailableMsg');
@@ -405,25 +411,57 @@ document.addEventListener('DOMContentLoaded', function() {
     //  `;
     //}
 
-    if (codInput) {
-      codInput.disabled = !codAllowed;
-      //console.log('COD input disabled:', !codAllowed);
-      if (!codAllowed) {
-        if (codMsg) codMsg.style.display = '';
-        // If COD is selected but not allowed, keep it selected but disable submission
-        if (placeBtn) placeBtn.disabled = codInput.checked;
+    // Handle COD option
+    if (codOption) {
+      if (!codEnabled) {
+        // Completely hide if disabled in settings
+        codOption.style.display = 'none';
+        if (codInput) codInput.checked = false;
       } else {
-        if (codMsg) codMsg.style.display = 'none';
-        if (placeBtn) placeBtn.disabled = false;
+        // Show and check city restrictions
+        codOption.style.display = '';
+        if (codInput) {
+          codInput.disabled = !codCityAllowed;
+          if (!codCityAllowed) {
+            if (codMsg) codMsg.style.display = '';
+            // If COD is selected but not allowed, disable submission
+            if (placeBtn) placeBtn.disabled = codInput.checked;
+          } else {
+            if (codMsg) codMsg.style.display = 'none';
+            if (placeBtn && !pickupInput.checked) placeBtn.disabled = false;
+          }
+        }
       }
     }
-    if (pickupInput) {
-      pickupInput.disabled = !pickupAllowed;
-      //console.log('Pickup input disabled:', !pickupAllowed);
-      // If pickup is not allowed and currently selected, prevent submit too
-      if (!pickupAllowed && pickupInput.checked && placeBtn) {
-        placeBtn.disabled = true;
+
+    // Handle Pickup option
+    if (pickupOption) {
+      if (!pickupEnabled) {
+        // Completely hide if disabled in settings
+        pickupOption.style.display = 'none';
+        if (pickupInput) pickupInput.checked = false;
+      } else {
+        // Show and check city restrictions
+        pickupOption.style.display = '';
+        if (pickupInput) {
+          pickupInput.disabled = !pickupCityAllowed;
+          // If pickup is not allowed and currently selected, prevent submit
+          if (!pickupCityAllowed && pickupInput.checked && placeBtn) {
+            placeBtn.disabled = true;
+          } else if (pickupInput.checked && placeBtn) {
+            placeBtn.disabled = false;
+          }
+        }
       }
+    }
+
+    // If only one method is available, select it automatically
+    if (codEnabled && !pickupEnabled && codInput) {
+      codInput.checked = true;
+      toggleAddressFields();
+    } else if (!codEnabled && pickupEnabled && pickupInput) {
+      pickupInput.checked = true;
+      toggleAddressFields();
     }
   }
 
