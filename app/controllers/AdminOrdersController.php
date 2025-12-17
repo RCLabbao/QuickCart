@@ -59,7 +59,14 @@ class AdminOrdersController extends Controller
         $pdo = DB::pdo();
 
         // Get current status before update
-        $currentStatus = $pdo->prepare('SELECT status FROM orders WHERE id=?')->execute([$oid])->fetchColumn();
+        $stmt = $pdo->prepare('SELECT status FROM orders WHERE id=?');
+        $stmt->execute([$oid]);
+        if ($stmt->rowCount() === 0) {
+            $_SESSION['error'] = 'Order not found.';
+            $this->redirect('/admin/orders');
+            return;
+        }
+        $currentStatus = $stmt->fetchColumn();
 
         // Check if we're cancelling an order
         $isCancelling = ($status === 'cancelled') && ($currentStatus !== 'cancelled');
@@ -168,7 +175,12 @@ class AdminOrdersController extends Controller
                 try {
                     foreach ($ids as $oid) {
                         // Get current status before update
-                        $currentStatus = $pdo->prepare('SELECT status FROM orders WHERE id=?')->execute([$oid])->fetchColumn();
+                        $stmt = $pdo->prepare('SELECT status FROM orders WHERE id=?');
+                        $stmt->execute([$oid]);
+                        if ($stmt->rowCount() === 0) {
+                            continue; // Skip if order doesn't exist
+                        }
+                        $currentStatus = $stmt->fetchColumn();
 
                         // If order was fulfilled, restore stock
                         if (in_array($currentStatus, ['processing', 'shipped', 'completed'])) {
@@ -407,7 +419,14 @@ class AdminOrdersController extends Controller
         $pdo = DB::pdo();
 
         // Get current status before cancellation
-        $currentStatus = $pdo->prepare('SELECT status FROM orders WHERE id=?')->execute([$oid])->fetchColumn();
+        $stmt = $pdo->prepare('SELECT status FROM orders WHERE id=?');
+        $stmt->execute([$oid]);
+        if ($stmt->rowCount() === 0) {
+            $_SESSION['error'] = 'Order not found.';
+            $this->redirect('/admin/orders');
+            return;
+        }
+        $currentStatus = $stmt->fetchColumn();
 
         $pdo->beginTransaction();
         try {
