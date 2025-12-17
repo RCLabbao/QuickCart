@@ -84,7 +84,10 @@ class AdminSettingsController extends Controller
             $stmt = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
             $stmt->execute([$k, $v]);
         }
+        // Clear both APCu cache and static cache by calling the fresh_settings function
         if (function_exists('apcu_delete')) { @apcu_delete('settings'); }
+        // Force refresh by calling fresh_settings to clear any in-memory static cache
+        try { \App\Core\fresh_settings(); } catch (\Throwable $e) {}
         $_SESSION['settings_flash'] = 'Settings saved successfully.';
         $tab = $scope;
         if (!in_array($tab, ['general','checkout','shipping','email','catalog'], true)) { $tab = 'general'; }

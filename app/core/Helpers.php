@@ -61,6 +61,18 @@ function settings(): array {
         return $cache;
     } catch (\Throwable $e) { return $cache = []; }
 }
+
+// Get fresh settings without any caching - used for critical real-time data like shipping settings
+function fresh_settings(): array {
+    try {
+        $pdo = DB::pdo();
+        $rows = $pdo->query('SELECT `key`,`value` FROM settings')->fetchAll();
+        $cache = [];
+        foreach ($rows as $r) { $cache[$r['key']] = $r['value']; }
+        return $cache;
+    } catch (\Throwable $e) { return []; }
+}
+
 function setting(string $key, $default = '') {
     $s = settings(); return $s[$key] ?? $default;
 }

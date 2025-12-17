@@ -288,7 +288,7 @@ class CheckoutController extends Controller
         $method = in_array($method, ['cod','pickup'], true) ? $method : 'cod';
         $city = trim($_GET['city'] ?? '');
 
-        // Load settings
+        // Load fresh settings (no cache)
         $s = $pdo->query("SELECT `key`,`value` FROM settings")->fetchAll();
         $settings = []; foreach($s as $row){ $settings[$row['key']]=$row['value']; }
         $fee = ($method==='cod') ? (float)($settings['shipping_fee_cod'] ?? 0.00)

@@ -248,8 +248,10 @@
                   <?php endforeach; ?>
 
                   <?php
-                    $codFee = (float)\App\Core\setting('shipping_fee_cod', 0.00);
-                    $pickupFee = (float)\App\Core\setting('shipping_fee_pickup', 0.00);
+                    // Use fresh settings to get real-time shipping configuration
+                    $freshSettings = \App\Core\fresh_settings();
+                    $codFee = (float)($freshSettings['shipping_fee_cod'] ?? 0.00);
+                    $pickupFee = (float)($freshSettings['shipping_fee_pickup'] ?? 0.00);
                     $selectedMethod = (($_POST['shipping_method'] ?? 'cod') === 'pickup') ? 'pickup' : 'cod';
                     $shippingFee = $selectedMethod === 'cod' ? $codFee : $pickupFee;
                     $initialTotal = max(0.0, $subtotal - 0.0) + $shippingFee;
@@ -348,9 +350,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const codOption = document.getElementById('codOption');
   const pickupOption = document.getElementById('pickupOption');
 
-  // Build whitelists from settings
-  const codWhitelistRaw = "<?= addslashes((string)\App\Core\setting('cod_city_whitelist','')) ?>";
-  const pickupWhitelistRaw = "<?= addslashes((string)\App\Core\setting('pickup_city_whitelist','')) ?>";
+  // Build whitelists from fresh settings (not cached)
+  <?php
+    $freshSettings = \App\Core\fresh_settings();
+  ?>
+  const codWhitelistRaw = "<?= addslashes((string)($freshSettings['cod_city_whitelist'] ?? '')) ?>";
+  const pickupWhitelistRaw = "<?= addslashes((string)($freshSettings['pickup_city_whitelist'] ?? '')) ?>";
   //console.log('Raw COD whitelist:', JSON.stringify(codWhitelistRaw));
   //console.log('Raw Pickup whitelist:', JSON.stringify(pickupWhitelistRaw));
 
@@ -378,9 +383,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const city = cityInput ? cityInput.value.trim() : '';
     //console.log('Checking city:', JSON.stringify(city));
 
-    // Check global availability settings
-    const codEnabled = <?= \App\Core\setting('shipping_enable_cod', '1') === '1' ? 'true' : 'false' ?>;
-    const pickupEnabled = <?= \App\Core\setting('shipping_enable_pickup', '1') === '1' ? 'true' : 'false' ?>;
+    // Check global availability settings from fresh settings
+    const codEnabled = <?= ($freshSettings['shipping_enable_cod'] ?? '1') === '1' ? 'true' : 'false' ?>;
+    const pickupEnabled = <?= ($freshSettings['shipping_enable_pickup'] ?? '1') === '1' ? 'true' : 'false' ?>;
 
     const codCityAllowed = codEnabled && isAllowed(uniqueCodList, city);
     const pickupCityAllowed = pickupEnabled && isAllowed(uniquePickupList, city);
