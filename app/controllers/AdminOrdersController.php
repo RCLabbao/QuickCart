@@ -71,8 +71,8 @@ class AdminOrdersController extends Controller
         // Check if we're cancelling an order
         $isCancelling = ($status === 'cancelled') && ($currentStatus !== 'cancelled');
 
-        // If cancelling and order was previously fulfilled, restore stock
-        if ($isCancelling && in_array($currentStatus, ['processing', 'shipped', 'completed'])) {
+        // If cancelling and order was NOT draft (stock was deducted at placement), restore stock
+        if ($isCancelling && !in_array($currentStatus, ['draft', 'cancelled'])) {
             $pdo->beginTransaction();
             try {
                 // Get order items to restore stock
@@ -90,6 +90,15 @@ class AdminOrdersController extends Controller
 
                         // Log stock restoration event
                         try {
+                            // Ensure table exists first
+                            $pdo->exec("CREATE TABLE IF NOT EXISTS product_stock_events (
+                                id INT AUTO_INCREMENT PRIMARY KEY,
+                                product_id INT NOT NULL,
+                                user_id INT NULL,
+                                delta INT NOT NULL,
+                                reason VARCHAR(255) NULL,
+                                created_at DATETIME NOT NULL
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                             $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())')
                                 ->execute([$pid, Auth::userId(), $qty, 'Order cancelled - restored stock for order #'.$oid]);
                         } catch (\Throwable $e) {}
@@ -107,7 +116,10 @@ class AdminOrdersController extends Controller
                 } catch (\Throwable $e) {}
 
                 $pdo->commit();
-                $_SESSION['success'] = 'Order cancelled and stock restored successfully.';
+
+                // Get total items restored for message
+                $totalItems = array_sum(array_column($orderItems, 'quantity'));
+                $_SESSION['success'] = "Order cancelled and $totalItems items restored to inventory successfully.";
             } catch (\Throwable $e) {
                 $pdo->rollBack();
                 $_SESSION['error'] = 'Failed to cancel order and restore stock: ' . $e->getMessage();
@@ -182,8 +194,8 @@ class AdminOrdersController extends Controller
                         }
                         $currentStatus = $stmt->fetchColumn();
 
-                        // If order was fulfilled, restore stock
-                        if (in_array($currentStatus, ['processing', 'shipped', 'completed'])) {
+                        // If order was NOT draft (stock was deducted at placement), restore stock
+                        if (!in_array($currentStatus, ['draft', 'cancelled'])) {
                             // Get order items to restore stock
                             $items = $pdo->prepare('SELECT product_id, quantity FROM order_items WHERE order_id=?');
                             $items->execute([$oid]);
@@ -199,6 +211,15 @@ class AdminOrdersController extends Controller
 
                                     // Log stock restoration event
                                     try {
+                                        // Ensure table exists first
+                                        $pdo->exec("CREATE TABLE IF NOT EXISTS product_stock_events (
+                                            id INT AUTO_INCREMENT PRIMARY KEY,
+                                            product_id INT NOT NULL,
+                                            user_id INT NULL,
+                                            delta INT NOT NULL,
+                                            reason VARCHAR(255) NULL,
+                                            created_at DATETIME NOT NULL
+                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                                         $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())')
                                             ->execute([$pid, Auth::userId(), $qty, 'Bulk cancel - restored stock for order #'.$oid]);
                                     } catch (\Throwable $e) {}
@@ -430,8 +451,8 @@ class AdminOrdersController extends Controller
 
         $pdo->beginTransaction();
         try {
-            // If order was fulfilled, restore stock
-            if (in_array($currentStatus, ['processing', 'shipped', 'completed'])) {
+            // If order was NOT draft (stock was deducted at placement), restore stock
+            if (!in_array($currentStatus, ['draft', 'cancelled'])) {
                 // Get order items to restore stock
                 $items = $pdo->prepare('SELECT product_id, quantity FROM order_items WHERE order_id=?');
                 $items->execute([$oid]);
@@ -447,6 +468,15 @@ class AdminOrdersController extends Controller
 
                         // Log stock restoration event
                         try {
+                            // Ensure table exists first
+                            $pdo->exec("CREATE TABLE IF NOT EXISTS product_stock_events (
+                                id INT AUTO_INCREMENT PRIMARY KEY,
+                                product_id INT NOT NULL,
+                                user_id INT NULL,
+                                delta INT NOT NULL,
+                                reason VARCHAR(255) NULL,
+                                created_at DATETIME NOT NULL
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                             $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())')
                                 ->execute([$pid, Auth::userId(), $qty, 'Order refunded - restored stock for order #'.$oid]);
                         } catch (\Throwable $e) {}
@@ -465,7 +495,10 @@ class AdminOrdersController extends Controller
             } catch (\Throwable $e) {}
 
             $pdo->commit();
-            $_SESSION['success'] = 'Order refunded successfully. Stock has been restored.';
+
+            // Get total items restored for message
+            $totalItems = array_sum(array_column($orderItems, 'quantity'));
+            $_SESSION['success'] = "Order refunded and $totalItems items restored to inventory successfully.";
         } catch (\Throwable $e) {
             $pdo->rollBack();
             $_SESSION['error'] = 'Failed to refund order: ' . $e->getMessage();
