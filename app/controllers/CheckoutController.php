@@ -82,8 +82,8 @@ class CheckoutController extends Controller
             }
         }
         // Enforce city-based availability for methods
-        $codWhitelist = array_filter(array_map('trim', preg_split('/\r?\n/', (string)($settings['cod_city_whitelist'] ?? ''))));
-        $pickupWhitelist = array_filter(array_map('trim', preg_split('/\r?\n/', (string)($settings['pickup_city_whitelist'] ?? ''))));
+        $codWhitelist = array_filter(array_map('trim', preg_split('/[\r\n,]+/', (string)($settings['cod_city_whitelist'] ?? ''))));
+        $pickupWhitelist = array_filter(array_map('trim', preg_split('/[\r\n,]+/', (string)($settings['pickup_city_whitelist'] ?? ''))));
         $cityNorm = strtolower($city);
         $inList = function(array $list, string $val): bool { if (empty($list)) return true; foreach ($list as $x) { if (strtolower($x) === $val) return true; } return false; };
         if ($method === 'cod' && !$inList($codWhitelist, $cityNorm)) {
