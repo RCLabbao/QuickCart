@@ -590,7 +590,27 @@ document.addEventListener('DOMContentLoaded', function() {
       confirmMessage = `Are you sure you want to delete ${selectedProducts.length} selected product(s)? This action cannot be undone.`;
     }
 
-    return confirm(confirmMessage);
+    if (!confirm(confirmMessage)) {
+      return false;
+    }
+
+    // Add selected product IDs to the form before submission
+    const bulkForm = document.getElementById('bulkActionsForm');
+
+    // Remove any existing ids[] inputs from previous submissions
+    const existingInputs = bulkForm.querySelectorAll('input[name="ids[]"]');
+    existingInputs.forEach(input => input.remove());
+
+    // Add new hidden inputs for each selected product
+    selectedProducts.forEach(checkbox => {
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = 'ids[]';
+      hiddenInput.value = checkbox.value;
+      bulkForm.appendChild(hiddenInput);
+    });
+
+    return true;
   };
 
   // Auto-submit quick update forms with debouncing
