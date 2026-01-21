@@ -580,7 +580,6 @@ class AdminProductsController extends Controller
             $cols[] = 'p.status';
             $cols[] = 'COALESCE(p.stock,0) AS stock';
             $cols[] = 'c.title AS collection';
-            $cols[] = 'p.image_url AS primary_image';
 
             $sql = 'SELECT '.implode(',', $cols).' FROM products p LEFT JOIN collections c ON c.id=p.collection_id ORDER BY p.id DESC';
             $stmt = $pdo->query($sql);
@@ -614,12 +613,10 @@ class AdminProductsController extends Controller
                 // Create comma-separated image URLs
                 $allImages = !empty($imageUrls) ? implode(', ', $imageUrls) : '';
 
-                // Get primary image (first image or product.image_url)
+                // Get primary image (first image from product_images table)
                 $primaryImage = '';
                 if (!empty($imageUrls)) {
                     $primaryImage = $imageUrls[0];
-                } elseif (!empty($row['primary_image'])) {
-                    $primaryImage = $row['primary_image'];
                 }
 
                 // Make URLs absolute if they're relative
