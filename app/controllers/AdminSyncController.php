@@ -128,6 +128,9 @@ class AdminSyncController extends Controller
                             'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
                             'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
+                            'Status' => $pick($arr,$map,['status']),
+                            'ImageURLs' => $pick($arr,$map,['image urls','image_urls','images','image urls','images url']),
+                            'PrimaryImageURL' => $pick($arr,$map,['primary image url','primary_image_url','primary image','primary_image','image url','image_url']),
                         ];
                     }
                 } catch (\Throwable $e) {
@@ -165,6 +168,9 @@ class AdminSyncController extends Controller
                             'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
                             'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
+                            'Status' => $pick($arr,$map,['status']),
+                            'ImageURLs' => $pick($arr,$map,['image urls','image_urls','images','image urls','images url']),
+                            'PrimaryImageURL' => $pick($arr,$map,['primary image url','primary_image_url','primary image','primary_image','image url','image_url']),
                         ];
                     }
                 } catch (\Throwable $e) {
@@ -215,6 +221,9 @@ class AdminSyncController extends Controller
                         'ProductType' => $pick($r,$map,['producttype','product_type','product type','type']),
                         'RegPrice' => $pick($r,$map,['regprice','listprice','list price','price']),
                         'BrochurePrice' => $pick($r,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure','brochure\nselling price','brochure \nselling price']),
+                        'Status' => $pick($r,$map,['status']),
+                        'ImageURLs' => $pick($r,$map,['image urls','image_urls','images','image urls','images url']),
+                        'PrimaryImageURL' => $pick($r,$map,['primary image url','primary_image_url','primary image','primary_image','image url','image_url']),
                     ];
                 }
                 fclose($h);
@@ -269,8 +278,17 @@ class AdminSyncController extends Controller
         $updateCollection = array_key_exists('update_collection', $overrides)
             ? (bool)$overrides['update_collection']
             : ((string)\App\Core\setting('sync_update_collection','1') === '1');
+        $updateImages = array_key_exists('update_images', $overrides)
+            ? (bool)$overrides['update_images']
+            : isset($_POST['sync_update_images']);
         $collectPreview = !empty($overrides['collect_preview']);
         $collectDebug = !empty($overrides['collect_debug']);
+
+        // Detect if product_images table exists
+        $hasProductImages = false;
+        try {
+            $hasProductImages = $pdo->query("SHOW TABLES LIKE 'product_images'")->rowCount() > 0;
+        } catch (\Throwable $e) { $hasProductImages = false; }
 
         // Detect if collections has a category_code column (for CSV matching by code)
         $hasCategoryCode = false;
@@ -482,6 +500,36 @@ class AdminSyncController extends Controller
                         $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
                         if ($tagId && $pid) { $pdo->prepare('INSERT IGNORE INTO product_tags (product_id, tag_id) VALUES (?,?)')->execute([$pid,$tagId]); }
                     } catch (\Throwable $e) { /* ignore tags failures */ }
+                }
+
+                // Import images if available
+                if ($hasProductImages && !$dryRun) {
+                    try {
+                        $imageUrls = trim((string)($row['ImageURLs'] ?? ''));
+                        if ($imageUrls !== '') {
+                            // Get product ID
+                            $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
+                            if ($pid) {
+                                // Parse comma-separated URLs
+                                $urls = array_map('trim', explode(',', $imageUrls));
+
+                                // For updates with update_images option, delete existing images first
+                                if ($updateImages && $p) {
+                                    $pdo->prepare('DELETE FROM product_images WHERE product_id=?')->execute([$pid]);
+                                }
+
+                                // Only import images if this is a new product or update_images is enabled
+                                if (!$p || $updateImages) {
+                                    foreach ($urls as $url) {
+                                        if ($url === '') continue;
+                                        // Store URL as-is (can be absolute or relative)
+                                        $pdo->prepare('INSERT INTO product_images (product_id, url, sort_order) VALUES (?, ?, ?)')
+                                            ->execute([$pid, $url, 0]);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) { /* ignore image import failures */ }
                 }
             }
             if ($dryRun) {

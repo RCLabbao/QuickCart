@@ -28,7 +28,7 @@
               <div class="mb-2">
                 <label class="form-label">Upload CSV or XLSX</label>
                 <input type="file" class="form-control" name="csv" accept=".csv,.xlsx" required>
-                <div class="form-text">Expected headers: FSC, Description, SM_SOH, WH_SOH, TotalSOH, UnitSold, Categorycode, ProductType, RegPrice</div>
+                <div class="form-text">Expected headers: FSC, Description, SM_SOH, WH_SOH, TotalSOH, UnitSold, Categorycode, ProductType, RegPrice, BrochurePrice, Status, Image URLs, Primary Image URL</div>
               </div>
               <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" name="dry_run" id="csv_dry_run">
@@ -51,6 +51,10 @@
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" id="csv_sync_update_collection" name="sync_update_collection" <?= (($settings['sync_update_collection'] ?? '1')==='1')?'checked':'' ?>>
                   <label class="form-check-label" for="csv_sync_update_collection">Update collection from Categorycode (auto-create if missing)</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="csv_sync_update_images" name="sync_update_images">
+                  <label class="form-check-label" for="csv_sync_update_images">Update images from Image URLs column</label>
                 </div>
                 <div class="form-text">These rules apply only to this upload. To change defaults, use the SQL Server tab &gt; Connection Settings.</div>
               </div>
