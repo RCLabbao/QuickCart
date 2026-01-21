@@ -2,7 +2,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3">All Products</h1>
   <div class="text-muted" id="productCount"><?= (int)$count ?> items</div>
-<form class="row g-2 align-items-end mb-3" method="get">
+<!--<form class="row g-2 align-items-end mb-3" method="get">
   <div class="col-6 col-md-3"><label class="form-label">Min price</label><input class="form-control" type="number" step="0.01" name="min_price" value="<?= htmlspecialchars($_GET['min_price'] ?? '') ?>"></div>
   <div class="col-6 col-md-3"><label class="form-label">Max price</label><input class="form-control" type="number" step="0.01" name="max_price" value="<?= htmlspecialchars($_GET['max_price'] ?? '') ?>"></div>
   <div class="col-12 col-md-3"><label class="form-label">Collection</label>
@@ -22,7 +22,7 @@
     </select>
   </div>
   <div class="col-12 col-md-3"><button class="btn btn-outline-secondary w-100">Apply</button></div>
-</form>
+</form>-->
 
 </div>
 <div class="row g-3" id="productGrid">

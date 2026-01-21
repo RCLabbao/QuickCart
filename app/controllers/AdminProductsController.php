@@ -287,7 +287,23 @@ class AdminProductsController extends Controller
     public function destroy(array $params): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/products'); }
-        DB::pdo()->prepare('DELETE FROM products WHERE id=?')->execute([(int)$params['id']]);
+        $pdo = DB::pdo();
+        $productId = (int)$params['id'];
+
+        // Check if product is in draft status - if so, preserve images by not deleting
+        $stmt = $pdo->prepare('SELECT status FROM products WHERE id = ?');
+        $stmt->execute([$productId]);
+        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($product && $product['status'] === 'draft') {
+            // Don't delete draft products - they should be kept to preserve images
+            $_SESSION['error'] = 'Cannot delete draft products. Change status to active first or use bulk delete to permanently remove.';
+            $this->redirect('/admin/products');
+        }
+
+        // For active products, proceed with deletion (CASCADE will handle related records)
+        $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$productId]);
+        $_SESSION['success'] = 'Product deleted successfully.';
         $this->redirect('/admin/products');
     }
 
@@ -390,7 +406,16 @@ class AdminProductsController extends Controller
             $ref = $pdo->prepare("SELECT DISTINCT product_id FROM order_items WHERE product_id IN ($in)");
             $ref->execute($ids);
             $blocked = array_map('intval', $ref->fetchAll(\PDO::FETCH_COLUMN));
-            $deletable = array_values(array_diff($ids, $blocked));
+
+            // Find draft products and skip them (preserve images for draft products)
+            $draftStmt = $pdo->prepare("SELECT id FROM products WHERE id IN ($in) AND status = 'draft'");
+            $draftStmt->execute($ids);
+            $draftProducts = array_map('intval', $draftStmt->fetchAll(\PDO::FETCH_COLUMN));
+
+            // Combine blocked products (order references + draft products)
+            $allBlocked = array_values(array_unique(array_merge($blocked, $draftProducts)));
+            $deletable = array_values(array_diff($ids, $allBlocked));
+
             if ($deletable) {
                 $in2 = implode(',', array_fill(0, count($deletable), '?'));
                 // Clean related rows first
@@ -401,10 +426,23 @@ class AdminProductsController extends Controller
                 $st = $pdo->prepare("DELETE FROM products WHERE id IN ($in2)");
                 $st->execute($deletable);
             }
-            if (!empty($blocked)) {
-                $_SESSION['error'] = count($blocked)." product(s) were not deleted because they are referenced by existing orders.";
+
+            // Build appropriate message
+            $messages = [];
+            if (count($deletable) > 0) {
+                $messages[] = count($deletable) . ' product(s) deleted.';
+            }
+            if (count($blocked) > 0) {
+                $messages[] = count($blocked) . ' product(s) were not deleted because they are referenced by existing orders.';
+            }
+            if (count($draftProducts) > 0) {
+                $messages[] = count($draftProducts) . ' draft product(s) were preserved with their images.';
+            }
+
+            if (!empty($messages)) {
+                $_SESSION['success'] = implode(' ', $messages);
             } else {
-                $_SESSION['success'] = 'Selected products deleted.';
+                $_SESSION['success'] = 'No products were deleted.';
             }
         } elseif ($action === 'assign_collection') {
             $cid = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
@@ -534,15 +572,18 @@ class AdminProductsController extends Controller
         $sql = 'SELECT '.implode(',', $cols).' FROM products p LEFT JOIN collections c ON c.id=p.collection_id ORDER BY p.id DESC';
         $stmt = $pdo->query($sql);
 
-        // Get images for each product
-        $getImages = $pdo->prepare('SELECT url FROM product_images WHERE product_id = ? ORDER BY sort_order, id ASC');
+        // Get images for each product (only prepare if table exists)
+        $getImages = null;
+        if ($hasProductImages) {
+            $getImages = $pdo->prepare('SELECT url FROM product_images WHERE product_id = ? ORDER BY sort_order, id ASC');
+        }
 
         while ($row = $stmt->fetch()) {
             $productId = $row['id'];
 
             // Get all images for this product
             $imageUrls = [];
-            if ($hasProductImages) {
+            if ($hasProductImages && $getImages) {
                 $getImages->execute([$productId]);
                 $images = $getImages->fetchAll(PDO::FETCH_COLUMN);
                 $imageUrls = $images;
