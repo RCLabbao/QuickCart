@@ -95,7 +95,7 @@
                   </div>
                   <div>
                     <h6 class="mb-1">Order Confirmation</h6>
-                    <small class="text-muted">We'll send you an email with order details</small>
+                    <small class="text-muted">We'll send you a message or call you with the order details</small>
                   </div>
                 </div>
               </div>

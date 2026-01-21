@@ -573,6 +573,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.validateBulkAction = function() {
     const selectedProducts = document.querySelectorAll('.product-checkbox:checked');
     const action = document.getElementById('bulkAction').value;
+    const submitButton = document.querySelector('#bulkActionsForm button[type="submit"]');
 
     if (selectedProducts.length === 0) {
       alert('Please select at least one product.');
@@ -610,6 +611,13 @@ document.addEventListener('DOMContentLoaded', function() {
       bulkForm.appendChild(hiddenInput);
     });
 
+    // Show loading state
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
+    }
+
+    // Allow form to submit
     return true;
   };
 
@@ -627,8 +635,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initialize bulk actions state
   updateBulkActionsState();
 
-  // Add loading state to forms
-  document.querySelectorAll('form').forEach(form => {
+  // Add loading state to forms (exclude bulk actions form which has its own handling)
+  document.querySelectorAll('form:not(#bulkActionsForm)').forEach(form => {
     form.addEventListener('submit', function() {
       const submitButton = this.querySelector('button[type="submit"]');
       if (submitButton) {
