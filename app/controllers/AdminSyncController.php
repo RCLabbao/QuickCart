@@ -119,15 +119,15 @@ class AdminSyncController extends Controller
                         if (count(array_filter($arr, fn($v)=>$v!==null && $v!==''))===0) continue; // skip empty lines
                         $rows[] = [
                             'FSC' => $pick($arr,$map,['fsc']),
-                            'Description' => $pick($arr,$map,['description','desc','product description','productdescription']),
+                            'Title' => $pick($arr,$map,['title','description','desc','product description','productdescription','name']),
                             'SM_SOH' => $pick($arr,$map,['sm_soh','sm soh','smqty','sm_qty','sm qty']),
                             'WH_SOH' => $pick($arr,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
-                            'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
+                            'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity','stock']),
                             'UnitSold' => $pick($arr,$map,['unitsold','unit_sold','unit sold','sold']),
                             'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
-                            'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
+                            'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type','variant']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
-                            'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
+                            'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure','sale price','sale_price']),
                             'Status' => $pick($arr,$map,['status']),
                             'ImageURLs' => $pick($arr,$map,['image urls','image_urls','images','image urls','images url']),
                             'PrimaryImageURL' => $pick($arr,$map,['primary image url','primary_image_url','primary image','primary_image','image url','image_url']),
@@ -159,15 +159,15 @@ class AdminSyncController extends Controller
                         if (count(array_filter($arr, fn($v)=>$v!==null && $v!==''))===0) continue;
                         $rows[] = [
                             'FSC' => $pick($arr,$map,['fsc']),
-                            'Description' => $pick($arr,$map,['description','desc','product description','productdescription']),
+                            'Title' => $pick($arr,$map,['title','description','desc','product description','productdescription','name']),
                             'SM_SOH' => $pick($arr,$map,['sm_soh','sm soh','smqty','sm_qty','sm qty']),
                             'WH_SOH' => $pick($arr,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
-                            'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
+                            'TotalSOH' => $pick($arr,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity','stock']),
                             'UnitSold' => $pick($arr,$map,['unitsold','unit_sold','unit sold','sold']),
                             'Categorycode' => $pick($arr,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
-                            'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type']),
+                            'ProductType' => $pick($arr,$map,['producttype','product_type','product type','type','variant']),
                             'RegPrice' => $pick($arr,$map,['regprice','listprice','list price','price']),
-                            'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure']),
+                            'BrochurePrice' => $pick($arr,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure','sale price','sale_price']),
                             'Status' => $pick($arr,$map,['status']),
                             'ImageURLs' => $pick($arr,$map,['image urls','image_urls','images','image urls','images url']),
                             'PrimaryImageURL' => $pick($arr,$map,['primary image url','primary_image_url','primary image','primary_image','image url','image_url']),
@@ -212,15 +212,15 @@ class AdminSyncController extends Controller
                 while (($r = fgetcsv($h, 0, $bestDelim)) !== false) {
                     $rows[] = [
                         'FSC' => $pick($r,$map,['fsc']),
-                        'Description' => $pick($r,$map,['description','desc','product description','productdescription']),
+                        'Title' => $pick($r,$map,['title','description','desc','product description','productdescription','name']),
                         'SM_SOH' => $pick($r,$map,['sm_soh','sm soh','smqty','sm_qty','sm qty']),
                         'WH_SOH' => $pick($r,$map,['wh_soh','wh soh','whqty','wh_qty','wh qty']),
-                        'TotalSOH' => $pick($r,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity']),
+                        'TotalSOH' => $pick($r,$map,['totalsoh','total_soh','total soh','totalqty','total_qty','total qty','qty','quantity','stock']),
                         'UnitSold' => $pick($r,$map,['unitsold','unit_sold','unit sold','sold']),
                         'Categorycode' => $pick($r,$map,['categorycode','category_code','category code','category','categories','categoryname','category name','collection','collection_name','collection name']),
-                        'ProductType' => $pick($r,$map,['producttype','product_type','product type','type']),
+                        'ProductType' => $pick($r,$map,['producttype','product_type','product type','type','variant']),
                         'RegPrice' => $pick($r,$map,['regprice','listprice','list price','price']),
-                        'BrochurePrice' => $pick($r,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure','brochure\nselling price','brochure \nselling price']),
+                        'BrochurePrice' => $pick($r,$map,['brochureprice','brochure price','brochure_selling_price','brochure selling price','brochure','brochure\nselling price','brochure \nselling price','sale price','sale_price']),
                         'Status' => $pick($r,$map,['status']),
                         'ImageURLs' => $pick($r,$map,['image urls','image_urls','images','image urls','images url']),
                         'PrimaryImageURL' => $pick($r,$map,['primary image url','primary_image_url','primary image','primary_image','image url','image_url']),
@@ -320,11 +320,35 @@ class AdminSyncController extends Controller
                 $seen++;
                 $fsc = trim((string)($row['FSC'] ?? ''));
                 if ($fsc==='') { $errors++; if ($collectDebug && count($debugRows) < 500) { $debugRows[] = ['fsc'=>'','category_raw'=>'','slug'=>'','collection'=>null,'action'=>'skip','reason'=>'Missing FSC']; } continue; }
-                $title = trim((string)($row['Description'] ?? '')) ?: $fsc;
+                $title = trim((string)($row['Title'] ?? ''));
+                // If title is empty, use FSC as fallback (but prefer keeping existing title when updating)
+                if ($title === '') { $title = $fsc; }
                 $price = (float)($row['RegPrice'] ?? 0);
                 $stock = (int)($row['TotalSOH'] ?? 0);
                 $category = trim((string)($row['Categorycode'] ?? ''));
                 $ptype = trim((string)($row['ProductType'] ?? ''));
+                // For variants, use ptype as the variant attribute (e.g., "Size: M, Color: Red")
+                $variantAttributes = null;
+                $parentProductId = null;
+                $hasVariantsColumn = false;
+                try {
+                    $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+                } catch (\Throwable $e) { $hasVariantsColumn = false; }
+
+                if ($ptype !== '' && $ptype !== $title && $hasVariantsColumn) {
+                    // ProductType contains variant info (e.g., "Size: M, Color: Red")
+                    $variantAttributes = $ptype;
+                    // Check if a parent product with this title already exists
+                    if (!$dryRun) {
+                        $parentCheck = $pdo->prepare('SELECT id FROM products WHERE title=? AND (parent_product_id IS NULL OR parent_product_id=0) LIMIT 1');
+                        $parentCheck->execute([$title]);
+                        $existingParent = $parentCheck->fetchColumn();
+                        if ($existingParent) {
+                            $parentProductId = (int)$existingParent;
+                        }
+                    }
+                }
+
                 // Resolve/ensure collection using category_code when available; otherwise fall back to slug/title
                 $collectionId = null; $catSlug = '';
                 if ($category !== '') {
@@ -430,6 +454,14 @@ class AdminSyncController extends Controller
                     // Build a safe, unique slug
                     $slugTitle = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$title));
                     $slugTitle = trim($slugTitle, '-');
+                    // For variants, append variant identifier to slug
+                    if ($variantAttributes && $parentProductId) {
+                        $variantSlug = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$variantAttributes));
+                        $variantSlug = trim($variantSlug, '-');
+                        if ($variantSlug !== '') {
+                            $slugTitle = $slugTitle . '-' . $variantSlug;
+                        }
+                    }
                     if ($slugTitle === '') {
                         $slugTitle = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$fsc));
                         $slugTitle = trim($slugTitle, '-');
@@ -441,8 +473,14 @@ class AdminSyncController extends Controller
                     }
                     // Map brochure price to sale_price field
                     $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;
-                    $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NOW())')
-                        ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId]);
+                    // Build INSERT with variant support
+                    if ($hasVariantsColumn) {
+                        $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, ?, ?, NOW())')
+                            ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId,$parentProductId,$variantAttributes]);
+                    } else {
+                        $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NOW())')
+                            ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId]);
+                    }
                     $created++;
                 } else {
                     // Update
@@ -483,7 +521,11 @@ class AdminSyncController extends Controller
                     }
                     $fields[] = 'sale_price = ?';
                     $vals[] = $salePrice;
-                    if ($updateTitle) { $fields[] = 'title = ?'; $vals[] = $title; }
+                    // Smart title update: only update if CSV has a meaningful title (not just FSC)
+                    if ($updateTitle && $title !== '' && $title !== $fsc) {
+                        $fields[] = 'title = ?';
+                        $vals[] = $title;
+                    }
                     if ($updateCollection && $collectionId) { $fields[] = 'collection_id = ?'; $vals[] = $collectionId; }
                     $vals[] = (int)$p['id'];
                     $sql = 'UPDATE products SET '.implode(',', $fields).' WHERE id = ?';

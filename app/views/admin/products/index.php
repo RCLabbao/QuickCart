@@ -285,7 +285,15 @@ $draftProducts = $stats['draft_products'] ?? 0;
                     <?php endif; ?>
                   </div>
                   <div>
-                    <h6 class="mb-1"><?= htmlspecialchars($p['title']) ?></h6>
+                    <h6 class="mb-1">
+                      <?= htmlspecialchars($p['title']) ?>
+                      <?php if (!empty($p['variant_attributes'])): ?>
+                        <span class="badge bg-info ms-2"><?= htmlspecialchars($p['variant_attributes']) ?></span>
+                      <?php endif; ?>
+                      <?php if (!empty($p['parent_product_id'])): ?>
+                        <span class="badge bg-secondary ms-1"><i class="bi bi-diagram-3 me-1"></i>Variant</span>
+                      <?php endif; ?>
+                    </h6>
                     <?php if (!empty($p['sku']) || !empty($p['barcode'])): ?>
                       <div class="small text-muted mb-1">
                         <?php if (!empty($p['sku'])): ?><span class="me-2"><i class="bi bi-upc-scan me-1"></i>FSC: <?= htmlspecialchars($p['sku']) ?></span><?php endif; ?>

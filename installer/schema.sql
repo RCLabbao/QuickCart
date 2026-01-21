@@ -59,6 +59,27 @@ CREATE TABLE IF NOT EXISTS customer_profiles (
   updated_at DATETIME NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS products (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(191) NOT NULL,
+  slug VARCHAR(191) NOT NULL UNIQUE,
+  fsc VARCHAR(50) NULL,
+  barcode VARCHAR(50) NULL,
+  price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  sale_price DECIMAL(10,2) NULL,
+  status ENUM('active','draft') NOT NULL DEFAULT 'active',
+  stock INT DEFAULT 0,
+  collection_id INT NULL,
+  parent_product_id INT NULL,
+  variant_attributes VARCHAR(500) NULL,
+  description TEXT NULL,
+  image_url VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL,
+  FOREIGN KEY (parent_product_id) REFERENCES products(id) ON DELETE SET NULL,
+  UNIQUE KEY idx_fsc (fsc)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS collections (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(191) NOT NULL,

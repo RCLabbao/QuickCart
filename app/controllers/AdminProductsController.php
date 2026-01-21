@@ -81,9 +81,14 @@ class AdminProductsController extends Controller
         // Include FSC/barcode columns when available for display
         $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
         $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+        $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
         $cols = ['id','title','price','status','COALESCE(stock,0) AS stock','collection_id', '(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url'];
         if ($hasSku) { $cols[] = 'fsc AS sku'; }
         if ($hasBarcode) { $cols[] = 'barcode'; }
+        if ($hasVariants) {
+            $cols[] = 'parent_product_id';
+            $cols[] = 'variant_attributes';
+        }
         $sql = 'SELECT '.implode(',', $cols).' FROM products p WHERE ' . implode(' AND ', $where) . ' ORDER BY created_at DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
         $st = $pdo->prepare($sql);
         $st->execute($params);
@@ -566,9 +571,10 @@ class AdminProductsController extends Controller
             $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
             $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
             $hasProductImages = $pdo->query("SHOW TABLES LIKE 'product_images'")->rowCount() > 0;
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'variant_attributes'")->rowCount() > 0;
 
             // Headers including image links
-            $headers = ['ID','Title','FSC','Barcode','Price','Sale Price','Status','Stock','Collection','Image URLs','Primary Image URL'];
+            $headers = ['ID','Title','FSC','Barcode','Price','Sale Price','Status','Stock','Collection','Variant','Image URLs','Primary Image URL'];
             fputcsv($out, $headers);
 
             // Build query
@@ -580,6 +586,7 @@ class AdminProductsController extends Controller
             $cols[] = 'p.status';
             $cols[] = 'COALESCE(p.stock,0) AS stock';
             $cols[] = 'c.title AS collection';
+            if ($hasVariants) { $cols[] = 'p.variant_attributes'; } else { $cols[] = "'' AS variant"; }
 
             $sql = 'SELECT '.implode(',', $cols).' FROM products p LEFT JOIN collections c ON c.id=p.collection_id ORDER BY p.id DESC';
             $stmt = $pdo->query($sql);
@@ -652,6 +659,7 @@ class AdminProductsController extends Controller
                     $row['status'],
                     $row['stock'],
                     $row['collection'] ?? '',
+                    $row['variant'] ?? '',
                     $allImages,
                     $primaryImage
                 ]);
