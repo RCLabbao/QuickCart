@@ -153,15 +153,27 @@ class CheckoutController extends Controller
                 } catch (\Throwable $e) {}
             }
             $total = max(0.0, $subtotal - $discount) + $shippingFee;
-            // Backward compatible insert: support databases without discount/coupon_code columns
+            // Get order notes (customer notes from checkout)
+            $customerNotes = trim($_POST['order_notes'] ?? '');
+            // Backward compatible insert: support databases without discount/coupon_code/customer_notes columns
             $hasDiscount = $pdo->query("SHOW COLUMNS FROM orders LIKE 'discount'")->rowCount() > 0;
             $hasCoupon = $pdo->query("SHOW COLUMNS FROM orders LIKE 'coupon_code'")->rowCount() > 0;
-            if ($hasDiscount && $hasCoupon) {
+            $hasCustomerNotes = $pdo->query("SHOW COLUMNS FROM orders LIKE 'customer_notes'")->rowCount() > 0;
+            if ($hasDiscount && $hasCoupon && $hasCustomerNotes) {
+                $stmt = $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, discount, shipping_fee, total, status, coupon_code, customer_notes, created_at) VALUES (?,?,?,?,?,? ,"pending", ?, ?, NOW())');
+                $stmt->execute([$email,$method,$subtotal,$discount,$shippingFee,$total,$couponCode?:null,$customerNotes?:null]);
+            } elseif ($hasDiscount && $hasCoupon && !$hasCustomerNotes) {
                 $stmt = $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, discount, shipping_fee, total, status, coupon_code, created_at) VALUES (?,?,?,?,?,? ,"pending", ?, NOW())');
                 $stmt->execute([$email,$method,$subtotal,$discount,$shippingFee,$total,$couponCode?:null]);
-            } elseif ($hasDiscount && !$hasCoupon) {
+            } elseif ($hasDiscount && !$hasCoupon && $hasCustomerNotes) {
+                $stmt = $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, discount, shipping_fee, total, status, customer_notes, created_at) VALUES (?,?,?,?,?,? ,"pending", ?, NOW())');
+                $stmt->execute([$email,$method,$subtotal,$discount,$shippingFee,$total,$customerNotes?:null]);
+            } elseif ($hasDiscount && !$hasCoupon && !$hasCustomerNotes) {
                 $stmt = $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, discount, shipping_fee, total, status, created_at) VALUES (?,?,?,?,?,? ,"pending", NOW())');
                 $stmt->execute([$email,$method,$subtotal,$discount,$shippingFee,$total]);
+            } elseif (!$hasDiscount && $hasCustomerNotes) {
+                $stmt = $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, shipping_fee, total, status, customer_notes, created_at) VALUES (?,?,?,?,? ,"pending", ?, NOW())');
+                $stmt->execute([$email,$method,$subtotal,$shippingFee,$total,$customerNotes?:null]);
             } else {
                 $stmt = $pdo->prepare('INSERT INTO orders (email, shipping_method, subtotal, shipping_fee, total, status, created_at) VALUES (?,?,?,?,? ,"pending", NOW())');
                 $stmt->execute([$email,$method,$subtotal,$shippingFee,$total]);

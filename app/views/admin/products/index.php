@@ -611,10 +611,12 @@ document.addEventListener('DOMContentLoaded', function() {
       bulkForm.appendChild(hiddenInput);
     });
 
-    // Show loading state
+    // Show loading state with a small delay to allow form to submit
     if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
+      setTimeout(() => {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
+      }, 10);
     }
 
     // Allow form to submit

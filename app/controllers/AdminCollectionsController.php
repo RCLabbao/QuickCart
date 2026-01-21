@@ -7,8 +7,13 @@ class AdminCollectionsController extends Controller
     public function index(): void
     {
         $hasCategoryCode = $this->hasCategoryCode();
-        if ($hasCategoryCode) {
+        $hasStatus = $this->hasStatus();
+        if ($hasCategoryCode && $hasStatus) {
+            $rows = DB::pdo()->query('SELECT id, title, slug, image_url, category_code, status FROM collections ORDER BY id DESC')->fetchAll();
+        } elseif ($hasCategoryCode) {
             $rows = DB::pdo()->query('SELECT id, title, slug, image_url, category_code FROM collections ORDER BY id DESC')->fetchAll();
+        } elseif ($hasStatus) {
+            $rows = DB::pdo()->query('SELECT id, title, slug, image_url, status FROM collections ORDER BY id DESC')->fetchAll();
         } else {
             $rows = DB::pdo()->query('SELECT id, title, slug, image_url FROM collections ORDER BY id DESC')->fetchAll();
         }
@@ -18,6 +23,11 @@ class AdminCollectionsController extends Controller
     private function hasCategoryCode(): bool {
         try {
             return (int)DB::pdo()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'collections' AND COLUMN_NAME = 'category_code'")->fetchColumn() > 0;
+        } catch (\Throwable $e) { return false; }
+    }
+    private function hasStatus(): bool {
+        try {
+            return (int)DB::pdo()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'collections' AND COLUMN_NAME = 'status'")->fetchColumn() > 0;
         } catch (\Throwable $e) { return false; }
     }
     public function store(): void
@@ -46,11 +56,20 @@ class AdminCollectionsController extends Controller
         }
         $imageUrl = $this->handleImageUpload();
         $hasCode = $this->hasCategoryCode();
+        $hasStatus = $this->hasStatus();
         $code = strtoupper(trim($_POST['category_code'] ?? ''));
         if ($code === '') { $code = null; }
-        if ($hasCode) {
+        $status = isset($_POST['status']) && in_array($_POST['status'], ['active', 'draft']) ? $_POST['status'] : 'active';
+
+        if ($hasCode && $hasStatus) {
+            $stmt = $pdo->prepare('INSERT INTO collections (title, slug, description, image_url, category_code, status) VALUES (?,?,?,?,?,?)');
+            $stmt->execute([$title,$slug, $_POST['description'] ?? '', $imageUrl, $code, $status]);
+        } elseif ($hasCode) {
             $stmt = $pdo->prepare('INSERT INTO collections (title, slug, description, image_url, category_code) VALUES (?,?,?,?,?)');
             $stmt->execute([$title,$slug, $_POST['description'] ?? '', $imageUrl, $code]);
+        } elseif ($hasStatus) {
+            $stmt = $pdo->prepare('INSERT INTO collections (title, slug, description, image_url, status) VALUES (?,?,?,?,?)');
+            $stmt->execute([$title,$slug, $_POST['description'] ?? '', $imageUrl, $status]);
         } else {
             $stmt = $pdo->prepare('INSERT INTO collections (title, slug, description, image_url) VALUES (?,?,?,?)');
             $stmt->execute([$title,$slug, $_POST['description'] ?? '', $imageUrl]);
@@ -88,20 +107,35 @@ class AdminCollectionsController extends Controller
         }
         $imageUrl = $this->handleImageUpload();
         $hasCode = $this->hasCategoryCode();
+        $hasStatus = $this->hasStatus();
         $code = strtoupper(trim($_POST['category_code'] ?? ''));
         if ($code === '') { $code = null; }
+        $status = isset($_POST['status']) && in_array($_POST['status'], ['active', 'draft']) ? $_POST['status'] : 'active';
+
         if ($imageUrl) {
-            if ($hasCode) {
+            if ($hasCode && $hasStatus) {
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=?, category_code=?, status=? WHERE id=?')
+                    ->execute([$title,$slug,$_POST['description'] ?? '', $imageUrl, $code, $status, $params['id']]);
+            } elseif ($hasCode) {
                 $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=?, category_code=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $imageUrl, $code, $params['id']]);
+            } elseif ($hasStatus) {
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=?, status=? WHERE id=?')
+                    ->execute([$title,$slug,$_POST['description'] ?? '', $imageUrl, $status, $params['id']]);
             } else {
                 $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, image_url=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $imageUrl, $params['id']]);
             }
         } else {
-            if ($hasCode) {
+            if ($hasCode && $hasStatus) {
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, category_code=?, status=? WHERE id=?')
+                    ->execute([$title,$slug,$_POST['description'] ?? '', $code, $status, $params['id']]);
+            } elseif ($hasCode) {
                 $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, category_code=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $code, $params['id']]);
+            } elseif ($hasStatus) {
+                $pdo->prepare('UPDATE collections SET title=?, slug=?, description=?, status=? WHERE id=?')
+                    ->execute([$title,$slug,$_POST['description'] ?? '', $status, $params['id']]);
             } else {
                 $pdo->prepare('UPDATE collections SET title=?, slug=?, description=? WHERE id=?')
                     ->execute([$title,$slug,$_POST['description'] ?? '', $params['id']]);

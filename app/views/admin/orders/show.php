@@ -102,17 +102,29 @@
 
       </div>
     </div>
+    <?php if (!empty($order['customer_notes'])): ?>
     <div class="card mt-3">
-      <div class="card-header"><i class="bi bi-sticky me-2"></i>Order Notes</div>
+      <div class="card-header"><i class="bi bi-chat-left-quote me-2"></i>Customer Order Notes</div>
+      <div class="card-body">
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-info-circle me-2"></i>
+          <strong>Customer's note:</strong>
+          <div class="mt-2"><?= nl2br(htmlspecialchars($order['customer_notes'] ?? '')) ?></div>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
+    <div class="card mt-3">
+      <div class="card-header"><i class="bi bi-sticky me-2"></i>Internal Staff Notes</div>
       <div class="card-body">
         <form method="post" action="/admin/orders/<?= (int)$order['id'] ?>/note">
           <?= csrf_field() ?>
-          <label class="form-label fw-semibold">Internal note</label>
+          <label class="form-label fw-semibold">Internal note (staff only)</label>
           <textarea class="form-control" name="note" rows="3" placeholder="Add an internal note that only staff can see..."><?= htmlspecialchars($order['notes'] ?? '') ?></textarea>
           <div class="d-flex justify-content-end mt-2">
             <button class="btn btn-dark"><i class="bi bi-save me-1"></i>Save Note</button>
           </div>
-          <div class="form-text">Notes are visible only to store staff.</div>
+          <div class="form-text">Internal notes are visible only to store staff.</div>
         </form>
       </div>
     </div>
@@ -144,7 +156,7 @@
         <div><strong>Method:</strong> <?= htmlspecialchars(strtoupper($order['shipping_method'] ?? '')) ?></div>
       </div>
     </div>
-    <?php if ($address): ?>
+    <?php if ($address && ($order['shipping_method'] ?? '') !== 'pickup'): ?>
     <div class="card mt-3">
       <div class="card-header">Shipping Address</div>
       <div class="card-body">
@@ -152,6 +164,23 @@
         <div><?= htmlspecialchars($address['street'] ?? '') ?></div>
         <div><?= htmlspecialchars($address['barangay'] ?? '') ?>, <?= htmlspecialchars($address['city'] ?? '') ?>, <?= htmlspecialchars($address['province'] ?? '') ?></div>
         <div><?= htmlspecialchars($address['region'] ?? '') ?> <?= htmlspecialchars($address['postal_code'] ?? '') ?></div>
+      </div>
+    </div>
+    <?php elseif (($order['shipping_method'] ?? '') === 'pickup'): ?>
+    <div class="card mt-3">
+      <div class="card-header">Pickup Information</div>
+      <div class="card-body">
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-shop me-2"></i>
+          <strong>Pickup Order</strong>
+        </div>
+        <div class="mt-2">
+          <div><strong>Name:</strong> <?= htmlspecialchars($address['name'] ?? '') ?></div>
+          <div><strong>Phone:</strong> <?= htmlspecialchars($address['phone'] ?? '') ?></div>
+          <?php if (!empty($address['city'])): ?>
+          <div><strong>Pickup City:</strong> <?= htmlspecialchars($address['city']) ?></div>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
     <?php endif; ?>

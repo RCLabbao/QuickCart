@@ -240,6 +240,19 @@
               </div>
             </div>
 
+            <!-- Order Notes -->
+            <div class="card border-0 shadow-sm mt-4">
+              <div class="card-header bg-white border-bottom">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-sticky me-2"></i>Order Notes (Optional)
+                </h5>
+              </div>
+              <div class="card-body">
+                <textarea class="form-control" name="order_notes" rows="3" placeholder="Any special instructions for your order..."><?= htmlspecialchars($_POST['order_notes'] ?? '') ?></textarea>
+                <small class="text-muted">Delivery instructions, preferred time, or other notes about your order.</small>
+              </div>
+            </div>
+
             <!-- Coupon Code -->
             <div class="card border-0 shadow-sm mt-4">
               <div class="card-header bg-white border-bottom">

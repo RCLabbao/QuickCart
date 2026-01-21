@@ -29,6 +29,16 @@
           <input class="form-control" name="title" value="<?= htmlspecialchars($collection['title'] ?? '') ?>" required placeholder="e.g. New Arrivals">
         </div>
         <div class="mb-3">
+          <label class="form-label fw-semibold">Status</label>
+          <select class="form-select" name="status">
+            <option value="active" <?= (isset($collection['status']) && $collection['status'] === 'active') ? 'selected' : (!isset($collection['status']) ? 'selected' : '') ?>>Active</option>
+            <option value="draft" <?= (isset($collection['status']) && $collection['status'] === 'draft') ? 'selected' : '' ?>>Draft</option>
+          </select>
+          <div class="form-text">
+            Active collections are visible on the storefront. Draft collections are hidden.
+          </div>
+        </div>
+        <div class="mb-3">
           <label class="form-label fw-semibold">Category Code (for CSV matching)</label>
           <input class="form-control" name="category_code" value="<?= htmlspecialchars($collection['category_code'] ?? '') ?>" placeholder="e.g. CFT" maxlength="64">
           <div class="form-text">

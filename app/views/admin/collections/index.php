@@ -24,6 +24,7 @@
             <th style="width:100px;">Cover</th>
             <th>Title</th>
             <th>Category Code</th>
+            <th>Status</th>
             <th>Slug</th>
             <th style="width: 140px;" class="text-end">Actions</th>
           </tr>
@@ -45,6 +46,17 @@
               <td>
                 <?php if (!empty($c['category_code'])): ?>
                   <span class="badge bg-secondary"><?= htmlspecialchars($c['category_code']) ?></span>
+                <?php else: ?>
+                  <span class="text-muted">—</span>
+                <?php endif; ?>
+              </td>
+              <td>
+                <?php if (isset($c['status'])): ?>
+                  <?php if ($c['status'] === 'active'): ?>
+                    <span class="badge bg-success">Active</span>
+                  <?php else: ?>
+                    <span class="badge bg-secondary">Draft</span>
+                  <?php endif; ?>
                 <?php else: ?>
                   <span class="text-muted">—</span>
                 <?php endif; ?>

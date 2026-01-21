@@ -606,7 +606,7 @@ class AdminProductsController extends Controller
                 $imageUrls = [];
                 if ($hasProductImages && $getImages) {
                     $getImages->execute([$productId]);
-                    $images = $getImages->fetchAll(PDO::FETCH_COLUMN);
+                    $images = $getImages->fetchAll(\PDO::FETCH_COLUMN);
                     $imageUrls = $images;
                 }
 

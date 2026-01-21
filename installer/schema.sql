@@ -63,9 +63,9 @@ CREATE TABLE IF NOT EXISTS collections (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(191) NOT NULL,
   slug VARCHAR(191) NOT NULL UNIQUE,
-  description TEXT
-,
-  image_url VARCHAR(255) NULL
+  description TEXT,
+  image_url VARCHAR(255) NULL,
+  status ENUM('active','draft') NOT NULL DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS products (
@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS orders (
   total DECIMAL(10,2) NOT NULL,
   status ENUM('draft','pending','processing','shipped','completed','cancelled') NOT NULL DEFAULT 'draft',
   notes TEXT NULL,
+  customer_notes TEXT NULL,
   created_at DATETIME NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
