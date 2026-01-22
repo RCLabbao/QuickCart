@@ -7,6 +7,12 @@ class HomeController extends Controller
     public function index(): void
     {
         $pdo = DB::pdo();
+        // Get active banners for slider
+        $banners = [];
+        try {
+            $banners = $pdo->query('SELECT * FROM banners WHERE status="active" ORDER BY sort_order ASC')->fetchAll();
+        } catch (\Throwable $e) { $banners = []; }
+
         $hidden = \App\Core\hidden_collection_ids();
         $exSql = '';
         $exParams = [];
@@ -65,6 +71,7 @@ class HomeController extends Controller
         }
         $this->view('home/index', [
             'title' => 'QuickCart - Modern Shopping',
+            'banners' => $banners,
             'sale_items' => $sale,
             'new_arrivals' => $new,
             'best_sellers' => $best,

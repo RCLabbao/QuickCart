@@ -1,9 +1,62 @@
-<!-- Hero -->
+<!-- Banner Slider -->
+<?php if (!empty($banners ?? [])): ?>
+<section class="my-4 my-md-5">
+  <div id="bannerSlider" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="5000">
+    <div class="carousel-indicators">
+      <?php foreach (($banners ?? []) as $index => $b): ?>
+        <button type="button" data-bs-target="#bannerSlider" data-bs-slide-to="<?= $index ?>" <?= $index === 0 ? 'class="active"' : '' ?> aria-label="Slide <?= $index + 1 ?>"></button>
+      <?php endforeach; ?>
+    </div>
+    <div class="carousel-inner rounded-4 shadow-sm overflow-hidden">
+      <?php foreach (($banners ?? []) as $index => $b): ?>
+        <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
+          <?php
+            $imageUrl = $b['image_url'] ?? '';
+            $mobileImageUrl = $b['mobile_image_url'] ?? '';
+            $linkUrl = $b['link_url'] ?? '';
+            $altText = $b['alt_text'] ?? $b['title'] ?? 'Banner';
+          ?>
+          <?php if (!empty($linkUrl)): ?>
+            <a href="<?= htmlspecialchars($linkUrl) ?>">
+          <?php endif; ?>
+          <!-- Mobile image (shown on small screens) -->
+          <?php if (!empty($mobileImageUrl)): ?>
+            <picture>
+              <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($mobileImageUrl) ?>">
+              <img src="<?= htmlspecialchars($imageUrl) ?>" class="d-block w-100" alt="<?= htmlspecialchars($altText) ?>"
+                   style="max-height: 600px; object-fit: cover; object-position: center;"
+                   fetchpriority="<?= $index === 0 ? 'high' : 'auto' ?>">
+            </picture>
+          <?php else: ?>
+            <img src="<?= htmlspecialchars($imageUrl) ?>" class="d-block w-100" alt="<?= htmlspecialchars($altText) ?>"
+                 style="max-height: 600px; object-fit: cover; object-position: center;"
+                 fetchpriority="<?= $index === 0 ? 'high' : 'auto' ?>">
+          <?php endif; ?>
+          <?php if (!empty($linkUrl)): ?>
+            </a>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <?php if (count($banners ?? []) > 1): ?>
+      <button class="carousel-control-prev" type="button" data-bs-target="#bannerSlider" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#bannerSlider" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+      </button>
+    <?php endif; ?>
+  </div>
+</section>
+<?php else: ?>
+<!-- Hero (fallback when no banners) -->
 <section class="bg-light rounded-4 shadow-sm my-4 my-md-5" style="background:linear-gradient(135deg,#f8f9fa,#eef6ff)">
   <div class="container py-5 py-md-6 px-3 px-md-5">
     <div class="row g-4 align-items-center">
       <div class="col-lg-7 text-center text-lg-start">
-        <h1 class="fw-semibold mb-2" style="font-size:clamp(1.75rem,4vw,2.5rem);">Discover products you’ll love</h1>
+        <h1 class="fw-semibold mb-2" style="font-size:clamp(1.75rem,4vw,2.5rem);">Discover products you'll love</h1>
         <p class="text-muted mb-4" style="font-size:clamp(1rem,2.2vw,1.25rem);">Fresh arrivals, curated collections, and the best deals—optimized for fast checkout.</p>
         <div class="d-flex gap-2 justify-content-center justify-content-lg-start flex-wrap">
           <a href="/products" class="btn btn-primary btn-lg"><i class="bi bi-shop me-2"></i>Shop Now</a>
@@ -13,6 +66,7 @@
     </div>
   </div>
 </section>
+<?php endif; ?>
 
 <?php if (!empty($featured_collections ?? [])): ?>
 <section class="py-3">

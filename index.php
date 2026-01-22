@@ -187,6 +187,15 @@ $router->get('/admin/collections/(?P<id>\d+)/edit', 'AdminCollectionsController@
 $router->post('/admin/collections/(?P<id>\d+)', 'AdminCollectionsController@update', ['perm' => 'collections.write']);
 $router->post('/admin/collections/(?P<id>\d+)/delete', 'AdminCollectionsController@destroy', ['perm' => 'collections.write']);
 
+// Admin Banners
+$router->get('/admin/banners', 'AdminBannersController@index', ['perm' => 'collections.write']);
+$router->get('/admin/banners/create', 'AdminBannersController@create', ['perm' => 'collections.write']);
+$router->post('/admin/banners', 'AdminBannersController@store', ['perm' => 'collections.write']);
+$router->get('/admin/banners/(?P<id>\d+)/edit', 'AdminBannersController@edit', ['perm' => 'collections.write']);
+$router->post('/admin/banners/(?P<id>\d+)', 'AdminBannersController@update', ['perm' => 'collections.write']);
+$router->post('/admin/banners/(?P<id>\d+)/delete', 'AdminBannersController@destroy', ['perm' => 'collections.write']);
+$router->post('/admin/banners/reorder', 'AdminBannersController@reorder', ['perm' => 'collections.write']);
+
 // Admin Reports
 $router->get('/admin/reports', 'AdminReportsController@index', ['perm' => 'reports.read']);
 

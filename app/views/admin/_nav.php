@@ -7,6 +7,7 @@
 
     <a href="/admin/products" class="btn btn-outline-secondary">Products</a>
     <a href="/admin/collections" class="btn btn-outline-secondary">Collections</a>
+    <a href="/admin/banners" class="btn btn-outline-secondary">Banners</a>
     <a href="/admin/users" class="btn btn-outline-secondary">Users</a>
     <a href="/admin/customers" class="btn btn-outline-secondary">Customers</a>
     <a href="/admin/roles" class="btn btn-outline-secondary">Roles</a>
