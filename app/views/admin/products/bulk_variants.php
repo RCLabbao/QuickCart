@@ -1,7 +1,5 @@
 <?php use function App\Core\csrf_field; ?>
-
-<!-- Hidden CSRF token for JavaScript -->
-<input type="hidden" name="_token" value="<?= $_SESSION['_token'] ?? '' ?>">
+<?= csrf_field() ?>
 
 <!-- Bulk Variants Header -->
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -154,10 +152,57 @@
         <h5 class="modal-title">Merging Variants...</h5>
       </div>
       <div class="modal-body text-center py-4">
-        <div class="spinner-border text-primary mb-3" role="status">
+        <div id="loadingSpinner" class="spinner-border text-primary mb-3" role="status">
           <span class="visually-hidden">Loading...</span>
         </div>
-        <p class="mb-0" id="progressStatus">Processing variant groups...</p>
+        <p class="mb-2" id="progressStatus">Processing <?= $totalGroups ?> variant groups with <?= $totalProducts ?> products...</p>
+        <div class="progress" style="height: 6px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+        </div>
+      </div>
+      <div class="modal-footer d-none" id="resultFooter">
+        <button type="button" class="btn btn-primary" onclick="location.reload()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Results Modal -->
+<div class="modal fade" id="resultsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>Merge Complete!</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-center mb-4">
+          <div class="display-4 text-success mb-2">
+            <i class="bi bi-diagram-3"></i>
+          </div>
+          <h4>Variants Merged Successfully</h4>
+        </div>
+        <div class="row text-center">
+          <div class="col-6">
+            <div class="display-6 fw-bold text-primary" id="resultGroups">0</div>
+            <div class="text-muted">Variant Groups</div>
+          </div>
+          <div class="col-6">
+            <div class="display-6 fw-bold text-success" id="resultProducts">0</div>
+            <div class="text-muted">Products Merged</div>
+          </div>
+        </div>
+        <?php if (!empty($variantGroups)): ?>
+        <div class="alert alert-info mt-3 mb-0">
+          <i class="bi bi-info-circle me-2"></i>
+          <strong>What's Next?</strong><br>
+          <small>Your products have been organized as variants. You can now edit the parent products to manage pricing, stock, and images for all variants at once.</small>
+        </div>
+        <?php endif; ?>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Stay Here</button>
+        <button type="button" class="btn btn-primary" onclick="location.reload()">Refresh Page</button>
       </div>
     </div>
   </div>
@@ -165,34 +210,66 @@
 
 <script>
 function bulkMergeAllVariants() {
-  if (!confirm('Are you sure you want to merge all detected variants? This will link products together as variants.')) {
+  if (!confirm(`Are you sure you want to merge all <?= $totalGroups ?> detected variant groups?\n\nThis will link <?= $totalProducts ?> products together as variants.`)) {
     return;
   }
 
   const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+  const resultsModal = new bootstrap.Modal(document.getElementById('resultsModal'));
+
+  // Get CSRF token
+  const tokenInput = document.querySelector('input[name="_token"]');
+  if (!tokenInput) {
+    alert('CSRF token not found. Please refresh the page and try again.');
+    return;
+  }
+
   progressModal.show();
+
+  // Simulate progress updates
+  let progress = 0;
+  const progressInterval = setInterval(() => {
+    progress += 10;
+    if (progress > 90) clearInterval(progressInterval);
+  }, 500);
 
   fetch('/admin/products/bulk-merge-variants', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: '_token=' + document.querySelector('[name="_token"]').value
+    body: '_token=' + encodeURIComponent(tokenInput.value)
   })
-  .then(r => r.json())
+  .then(r => {
+    clearInterval(progressInterval);
+    if (!r.ok) {
+      throw new Error('Server returned ' + r.status);
+    }
+    return r.json();
+  })
   .then(data => {
     progressModal.hide();
+    clearInterval(progressInterval);
+
     if (data.success) {
-      alert(`Successfully merged ${data.merged_groups} variant groups with ${data.merged_products} products!`);
+      // Update results modal
+      document.getElementById('resultGroups').textContent = data.merged_groups || 0;
+      document.getElementById('resultProducts').textContent = data.merged_products || 0;
+
+      // Show results modal
+      resultsModal.show();
+
       if (data.errors && data.errors.length > 0) {
         console.warn('Some errors occurred:', data.errors);
+        // Optionally show errors to user
       }
-      location.reload();
     } else {
       alert(data.error || 'Failed to merge variants');
     }
   })
   .catch(err => {
     progressModal.hide();
-    alert('Error: ' + err.message);
+    clearInterval(progressInterval);
+    console.error('Error:', err);
+    alert('Error: ' + err.message + '\n\nPlease check the console for details and try again.');
   });
 }
 </script>
