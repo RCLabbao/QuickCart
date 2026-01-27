@@ -20,6 +20,17 @@
   </div>
 </div>
 
+<?php if ($hasVariants && !empty($parentProduct)): ?>
+<!-- Variant Notice -->
+<div class="alert alert-info d-flex align-items-center mb-4">
+  <i class="bi bi-diagram-3 fs-4 me-3"></i>
+  <div>
+    <strong>This is a variant product.</strong>
+    <p class="mb-0">It belongs to the parent product: <a href="/admin/products/<?= (int)$parentProduct['id'] ?>/edit" class="alert-link"><?= htmlspecialchars($parentProduct['title']) ?></a></p>
+  </div>
+</div>
+<?php endif; ?>
+
 <!-- Product Form -->
 <form method="post" enctype="multipart/form-data" action="<?= isset($product)?('/admin/products/'.(int)$product['id']):'/admin/products' ?>" class="row g-4">
   <?= csrf_field() ?>
@@ -103,6 +114,131 @@
       </div>
     </div>
   </div>
+
+  <?php if ($hasVariants && empty($product['parent_product_id'])): ?>
+  <!-- Product Variants Section -->
+  <div class="col-lg-12">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-diagram-3 me-2"></i>Product Variants
+          <span class="badge bg-primary ms-2"><?= count($variants) ?> variants</span>
+        </h5>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addVariantModal">
+          <i class="bi bi-plus-circle me-1"></i>Add Variant
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <?php if (empty($variants)): ?>
+          <div class="text-center py-4">
+            <i class="bi bi-diagram-3 fs-1 text-muted"></i>
+            <p class="text-muted mb-0">No variants yet. Add your first variant.</p>
+          </div>
+        <?php else: ?>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" id="variantsTable">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 60px;"></th>
+                  <th>Variant</th>
+                  <th>FSC</th>
+                  <th>Barcode</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Status</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($variants as $v): ?>
+                <tr data-variant-id="<?= (int)$v['id'] ?>">
+                  <td>
+                    <div class="bg-light rounded" style="width: 40px; height: 40px; overflow: hidden;">
+                      <?php if (!empty($v['image_url'])): ?>
+                        <img src="<?= htmlspecialchars($v['image_url']) ?>" class="w-100 h-100 object-fit-cover">
+                      <?php else: ?>
+                        <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted">
+                          <i class="bi bi-image"></i>
+                        </div>
+                      <?php endif; ?>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge bg-info"><?= htmlspecialchars($v['variant_attributes']) ?></span>
+                  </td>
+                  <td class="variant-fsc"><?= htmlspecialchars($v['fsc'] ?? '-') ?></td>
+                  <td class="variant-barcode"><?= htmlspecialchars($v['barcode'] ?? '-') ?></td>
+                  <td class="variant-price">₱<?= number_format((float)$v['price'], 2) ?></td>
+                  <td class="variant-stock"><?= (int)$v['stock'] ?></td>
+                  <td class="variant-status">
+                    <span class="badge bg-<?= $v['status'] === 'active' ? 'success' : 'secondary' ?>">
+                      <?= ucfirst($v['status']) ?>
+                    </span>
+                  </td>
+                  <td class="text-end">
+                    <a class="btn btn-sm btn-outline-primary" href="/admin/products/<?= (int)$v['id'] ?>/edit" title="Edit">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger delete-variant-btn" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Variant Modal -->
+  <div class="modal fade" id="addVariantModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post" action="/admin/products/<?= (int)$product['id'] ?>/variants" id="addVariantForm">
+          <?= csrf_field() ?>
+          <div class="modal-header">
+            <h5 class="modal-title">Add New Variant</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Variant Attribute <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="variant_attributes" required placeholder="e.g., 38A, 36B, Small">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">FSC</label>
+              <input type="text" class="form-control" name="fsc" placeholder="FSC code">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Barcode</label>
+              <input type="text" class="form-control" name="barcode" placeholder="Barcode">
+            </div>
+            <div class="row">
+              <div class="col-6">
+                <label class="form-label">Price</label>
+                <div class="input-group">
+                  <span class="input-group-text">₱</span>
+                  <input type="number" step="0.01" class="form-control" name="price" value="<?= number_format((float)($product['price'] ?? 0), 2, '.', '') ?>">
+                </div>
+              </div>
+              <div class="col-6">
+                <label class="form-label">Stock</label>
+                <input type="number" class="form-control" name="stock" value="0">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Add Variant</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 
   <!-- Product Settings Sidebar -->
   <div class="col-lg-4">
@@ -231,6 +367,69 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         this.setCustomValidity('');
       }
+    });
+  }
+
+  // Variant Management
+  const variantsTable = document.getElementById('variantsTable');
+  if (variantsTable) {
+    // Handle Add Variant form submission via AJAX
+    const addVariantForm = document.getElementById('addVariantForm');
+    if (addVariantForm) {
+      addVariantForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+
+        fetch(this.action, {
+          method: 'POST',
+          body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            // Close modal and reload page
+            const modalEl = document.getElementById('addVariantModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            location.reload();
+          } else {
+            alert(data.error || 'Failed to add variant');
+          }
+        })
+        .catch(err => alert('Error: ' + err.message));
+      });
+    }
+
+    // Handle variant deletion
+    variantsTable.querySelectorAll('.delete-variant-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        if (!confirm('Are you sure you want to delete this variant?')) return;
+
+        const row = this.closest('tr');
+        const variantId = row.dataset.variantId;
+        const productId = window.location.pathname.split('/')[3];
+
+        fetch(`/admin/products/${productId}/variants/${variantId}/delete`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: '_token=' + document.querySelector('[name="_token"]').value
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            row.remove();
+            // Update badge count
+            const badge = document.querySelector('.card-header .badge');
+            if (badge) {
+              const count = parseInt(badge.textContent) || 0;
+              badge.textContent = Math.max(0, count - 1) + ' variants';
+            }
+          } else {
+            alert(data.error || 'Failed to delete variant');
+          }
+        })
+        .catch(err => alert('Error: ' + err.message));
+      });
     });
   }
 });

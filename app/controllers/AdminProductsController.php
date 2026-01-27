@@ -218,6 +218,32 @@ class AdminProductsController extends Controller
         $collections = DB::pdo()->query('SELECT id,title FROM collections ORDER BY title')->fetchAll();
         $imgs = DB::pdo()->prepare('SELECT * FROM product_images WHERE product_id=? ORDER BY sort_order');
         $imgs->execute([(int)$params['id']]);
+
+        // Fetch variants and parent product info
+        $hasVariants = DB::pdo()->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        $variants = [];
+        $parentProduct = null;
+
+        if ($hasVariants) {
+            // If this is a variant, get parent info
+            if (!empty($p['parent_product_id'])) {
+                $parentStmt = DB::pdo()->prepare('SELECT id,title FROM products WHERE id=?');
+                $parentStmt->execute([$p['parent_product_id']]);
+                $parentProduct = $parentStmt->fetch();
+            }
+
+            // Get all variants of this product (if it's a parent)
+            $variantStmt = DB::pdo()->prepare('
+                SELECT p.*, i.url as image_url
+                FROM products p
+                LEFT JOIN (SELECT product_id, url FROM product_images GROUP BY product_id) i ON i.product_id = p.id
+                WHERE p.parent_product_id = ?
+                ORDER BY p.variant_attributes
+            ');
+            $variantStmt->execute([(int)$params['id']]);
+            $variants = $variantStmt->fetchAll();
+        }
+
         // Tags
         $tagsCsv = '';
         try {
@@ -230,7 +256,17 @@ class AdminProductsController extends Controller
             $ev = DB::pdo()->prepare('SELECT * FROM product_stock_events WHERE product_id=? ORDER BY id DESC LIMIT 20');
             $ev->execute([(int)$params['id']]); $events = $ev->fetchAll();
         } catch (\Throwable $e) { $events = []; }
-        $this->adminView('admin/products/form', ['title' => 'Edit Product', 'product'=>$p,'collections'=>$collections,'images'=>$imgs->fetchAll(),'events'=>$events,'tagsCsv'=>$tagsCsv]);
+        $this->adminView('admin/products/form', [
+            'title' => 'Edit Product',
+            'product'=>$p,
+            'collections'=>$collections,
+            'images'=>$imgs->fetchAll(),
+            'events'=>$events,
+            'tagsCsv'=>$tagsCsv,
+            'variants' => $variants,
+            'parentProduct' => $parentProduct,
+            'hasVariants' => $hasVariants
+        ]);
     }
 
     public function update(array $params): void
@@ -792,6 +828,134 @@ class AdminProductsController extends Controller
             'barcodeGroups' => $barcodeGroups,
             'itemsByKey' => $itemsByKey,
         ]);
+    }
+
+    // Get variants as JSON
+    public function variants(array $params): void
+    {
+        header('Content-Type: application/json');
+        $productId = (int)$params['id'];
+
+        $stmt = DB::pdo()->prepare('
+            SELECT p.*, i.url as image_url
+            FROM products p
+            LEFT JOIN (SELECT product_id, url FROM product_images GROUP BY product_id) i ON i.product_id = p.id
+            WHERE p.parent_product_id = ?
+            ORDER BY p.variant_attributes
+        ');
+        $stmt->execute([$productId]);
+        $variants = $stmt->fetchAll();
+
+        echo json_encode(['variants' => $variants]);
+    }
+
+    // Create new variant
+    public function storeVariant(array $params): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid CSRF token']);
+            return;
+        }
+
+        $productId = (int)$params['id'];
+        $pdo = DB::pdo();
+
+        // Get parent product info
+        $parentStmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
+        $parentStmt->execute([$productId]);
+        $parent = $parentStmt->fetch();
+
+        if (!$parent) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Parent product not found']);
+            return;
+        }
+
+        $variantAttr = trim($_POST['variant_attributes'] ?? '');
+        $fsc = trim($_POST['fsc'] ?? '');
+        $barcode = trim($_POST['barcode'] ?? '');
+        $price = (float)($_POST['price'] ?? $parent['price']);
+        $stock = (int)($_POST['stock'] ?? 0);
+        $status = $_POST['status'] ?? 'active';
+
+        // Create variant title: parent_title + variant_attribute
+        $title = $parent['title'] . ' ' . $variantAttr;
+        $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $title)) . '-' . substr(md5(uniqid()), 0, 6);
+
+        // Insert variant
+        $stmt = $pdo->prepare('
+            INSERT INTO products (title, slug, fsc, barcode, price, stock, status, collection_id, parent_product_id, variant_attributes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ');
+        $stmt->execute([$title, $slug, $fsc ?: null, $barcode ?: null, $price, $stock, $status, $parent['collection_id'], $productId, $variantAttr]);
+
+        $variantId = (int)$pdo->lastInsertId();
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'variant_id' => $variantId,
+            'message' => 'Variant created successfully'
+        ]);
+    }
+
+    // Update variant
+    public function updateVariant(array $params): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid CSRF token']);
+            return;
+        }
+
+        $variantId = (int)$params['variant_id'];
+        $pdo = DB::pdo();
+
+        $fsc = trim($_POST['fsc'] ?? '');
+        $barcode = trim($_POST['barcode'] ?? '');
+        $price = (float)($_POST['price'] ?? 0);
+        $stock = (int)($_POST['stock'] ?? 0);
+        $status = $_POST['status'] ?? 'active';
+        $variantAttr = trim($_POST['variant_attributes'] ?? '');
+
+        $set = ['fsc=?', 'barcode=?', 'price=?', 'stock=?', 'status=?', 'variant_attributes=?'];
+        $vals = [$fsc ?: null, $barcode ?: null, $price, $stock, $status, $variantAttr, $variantId];
+
+        $pdo->prepare('UPDATE products SET ' . implode(',', $set) . ' WHERE id=?')
+            ->execute($vals);
+
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'message' => 'Variant updated']);
+    }
+
+    // Delete variant
+    public function deleteVariant(array $params): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid CSRF token']);
+            return;
+        }
+
+        $variantId = (int)$params['variant_id'];
+        $pdo = DB::pdo();
+
+        // Verify it's actually a variant
+        $stmt = $pdo->prepare('SELECT parent_product_id FROM products WHERE id=?');
+        $stmt->execute([$variantId]);
+        $variant = $stmt->fetch();
+
+        if (!$variant || empty($variant['parent_product_id'])) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Variant not found']);
+            return;
+        }
+
+        $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$variantId]);
+
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'message' => 'Variant deleted']);
     }
 
 }

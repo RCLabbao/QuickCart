@@ -715,6 +715,8 @@ class AdminSyncController extends Controller
      * Examples:
      *   "EDWARD 5IN1 HI CUT BPK SMALL" → ["base_title" => "EDWARD 5IN1 HI CUT BPK", "variant" => "SMALL"]
      *   "EDWARD 5IN1 HI CUT BPK MEDIUM" → ["base_title" => "EDWARD 5IN1 HI CUT BPK", "variant" => "MEDIUM"]
+     *   "BEVERLY UW FULL CUP LACE 38A" → ["base_title" => "BEVERLY UW FULL CUP LACE", "variant" => "38A"]
+     *   "BEVERLY UW FULL CUP LACE 36B" → ["base_title" => "BEVERLY UW FULL CUP LACE", "variant" => "36B"]
      */
     private function extractVariantFromTitle(string $title): array
     {
@@ -724,13 +726,24 @@ class AdminSyncController extends Controller
         }
 
         // Common variant patterns to look for at the end of titles
+        // ORDER MATTERS: More specific patterns must come first
         $sizePatterns = [
-            '\b(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\b$',  // EXTRA LARGE, etc.
-            '\b(XXL|XXXL|XXXXL|2XL|3XL|4XL|5XL)\b$',                 // 2XL, 3XL, etc.
-            '\b(XL|XS)\b$',                                          // XL, XS
-            '\b(LARGE|MEDIUM|SMALL)\b$',                             // LARGE, MEDIUM, SMALL
-            '\b(L|M|S)\b$',                                          // Single letter sizes
-            '\b(\d{1,2})\b$',                                       // Numeric sizes like 36, 37, 38, etc.
+            // Bra sizes: 38A, 36B, 34C, 32DD, 40DD, etc. (must come FIRST - most specific)
+            '\b(\d{2,3}[A-Z]{1,3})\s*$',
+            // Decimal sizes: 28.5, 29.5, etc.
+            '\b(\d{1,2}\.\d{1,2})\s*$',
+            // Extra sizes with numbers: 2XL, 3XL, 4XL, 5XL, 2XS, 3XS, etc.
+            '\b(\d+(?:XL|XS|L|M|S))\b$',
+            // Extra sizes: EXTRA LARGE, EXTRA SMALL, EXTRA LONG, EXTRA SHORT, XXL, XXXL, XXXXL, XXXXXL
+            '\b(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT|XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\b$',
+            // Standard sizes: XL, XS
+            '\b(XL|XS)\b$',
+            // Word sizes: LARGE, MEDIUM, SMALL
+            '\b(LARGE|MEDIUM|SMALL)\b$',
+            // Single letter sizes: L, M, S
+            '\b([LMS])\b$',
+            // Numeric sizes: 36, 37, 38, etc. (standalone numbers at end)
+            '\b(\d{1,2})\s*$',
         ];
 
         $colorPatterns = [

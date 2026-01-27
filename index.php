@@ -225,6 +225,12 @@ $router->get('/sync/stock', 'AdminSyncController@webhook');
 $router->get('/admin/products/search', 'AdminProductsController@search', ['perm' => 'products.read']);
 $router->get('/admin/products/duplicates', 'AdminProductsController@duplicates', ['perm' => 'products.read']);
 
+// Admin Product Variants
+$router->get('/admin/products/(?P<id>\d+)/variants', 'AdminProductsController@variants', ['perm' => 'products.read']);
+$router->post('/admin/products/(?P<id>\d+)/variants', 'AdminProductsController@storeVariant', ['perm' => 'products.write']);
+$router->post('/admin/products/(?P<id>\d+)/variants/(?P<variant_id>\d+)', 'AdminProductsController@updateVariant', ['perm' => 'products.write']);
+$router->post('/admin/products/(?P<id>\d+)/variants/(?P<variant_id>\d+)/delete', 'AdminProductsController@deleteVariant', ['perm' => 'products.write']);
+
 
 
 
