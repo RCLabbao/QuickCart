@@ -25,8 +25,19 @@
 
 <?php if (!empty($error)): ?>
 <!-- Error Message -->
-<div class="alert alert-danger">
-  <i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($error) ?>
+<div class="alert alert-danger d-flex align-items-center">
+  <i class="bi bi-exclamation-triangle fs-4 me-3"></i>
+  <div>
+    <strong>Variant support not enabled</strong>
+    <p class="mb-0"><?= htmlspecialchars($error) ?></p>
+    <form method="post" action="/admin/maintenance/optimize" class="mt-3">
+      <?= csrf_field() ?>
+      <button type="submit" class="btn btn-warning">
+        <i class="bi bi-tools me-2"></i>Enable Variant Support
+      </button>
+      <small class="text-muted d-block mt-2">This will add the necessary database columns to support product variants.</small>
+    </form>
+  </div>
 </div>
 <?php elseif (empty($variantGroups)): ?>
 <!-- No Variants Found -->

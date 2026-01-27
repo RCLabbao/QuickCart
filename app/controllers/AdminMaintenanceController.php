@@ -35,6 +35,7 @@ class AdminMaintenanceController extends Controller
             ['products','stock','products.stock'],
             ['products','sale_price','products.sale_price'],
             ['orders','notes','orders.notes'],
+            ['products','parent_product_id','variants support'],
         ];
         foreach ($checkItems as [$tbl,$col,$label]) {
             try { $checks[$label] = $this->columnExists($pdo, $tbl, $col); } catch (\Throwable $e) { $checks[$label] = false; }
@@ -96,6 +97,25 @@ class AdminMaintenanceController extends Controller
         // Add FSC and barcode columns if missing
         $this->ensureColumn($pdo, 'products','fsc','ALTER TABLE products ADD COLUMN fsc VARCHAR(64) NULL UNIQUE');
         $this->ensureColumn($pdo, 'products','barcode','ALTER TABLE products ADD COLUMN barcode VARCHAR(64) NULL UNIQUE');
+
+        // Add variant support columns if missing (for product variants like sizes, colors)
+        $this->ensureColumn($pdo, 'products','parent_product_id','ALTER TABLE products ADD COLUMN parent_product_id INT NULL AFTER collection_id');
+        $this->ensureColumn($pdo, 'products','variant_attributes','ALTER TABLE products ADD COLUMN variant_attributes VARCHAR(500) NULL AFTER parent_product_id');
+
+        // Add foreign key for parent_product_id if it doesn't exist
+        try {
+            $fkExists = $pdo->query("
+                SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'products'
+                AND COLUMN_NAME = 'parent_product_id'
+                AND REFERENCED_TABLE_NAME IS NOT NULL
+            ")->fetchColumn() > 0;
+
+            if (!$fkExists) {
+                $pdo->exec('ALTER TABLE products ADD FOREIGN KEY (parent_product_id) REFERENCES products(id) ON DELETE SET NULL');
+            }
+        } catch (\Throwable $e) { /* ignore foreign key errors */ }
 
         // Fix image URLs - add /public prefix if missing
         try {
