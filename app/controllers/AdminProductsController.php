@@ -1089,6 +1089,169 @@ class AdminProductsController extends Controller
         ]);
     }
 
+    // Bulk variant detection - scan all products and find potential variant groups
+    public function bulkDetectVariants(): void
+    {
+        $pdo = DB::pdo();
+        $hasVariantsColumn = false;
+        try {
+            $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) { $hasVariantsColumn = false; }
+
+        if (!$hasVariantsColumn) {
+            $this->adminView('admin/products/bulk_variants', [
+                'title' => 'Bulk Variant Detection',
+                'error' => 'Variant support is not enabled in the database. Please ensure the parent_product_id column exists.'
+            ]);
+            return;
+        }
+
+        // Get all products that are not already variants (parent_product_id IS NULL)
+        $stmt = $pdo->query('
+            SELECT id, title, fsc, price, stock, status, collection_id
+            FROM products
+            WHERE parent_product_id IS NULL OR parent_product_id = 0
+            ORDER BY title
+        ');
+        $products = $stmt->fetchAll();
+
+        // Group products by base title
+        $groups = [];
+        $productGroups = [];
+
+        foreach ($products as $product) {
+            $extracted = $this->extractBaseTitle($product['title']);
+            $baseTitle = $extracted;
+
+            // Only group if base title is different from full title and meaningful
+            if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
+                if (!isset($groups[$baseTitle])) {
+                    $groups[$baseTitle] = [];
+                }
+                $groups[$baseTitle][] = $product;
+            }
+        }
+
+        // Filter to only show groups with multiple products
+        $variantGroups = array_filter($groups, function($group) {
+            return count($group) > 1;
+        });
+
+        // Sort by group name
+        ksort($variantGroups);
+
+        $this->adminView('admin/products/bulk_variants', [
+            'title' => 'Bulk Variant Detection',
+            'variantGroups' => $variantGroups,
+            'totalGroups' => count($variantGroups),
+            'totalProducts' => array_sum(array_map('count', $variantGroups))
+        ]);
+    }
+
+    // Bulk merge all detected variants
+    public function bulkMergeVariants(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid CSRF token']);
+            return;
+        }
+
+        $pdo = DB::pdo();
+        $hasVariantsColumn = false;
+        try {
+            $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) { $hasVariantsColumn = false; }
+
+        if (!$hasVariantsColumn) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Variant support not enabled']);
+            return;
+        }
+
+        // Get all products that are not already variants
+        $stmt = $pdo->query('
+            SELECT id, title, fsc, price, stock, status, collection_id
+            FROM products
+            WHERE parent_product_id IS NULL OR parent_product_id = 0
+            ORDER BY title
+        ');
+        $products = $stmt->fetchAll();
+
+        // Group products by base title
+        $groups = [];
+        foreach ($products as $product) {
+            $extracted = $this->extractBaseTitle($product['title']);
+            $baseTitle = $extracted;
+
+            if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
+                if (!isset($groups[$baseTitle])) {
+                    $groups[$baseTitle] = [];
+                }
+                $groups[$baseTitle][] = $product;
+            }
+        }
+
+        // Merge each group
+        $mergedGroups = 0;
+        $mergedProducts = 0;
+        $errors = [];
+
+        foreach ($groups as $baseTitle => $groupProducts) {
+            if (count($groupProducts) <= 1) continue;
+
+            // Sort by ID to use the first/oldest as parent
+            usort($groupProducts, function($a, $b) {
+                return $a['id'] - $b['id'];
+            });
+
+            $parentProduct = $groupProducts[0];
+            $parentId = $parentProduct['id'];
+
+            // Update parent title to base title if it's not already
+            if ($parentProduct['title'] !== $baseTitle) {
+                try {
+                    $pdo->prepare('UPDATE products SET title=? WHERE id=?')
+                        ->execute([$baseTitle, $parentId]);
+                } catch (\Throwable $e) {
+                    $errors[] = "Could not update parent product ID {$parentId}: " . $e->getMessage();
+                }
+            }
+
+            // Link other products as variants
+            foreach (array_slice($groupProducts, 1) as $variantProduct) {
+                $variantId = $variantProduct['id'];
+
+                // Extract variant attribute
+                $variantAttr = trim(substr($variantProduct['title'], strlen($baseTitle)));
+                if ($variantAttr === '') {
+                    $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
+                }
+
+                try {
+                    $pdo->prepare('
+                        UPDATE products
+                        SET parent_product_id = ?, variant_attributes = ?
+                        WHERE id = ?
+                    ')->execute([$parentId, $variantAttr, $variantId]);
+                    $mergedProducts++;
+                } catch (\Throwable $e) {
+                    $errors[] = "Could not link product ID {$variantId}: " . $e->getMessage();
+                }
+            }
+
+            $mergedGroups++;
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'merged_groups' => $mergedGroups,
+            'merged_products' => $mergedProducts,
+            'errors' => $errors
+        ]);
+    }
+
 }
 
 

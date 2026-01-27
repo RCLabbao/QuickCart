@@ -18,6 +18,9 @@
        href="/admin/products?show_variants=<?= $showVariants ? '0' : '1' ?>">
       <i class="bi bi-diagram-3 me-2"></i><?= $showVariants ? 'Hide Variants' : 'Show Variants' ?>
     </a>
+    <a class="btn btn-outline-info" href="/admin/products/bulk-variants">
+      <i class="bi bi-diagram-3 me-2"></i>Bulk Detect Variants
+    </a>
 
     <div class="btn-group">
       <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">

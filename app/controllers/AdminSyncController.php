@@ -327,57 +327,9 @@ class AdminSyncController extends Controller
                 $stock = (int)($row['TotalSOH'] ?? 0);
                 $category = trim((string)($row['Categorycode'] ?? ''));
                 $ptype = trim((string)($row['ProductType'] ?? ''));
-                // For variants, first try ProductType column, then extract from title
-                $variantAttributes = null;
-                $parentProductId = null;
-                $parentTitle = $title; // Default: use current title as parent
-                $hasVariantsColumn = false;
-                try {
-                    $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
-                } catch (\Throwable $e) { $hasVariantsColumn = false; }
-
-                if ($hasVariantsColumn) {
-                    // First, check if ProductType column contains variant info (e.g., "Size: M, Color: Red")
-                    if ($ptype !== '' && strtoupper($ptype) !== strtoupper($title)) {
-                        $variantAttributes = $ptype;
-                        // Keep parent as current title since ProductType is separate
-                    } else {
-                        // ProductType is empty or same as title - try to extract variant from the title itself
-                        $extracted = $this->extractVariantFromTitle($title);
-                        if ($extracted['variant'] !== '') {
-                            $variantAttributes = $extracted['variant'];
-                            $parentTitle = $extracted['base_title'];
-                        }
-                    }
-
-                    // If we have a variant, check if parent product exists or create it
-                    if ($variantAttributes !== '' && !$dryRun) {
-                        $parentCheck = $pdo->prepare('SELECT id FROM products WHERE title=? AND (parent_product_id IS NULL OR parent_product_id=0) LIMIT 1');
-                        $parentCheck->execute([$parentTitle]);
-                        $existingParent = $parentCheck->fetchColumn();
-                        if ($existingParent) {
-                            $parentProductId = (int)$existingParent;
-                        } else {
-                            // Create parent product as placeholder
-                            $parentSlug = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$parentTitle));
-                            $parentSlug = trim($parentSlug, '-');
-                            if ($parentSlug === '') {
-                                $parentSlug = 'product-'.substr(md5($parentTitle . microtime(true)), 0, 6);
-                            }
-                            // Ensure unique slug for parent
-                            $baseSlug = $parentSlug; $suffix = 1;
-                            while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($parentSlug))->fetchColumn() > 0) {
-                                $parentSlug = $baseSlug.'-'.$suffix++;
-                                if ($suffix > 1000) break;
-                            }
-                            $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'draft\',0,?, NULL, NULL, NOW())')
-                                ->execute([$parentTitle,$parentSlug,'',0,0,$collectionId]);
-                            $parentProductId = (int)$pdo->lastInsertId();
-                        }
-                    }
-                }
 
                 // Resolve/ensure collection using category_code when available; otherwise fall back to slug/title
+                // NOTE: This must happen BEFORE variant detection so parent products get the correct collection
                 $collectionId = null; $catSlug = '';
                 if ($category !== '') {
                     if ($hasCategoryCode) {
@@ -427,6 +379,56 @@ class AdminSyncController extends Controller
                         }
                     }
                     $collectionId = $cid ? (int)$cid : null;
+                }
+                // For variants, first try ProductType column, then extract from title
+                // NOTE: This must happen AFTER collection resolution so parent products get the correct collection
+                $variantAttributes = null;
+                $parentProductId = null;
+                $parentTitle = $title; // Default: use current title as parent
+                $hasVariantsColumn = false;
+                try {
+                    $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+                } catch (\Throwable $e) { $hasVariantsColumn = false; }
+
+                if ($hasVariantsColumn) {
+                    // First, check if ProductType column contains variant info (e.g., "Size: M, Color: Red")
+                    if ($ptype !== '' && strtoupper($ptype) !== strtoupper($title)) {
+                        $variantAttributes = $ptype;
+                        // Keep parent as current title since ProductType is separate
+                    } else {
+                        // ProductType is empty or same as title - try to extract variant from the title itself
+                        $extracted = $this->extractVariantFromTitle($title);
+                        if ($extracted['variant'] !== '') {
+                            $variantAttributes = $extracted['variant'];
+                            $parentTitle = $extracted['base_title'];
+                        }
+                    }
+
+                    // If we have a variant, check if parent product exists or create it
+                    if ($variantAttributes !== '' && !$dryRun) {
+                        $parentCheck = $pdo->prepare('SELECT id FROM products WHERE title=? AND (parent_product_id IS NULL OR parent_product_id=0) LIMIT 1');
+                        $parentCheck->execute([$parentTitle]);
+                        $existingParent = $parentCheck->fetchColumn();
+                        if ($existingParent) {
+                            $parentProductId = (int)$existingParent;
+                        } else {
+                            // Create parent product as placeholder
+                            $parentSlug = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$parentTitle));
+                            $parentSlug = trim($parentSlug, '-');
+                            if ($parentSlug === '') {
+                                $parentSlug = 'product-'.substr(md5($parentTitle . microtime(true)), 0, 6);
+                            }
+                            // Ensure unique slug for parent
+                            $baseSlug = $parentSlug; $suffix = 1;
+                            while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($parentSlug))->fetchColumn() > 0) {
+                                $parentSlug = $baseSlug.'-'.$suffix++;
+                                if ($suffix > 1000) break;
+                            }
+                            $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'draft\',0,?, NULL, NULL, NOW())')
+                                ->execute([$parentTitle,$parentSlug,'',0,0,$collectionId]);
+                            $parentProductId = (int)$pdo->lastInsertId();
+                        }
+                    }
                 }
                 // Find product by FSC
                 $pst = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE fsc=?');

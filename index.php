@@ -231,6 +231,9 @@ $router->post('/admin/products/(?P<id>\d+)/variants', 'AdminProductsController@s
 $router->post('/admin/products/(?P<id>\d+)/variants/(?P<variant_id>\d+)', 'AdminProductsController@updateVariant', ['perm' => 'products.write']);
 $router->post('/admin/products/(?P<id>\d+)/variants/(?P<variant_id>\d+)/delete', 'AdminProductsController@deleteVariant', ['perm' => 'products.write']);
 $router->post('/admin/products/(?P<id>\d+)/merge-variants', 'AdminProductsController@mergeVariants', ['perm' => 'products.write']);
+// Bulk Variant Detection
+$router->get('/admin/products/bulk-variants', 'AdminProductsController@bulkDetectVariants', ['perm' => 'products.read']);
+$router->post('/admin/products/bulk-merge-variants', 'AdminProductsController@bulkMergeVariants', ['perm' => 'products.write']);
 
 
 
