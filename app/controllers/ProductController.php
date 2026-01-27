@@ -44,7 +44,46 @@ class ProductController extends Controller
         $images = $pdo->prepare('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order');
         $images->execute([$product['id']]);
         $gallery = $images->fetchAll();
-        $this->view('products/show', compact('product', 'gallery'));
+
+        // Fetch variants if this is a parent product
+        $variants = [];
+        $parentProduct = null;
+        $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+
+        if ($hasVariants) {
+            // If this is a variant, get parent and sibling variants
+            if (!empty($product['parent_product_id'])) {
+                $parentStmt = $pdo->prepare('SELECT * FROM products WHERE id = ? AND status = "active"');
+                $parentStmt->execute([$product['parent_product_id']]);
+                $parentProduct = $parentStmt->fetch();
+
+                if ($parentProduct) {
+                    // Get all variants of the parent
+                    $variantStmt = $pdo->prepare('
+                        SELECT p.*, i.url as image_url
+                        FROM products p
+                        LEFT JOIN (SELECT product_id, url FROM product_images GROUP BY product_id) i ON i.product_id = p.id
+                        WHERE p.parent_product_id = ? AND p.status = "active"
+                        ORDER BY p.variant_attributes
+                    ');
+                    $variantStmt->execute([$product['parent_product_id']]);
+                    $variants = $variantStmt->fetchAll();
+                }
+            } else {
+                // This is a parent product, get its variants
+                $variantStmt = $pdo->prepare('
+                    SELECT p.*, i.url as image_url
+                    FROM products p
+                    LEFT JOIN (SELECT product_id, url FROM product_images GROUP BY product_id) i ON i.product_id = p.id
+                    WHERE p.parent_product_id = ? AND p.status = "active"
+                    ORDER BY p.variant_attributes
+                ');
+                $variantStmt->execute([$product['id']]);
+                $variants = $variantStmt->fetchAll();
+            }
+        }
+
+        $this->view('products/show', compact('product', 'gallery', 'variants', 'parentProduct', 'hasVariants'));
     }
 
     public function search(): void

@@ -140,6 +140,39 @@
         <?= price((float)$product['price']) ?>
       <?php endif; ?>
     </div>
+
+    <?php if (!empty($variants) && $hasVariants): ?>
+    <!-- Variant Selector -->
+    <div class="mb-3 p-3 bg-light rounded">
+      <h6 class="mb-2"><i class="bi bi-diagram-3 me-1"></i>Select Variant:</h6>
+      <div class="d-flex flex-wrap gap-2" id="variantSelector">
+        <?php foreach ($variants as $v): ?>
+          <?php
+          $isSelected = (int)$v['id'] === (int)$product['id'];
+          $variantId = (int)$v['id'];
+          $variantAttr = htmlspecialchars($v['variant_attributes'] ?? '');
+          $variantPrice = (float)$v['price'];
+          $variantStock = (int)$v['stock'];
+          $outOfStock = $variantStock <= 0;
+          ?>
+          <button class="variant-btn btn btn-sm <?= $isSelected ? 'btn-dark' : 'btn-outline-dark' ?>"
+                  data-variant-id="<?= $variantId ?>"
+                  data-variant-price="<?= $variantPrice ?>"
+                  data-variant-stock="<?= $variantStock ?>"
+                  data-variant-fsc="<?= htmlspecialchars($v['fsc'] ?? '') ?>"
+                  <?= $outOfStock ? 'disabled' : '' ?>>
+            <span class="badge bg-info"><?= $variantAttr ?></span>
+            <?php if (!$isSelected): ?>
+              <small class="d-block text-muted">₱<?= number_format($variantPrice, 2) ?></small>
+            <?php endif; ?>
+            <?php if ($outOfStock): ?>
+              <small class="d-block text-danger">Out of stock</small>
+            <?php endif; ?>
+          </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
     <form id="pdpAddToCartForm" class="addToCart mb-3" method="post" action="/cart/add">
       <?= \App\Core\csrf_field() ?>
       <input type="hidden" name="product_id" value="<?= (int)$product['id'] ?>"/>
@@ -305,6 +338,81 @@ document.addEventListener('DOMContentLoaded', function() {
     new bootstrap.Carousel(modalCarousel, {
       interval: false,
       wrap: true
+    });
+  }
+
+  // Variant Selection
+  const variantBtns = document.querySelectorAll('.variant-btn');
+  variantBtns.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const variantId = this.dataset.variantId;
+      const variantPrice = parseFloat(this.dataset.variantPrice);
+      const variantStock = parseInt(this.dataset.variantStock);
+      const variantFsc = this.dataset.variantFsc;
+
+      // Update selected button style
+      variantBtns.forEach(b => {
+        b.classList.remove('btn-dark');
+        b.classList.add('btn-outline-dark');
+      });
+      this.classList.remove('btn-outline-dark');
+      this.classList.add('btn-dark');
+
+      // Update form
+      const form = document.getElementById('pdpAddToCartForm');
+      const productIdInput = form.querySelector('input[name="product_id"]');
+      const qtyInput = form.querySelector('input[name="qty"]');
+      const submitBtn = form.querySelector('button[type="submit"]');
+
+      productIdInput.value = variantId;
+
+      // Update price display and add to cart button
+      const priceDisplay = document.querySelector('.fs-3.fw-bold');
+      const outOfStock = variantStock <= 0;
+
+      // Create new price HTML
+      let priceHtml = '';
+      if (outOfStock) {
+        priceHtml = '<span class="text-danger me-2">₱' + number_format(variantPrice, 2) + '</span>';
+      } else {
+        priceHtml = '₱' + number_format(variantPrice, 2);
+      }
+      priceDisplay.innerHTML = priceHtml;
+
+      // Update add to cart button
+      submitBtn.textContent = outOfStock ? 'Sold out' : 'Add to cart';
+      submitBtn.disabled = outOfStock;
+      qtyInput.disabled = outOfStock;
+
+      // Update quantity buttons
+      const qtyBtns = form.querySelectorAll('button[data-qty]');
+      qtyBtns.forEach(qtyBtn => {
+        qtyBtn.disabled = outOfStock;
+      });
+
+      // Update stock badge if exists
+      const stockInfo = document.querySelector('.small.mb-2');
+      if (stockInfo) {
+        if (outOfStock) {
+          stockInfo.innerHTML = '<span class="badge bg-secondary">Out of stock</span><span class="text-muted"> • Free pickup available</span>';
+        } else if (variantStock <= 3) {
+          stockInfo.innerHTML = '<span class="badge bg-warning text-dark">Low stock: ' + variantStock + ' units</span><span class="text-muted"> • Free pickup available</span>';
+        } else {
+          stockInfo.innerHTML = '<span class="badge bg-success text-white">In stock: ' + variantStock + ' units</span><span class="text-muted"> • Free pickup available</span>';
+        }
+      }
+
+      // Update page URL without reload
+      const newUrl = '/products/' + (variantFsc || variantId);
+      window.history.replaceState({}, '', newUrl);
+    });
+  });
+
+  // Helper function for number formatting
+  function number_format(number, decimals) {
+    return number.toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
     });
   }
 });

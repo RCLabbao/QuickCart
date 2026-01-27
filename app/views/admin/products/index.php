@@ -13,6 +13,10 @@
     <a class="btn btn-outline-warning" href="/admin/products/duplicates">
       <i class="bi bi-exclamation-diamond me-2"></i>Find Duplicates
     </a>
+    <a class="btn btn-outline-<?= (isset($_GET['show_variants']) && $_GET['show_variants'] === '1') ? 'primary' : 'secondary') ?>"
+       href="/admin/products?show_variants=<?= (isset($_GET['show_variants']) && $_GET['show_variants'] === '1') ? '0' : '1' ?>">
+      <i class="bi bi-diagram-3 me-2"></i><?= (isset($_GET['show_variants']) && $_GET['show_variants'] === '1') ? 'Hide Variants' : 'Show Variants' ?>
+    </a>
 
     <div class="btn-group">
       <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">

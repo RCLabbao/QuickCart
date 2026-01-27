@@ -193,6 +193,89 @@
     </div>
   </div>
 
+  <?php if (!empty($suggestedVariants)): ?>
+  <!-- Suggested Variants Section -->
+  <div class="col-lg-12">
+    <div class="card border-0 shadow-sm mb-4 border-warning">
+      <div class="card-header bg-warning bg-opacity-10 border-bottom d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-lightbulb me-2"></i>Suggested Variants Found
+          <span class="badge bg-warning ms-2"><?= count($suggestedVariants) ?> products</span>
+        </h5>
+        <button class="btn btn-sm btn-warning" onclick="mergeAllSuggestedVariants()">
+          <i class="bi bi-diagram-3 me-1"></i>Merge All as Variants
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-info-circle me-2"></i>
+          These products appear to be variants of this product based on similar titles. Select which ones to merge, or click "Merge All" to combine them all.
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0" id="suggestedVariantsTable">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 50px;">
+                  <input type="checkbox" class="form-check-input" id="selectAllSuggested" onchange="toggleAllSuggested(this)">
+                </th>
+                <th style="width: 60px;"></th>
+                <th>Product Title</th>
+                <th>FSC</th>
+                <th>Barcode</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Variant Attribute (auto-detected)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($suggestedVariants as $sv): ?>
+                <?php
+                // Extract variant attribute
+                $variantAttr = $sv['title'];
+                $baseTitle = preg_replace('/\s+(38A|36B|34C|32A|42B|40C|\d{2,3}[A-Z]{1,3}|XL|XS|LARGE|MEDIUM|SMALL|XXL|XXXL|2XL|3XL|4XL|5XL)$/i', '', $sv['title']);
+                if (stripos($sv['title'], $baseTitle) === 0 && strlen($baseTitle) > 5) {
+                  $variantAttr = trim(substr($sv['title'], strlen($baseTitle)));
+                }
+                ?>
+              <tr data-variant-id="<?= (int)$sv['id'] ?>">
+                <td>
+                  <input type="checkbox" class="form-check-input suggested-variant-checkbox" value="<?= (int)$sv['id'] ?>">
+                </td>
+                <td>
+                  <div class="bg-light rounded" style="width: 40px; height: 40px; overflow: hidden;">
+                    <?php if (!empty($sv['image_url'])): ?>
+                      <img src="<?= htmlspecialchars($sv['image_url']) ?>" class="w-100 h-100 object-fit-cover">
+                    <?php else: ?>
+                      <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted">
+                        <i class="bi bi-image"></i>
+                      </div>
+                    <?php endif; ?>
+                  </div>
+                </td>
+                <td>
+                  <div class="fw-semibold"><?= htmlspecialchars($sv['title']) ?></div>
+                  <small class="text-muted">ID: #<?= (int)$sv['id'] ?></small>
+                </td>
+                <td><?= htmlspecialchars($sv['fsc'] ?? '-') ?></td>
+                <td><?= htmlspecialchars($sv['barcode'] ?? '-') ?></td>
+                <td>₱<?= number_format((float)$sv['price'], 2) ?></td>
+                <td><?= (int)$sv['stock'] ?></td>
+                <td><span class="badge bg-info"><?= htmlspecialchars($variantAttr) ?></span></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3 text-end">
+          <button class="btn btn-warning" onclick="mergeSelectedSuggestedVariants()">
+            <i class="bi bi-diagram-3 me-1"></i>Merge Selected as Variants
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <!-- Add Variant Modal -->
   <div class="modal fade" id="addVariantModal" tabindex="-1">
     <div class="modal-dialog">
@@ -431,6 +514,56 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(err => alert('Error: ' + err.message));
       });
     });
+  }
+
+  // Suggested Variants Management
+  window.toggleAllSuggested = function(checkbox) {
+    document.querySelectorAll('.suggested-variant-checkbox').forEach(cb => {
+      cb.checked = checkbox.checked;
+    });
+  };
+
+  window.mergeSelectedSuggestedVariants = function() {
+    const selected = Array.from(document.querySelectorAll('.suggested-variant-checkbox:checked')).map(cb => cb.value);
+    if (selected.length === 0) {
+      alert('Please select at least one product to merge.');
+      return;
+    }
+    mergeVariantsRequest(selected);
+  };
+
+  window.mergeAllSuggestedVariants = function() {
+    const allIds = Array.from(document.querySelectorAll('.suggested-variant-checkbox')).map(cb => cb.value);
+    if (allIds.length === 0) {
+      alert('No suggested variants to merge.');
+      return;
+    }
+    if (!confirm(`Merge all ${allIds.length} suggested products as variants?`)) {
+      return;
+    }
+    mergeVariantsRequest(allIds);
+  };
+
+  function mergeVariantsRequest(variantIds) {
+    const productId = window.location.pathname.split('/')[3];
+    const formData = new FormData();
+    formData.append('_token', document.querySelector('[name="_token"]').value);
+    variantIds.forEach(id => formData.append('variant_ids[]', id));
+
+    fetch(`/admin/products/${productId}/merge-variants`, {
+      method: 'POST',
+      body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert(data.error || 'Failed to merge variants');
+      }
+    })
+    .catch(err => alert('Error: ' + err.message));
   }
 });
 </script>

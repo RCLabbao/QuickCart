@@ -230,6 +230,7 @@ $router->get('/admin/products/(?P<id>\d+)/variants', 'AdminProductsController@va
 $router->post('/admin/products/(?P<id>\d+)/variants', 'AdminProductsController@storeVariant', ['perm' => 'products.write']);
 $router->post('/admin/products/(?P<id>\d+)/variants/(?P<variant_id>\d+)', 'AdminProductsController@updateVariant', ['perm' => 'products.write']);
 $router->post('/admin/products/(?P<id>\d+)/variants/(?P<variant_id>\d+)/delete', 'AdminProductsController@deleteVariant', ['perm' => 'products.write']);
+$router->post('/admin/products/(?P<id>\d+)/merge-variants', 'AdminProductsController@mergeVariants', ['perm' => 'products.write']);
 
 
 

@@ -57,6 +57,13 @@ class AdminProductsController extends Controller
             $where[] = 'COALESCE(stock,0) <= 3';
         }
 
+        // Variant filter - by default hide variants, only show parent products
+        $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        $showVariants = isset($_GET['show_variants']) && $_GET['show_variants'] === '1';
+        if ($hasVariants && !$showVariants) {
+            $where[] = '(parent_product_id IS NULL OR parent_product_id = 0)';
+        }
+
         // Pagination setup
         $page = max(1, (int)($_GET['page'] ?? 1));
         $perPage = isset($_GET['per_page']) && in_array((int)$_GET['per_page'], [25, 50, 100]) ? (int)$_GET['per_page'] : 50;
@@ -123,6 +130,7 @@ class AdminProductsController extends Controller
     public function create(): void
     {
         $collections = DB::pdo()->query('SELECT id,title FROM collections ORDER BY title')->fetchAll();
+        $hasVariants = DB::pdo()->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
         // Initialize empty product for create form
         $product = [
             'id' => null,
@@ -140,7 +148,8 @@ class AdminProductsController extends Controller
             'collection_id' => null,
             'featured' => 0,
             'created_at' => null,
-            'updated_at' => null
+            'updated_at' => null,
+            'parent_product_id' => null
         ];
         $this->adminView('admin/products/form', [
             'title' => 'Add Product',
@@ -148,7 +157,10 @@ class AdminProductsController extends Controller
             'collections' => $collections,
             'images' => [],
             'events' => [],
-            'tagsCsv' => ''
+            'tagsCsv' => '',
+            'variants' => [],
+            'parentProduct' => null,
+            'hasVariants' => $hasVariants
         ]);
     }
 
@@ -223,6 +235,7 @@ class AdminProductsController extends Controller
         $hasVariants = DB::pdo()->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
         $variants = [];
         $parentProduct = null;
+        $suggestedVariants = [];
 
         if ($hasVariants) {
             // If this is a variant, get parent info
@@ -242,6 +255,25 @@ class AdminProductsController extends Controller
             ');
             $variantStmt->execute([(int)$params['id']]);
             $variants = $variantStmt->fetchAll();
+
+            // Find potential variants - products with similar base title but not already linked
+            // Extract base title by removing common variant patterns from the end
+            $baseTitle = $this->extractBaseTitle($p['title']);
+            if ($baseTitle && strlen($baseTitle) >= 5) {
+                // Find products whose title starts with the base title but are different
+                $suggestStmt = DB::pdo()->prepare('
+                    SELECT p.*, i.url as image_url
+                    FROM products p
+                    LEFT JOIN (SELECT product_id, url FROM product_images GROUP BY product_id) i ON i.product_id = p.id
+                    WHERE p.id != ? AND p.parent_product_id IS NULL
+                    AND (p.title LIKE ? OR p.title LIKE ?)
+                    ORDER BY p.title
+                    LIMIT 20
+                ');
+                $likePattern = $baseTitle . ' %';
+                $suggestStmt->execute([(int)$params['id'], $likePattern, $baseTitle . '%']);
+                $suggestedVariants = $suggestStmt->fetchAll();
+            }
         }
 
         // Tags
@@ -265,7 +297,8 @@ class AdminProductsController extends Controller
             'tagsCsv'=>$tagsCsv,
             'variants' => $variants,
             'parentProduct' => $parentProduct,
-            'hasVariants' => $hasVariants
+            'hasVariants' => $hasVariants,
+            'suggestedVariants' => $suggestedVariants
         ]);
     }
 
@@ -956,6 +989,104 @@ class AdminProductsController extends Controller
 
         header('Content-Type: application/json');
         echo json_encode(['success' => true, 'message' => 'Variant deleted']);
+    }
+
+    // Extract base title by removing variant patterns from the end
+    private function extractBaseTitle(string $title): string
+    {
+        $title = trim($title);
+        if ($title === '') return '';
+
+        // Common variant patterns to remove from the end
+        $patterns = [
+            '\b\d{2,3}[A-Z]{1,3}\s*$',           // Bra sizes: 38A, 36B, 34C, 32DD
+            '\b\d{1,2}\.\d{1,2}\s*$',            // Decimal: 28.5
+            '\b\d+(?:XL|XS|L|M|S)\b$',          // 2XL, 3XL, 2XS
+            '\b(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$',
+            '\b(XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
+            '\b(XL|XS)\s*$',
+            '\b(LARGE|MEDIUM|SMALL)\s*$',
+            '\b([LMS])\s*$',
+            '\b(\d{1,2})\s*$',                 // Standalone numbers
+        ];
+
+        foreach ($patterns as $pattern) {
+            $newTitle = preg_replace('/' . $pattern . '/i', '', $title);
+            $newTitle = trim($newTitle);
+            if ($newTitle !== $title && strlen($newTitle) >= 5) {
+                return $newTitle;
+            }
+        }
+
+        return $title; // Return original if no pattern matched
+    }
+
+    // Merge suggested products as variants
+    public function mergeVariants(array $params): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid CSRF token']);
+            return;
+        }
+
+        $parentId = (int)$params['id'];
+        $variantIds = array_map('intval', $_POST['variant_ids'] ?? []);
+
+        if (empty($variantIds)) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'No variants selected']);
+            return;
+        }
+
+        $pdo = DB::pdo();
+
+        // Get parent product info
+        $parentStmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
+        $parentStmt->execute([$parentId]);
+        $parent = $parentStmt->fetch();
+
+        if (!$parent) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Parent product not found']);
+            return;
+        }
+
+        // Extract variant attributes from each product title
+        $baseTitle = $this->extractBaseTitle($parent['title']);
+        $mergedCount = 0;
+
+        foreach ($variantIds as $variantId) {
+            if ($variantId === $parentId) continue; // Skip parent itself
+
+            // Get variant product
+            $stmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
+            $stmt->execute([$variantId]);
+            $variant = $stmt->fetch();
+
+            if (!$variant) continue;
+
+            // Extract variant attribute from the title
+            $variantAttr = $variant['title'];
+            if (stripos($variantAttr, $baseTitle) === 0) {
+                $variantAttr = trim(substr($variantAttr, strlen($baseTitle)));
+            }
+
+            // Update product to be a variant
+            $updateStmt = $pdo->prepare('
+                UPDATE products
+                SET parent_product_id = ?, variant_attributes = ?
+                WHERE id = ?
+            ');
+            $updateStmt->execute([$parentId, $variantAttr, $variantId]);
+            $mergedCount++;
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'message' => "Merged {$mergedCount} variants successfully"
+        ]);
     }
 
 }
