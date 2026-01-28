@@ -714,6 +714,16 @@ class AdminSyncController extends Controller
             return [];
         }
 
+        // First, check if images already exist for this product
+        $existingStmt = $pdo->prepare('SELECT url FROM product_images WHERE product_id = ? ORDER BY sort_order');
+        $existingStmt->execute([$productId]);
+        $existingImages = $existingStmt->fetchAll(\PDO::FETCH_COLUMN);
+
+        if (!empty($existingImages)) {
+            // Images already exist for this product, return them
+            return $existingImages;
+        }
+
         // Scan for files matching FSC pattern in any product subfolder
         // Pattern: {FSC}-{random}.{ext}
         $pattern = '/' . preg_quote($fsc, '/') . '-[^.]+\.(jpg|jpeg|png|gif|webp)/i';
@@ -728,9 +738,10 @@ class AdminSyncController extends Controller
             if ($file->isFile() && preg_match($pattern, $file->getFilename())) {
                 // Get relative path from public/uploads
                 $relativePath = str_replace(BASE_PATH . '/public/', '', $file->getPathname());
-                $urls[] = '/' . $relativePath;
+                $url = '/' . $relativePath;
+                $urls[] = $url;
 
-                // Also ensure the product's upload folder exists
+                // Ensure the product's upload folder exists
                 $productUploadDir = BASE_PATH . '/public/uploads/products/' . $productId;
                 if (!is_dir($productUploadDir)) {
                     mkdir($productUploadDir, 0755, true);

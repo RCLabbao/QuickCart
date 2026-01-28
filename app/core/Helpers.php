@@ -329,9 +329,10 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             $variantAttr = qc_extract_variant_attribute($variantProduct['original_title']);
 
             try {
+                // Set variant to active status and link to parent
                 $pdo->prepare('
                     UPDATE products
-                    SET parent_product_id = ?, variant_attributes = ?
+                    SET parent_product_id = ?, variant_attributes = ?, status = "active"
                     WHERE id = ?
                 ')->execute([$parentId, $variantAttr, $variantId]);
                 $result['merged_products']++;
