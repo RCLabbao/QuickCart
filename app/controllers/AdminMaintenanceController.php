@@ -529,6 +529,51 @@ class AdminMaintenanceController extends Controller
                 $this->redirect('/admin/maintenance?tab=actions');
             }
 
+    /**
+     * Delete all products (including images, tags, stock events)
+     * This is a destructive operation - requires confirmation
+     */
+    public function deleteAllProducts(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+        $pdo = DB::pdo();
+
+        try {
+            // Get count before deletion for confirmation message
+            $count = (int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
+
+            if ($count === 0) {
+                $_SESSION['success'] = 'No products to delete.';
+                $this->redirect('/admin/maintenance?tab=actions');
+            }
+
+            // Disable foreign key checks to allow cascading deletes
+            $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+
+            // Delete all related data first
+            $pdo->exec('DELETE FROM product_images WHERE product_id IN (SELECT id FROM products)');
+            $pdo->exec('DELETE FROM product_tags WHERE product_id IN (SELECT id FROM products)');
+            $pdo->exec('DELETE FROM product_stock_events WHERE product_id IN (SELECT id FROM products)');
+            $pdo->exec('DELETE FROM products');
+
+            // Re-enable foreign key checks
+            $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+
+            // Reset auto-increment
+            $pdo->exec('ALTER TABLE products AUTO_INCREMENT = 1');
+            $pdo->exec('ALTER TABLE product_images AUTO_INCREMENT = 1');
+            $pdo->exec('ALTER TABLE product_tags AUTO_INCREMENT = 1');
+            $pdo->exec('ALTER TABLE product_stock_events AUTO_INCREMENT = 1');
+
+            $_SESSION['success'] = "Successfully deleted {$count} products (including images, tags, and stock events).";
+        } catch (\Throwable $e) {
+            try { $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); } catch (\Throwable $e2) {}
+            $_SESSION['error'] = 'Failed to delete products: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/maintenance?tab=actions');
+    }
+
     public function createBackup(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }

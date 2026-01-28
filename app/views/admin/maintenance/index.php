@@ -205,6 +205,20 @@
           </div>
         </div>
       </div>
+
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100 border-danger">
+          <div class="card-header bg-white border-bottom border-danger"><h5 class="card-title mb-0 text-danger"><i class="bi bi-trash3 me-2"></i>Delete All Products</h5></div>
+          <div class="card-body">
+            <p class="text-muted mb-4">Permanently delete all products including images, tags, and stock events.</p>
+            <form method="post" action="/admin/maintenance/delete-all-products" onsubmit="return confirmAction('delete ALL products. This cannot be undone!')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-danger w-100"><i class="bi bi-trash me-2"></i>Delete All Products</button>
+            </form>
+            <div class="mt-3"><small class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i><strong>Warning:</strong> This will permanently delete all products and their related data. This cannot be undone!</small></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Reset, Wipe, Wipe Demo are already below in the file and remain accessible within this tab -->

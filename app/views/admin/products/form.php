@@ -114,7 +114,84 @@
       </div>
     </div>
   </div>
+    <!-- Product Settings Sidebar -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-gear me-2"></i>Product Settings
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Status</label>
+          <select class="form-select" name="status">
+            <option value="active" <?= ($product['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
+              Active (Visible to customers)
+            </option>
+            <option value="draft" <?= ($product['status'] ?? '') === 'draft' ? 'selected' : '' ?>>
+              Draft (Hidden from customers)
+            </option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Collection</label>
+          <select class="form-select" name="collection_id">
+            <option value="">— No Collection —</option>
+            <?php foreach ($collections as $c): ?>
+              <option value="<?= (int)$c['id'] ?>" <?= (isset($product) && (int)$product['collection_id'] === (int)$c['id']) ? 'selected' : '' ?>><?= htmlspecialchars($c['title']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
 
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Product Images</label>
+          <input class="form-control" type="file" name="images[]" multiple accept="image/*">
+          <div class="form-text">
+            <i class="bi bi-info-circle me-1"></i>
+            Upload multiple images. First image will be the main product image.
+          </div>
+        </div>
+
+        <?php if (!empty($images)): ?>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Current Images</label>
+          <div class="row g-2">
+            <?php foreach ($images as $index => $img): ?>
+              <div class="col-6">
+                <div class="position-relative">
+                  <img src="<?= htmlspecialchars($img['url']) ?>" class="img-fluid rounded border" alt="Product image">
+                  <?php if ($index === 0): ?>
+                    <span class="position-absolute top-0 start-0 badge bg-primary m-1">Main</span>
+                  <?php endif; ?>
+                  <form method="post" action="/admin/products/<?= (int)$product['id'] ?>/images/<?= (int)$img['id'] ?>/delete" class="position-absolute top-0 end-0 m-1">
+                    <?= csrf_field() ?>
+                    <button class="btn btn-sm btn-danger" onclick="return confirm('Delete this image?')">&times;</button>
+                  </form>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endif; ?>
+
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle me-2"></i>
+            <?= isset($product) ? 'Update Product' : 'Create Product' ?>
+          </button>
+          <?php if (isset($product)): ?>
+            <a href="/admin/products/<?= (int)$product['id'] ?>/delete"
+               class="btn btn-outline-danger"
+               onclick="return confirm('Are you sure you want to delete this product?')">
+              <i class="bi bi-trash me-2"></i>Delete Product
+            </a>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <?php if ($hasVariants && empty($product['parent_product_id'])): ?>
   <!-- Product Variants Section -->
   <div class="col-lg-12">
@@ -322,84 +399,6 @@
     </div>
   </div>
   <?php endif; ?>
-
-  <!-- Product Settings Sidebar -->
-  <div class="col-lg-4">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-gear me-2"></i>Product Settings
-        </h5>
-      </div>
-      <div class="card-body">
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Status</label>
-          <select class="form-select" name="status">
-            <option value="active" <?= ($product['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
-              Active (Visible to customers)
-            </option>
-            <option value="draft" <?= ($product['status'] ?? '') === 'draft' ? 'selected' : '' ?>>
-              Draft (Hidden from customers)
-            </option>
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Collection</label>
-          <select class="form-select" name="collection_id">
-            <option value="">— No Collection —</option>
-            <?php foreach ($collections as $c): ?>
-              <option value="<?= (int)$c['id'] ?>" <?= (isset($product) && (int)$product['collection_id'] === (int)$c['id']) ? 'selected' : '' ?>><?= htmlspecialchars($c['title']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Product Images</label>
-          <input class="form-control" type="file" name="images[]" multiple accept="image/*">
-          <div class="form-text">
-            <i class="bi bi-info-circle me-1"></i>
-            Upload multiple images. First image will be the main product image.
-          </div>
-        </div>
-
-        <?php if (!empty($images)): ?>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Current Images</label>
-          <div class="row g-2">
-            <?php foreach ($images as $index => $img): ?>
-              <div class="col-6">
-                <div class="position-relative">
-                  <img src="<?= htmlspecialchars($img['url']) ?>" class="img-fluid rounded border" alt="Product image">
-                  <?php if ($index === 0): ?>
-                    <span class="position-absolute top-0 start-0 badge bg-primary m-1">Main</span>
-                  <?php endif; ?>
-                  <form method="post" action="/admin/products/<?= (int)$product['id'] ?>/images/<?= (int)$img['id'] ?>/delete" class="position-absolute top-0 end-0 m-1">
-                    <?= csrf_field() ?>
-                    <button class="btn btn-sm btn-danger" onclick="return confirm('Delete this image?')">&times;</button>
-                  </form>
-                </div>
-              </div>
-            <?php endforeach; ?>
-          </div>
-        </div>
-        <?php endif; ?>
-
-        <div class="d-grid gap-2">
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-check-circle me-2"></i>
-            <?= isset($product) ? 'Update Product' : 'Create Product' ?>
-          </button>
-          <?php if (isset($product)): ?>
-            <a href="/admin/products/<?= (int)$product['id'] ?>/delete"
-               class="btn btn-outline-danger"
-               onclick="return confirm('Are you sure you want to delete this product?')">
-              <i class="bi bi-trash me-2"></i>Delete Product
-            </a>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
-  </div>
 </form>
 <style>
 .card {
