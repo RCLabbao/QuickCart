@@ -1,55 +1,6 @@
-<!-- Banner Slider -->
+<!-- Modern Banner Slider -->
 <?php if (!empty($banners ?? [])): ?>
-<section class="my-4 my-md-5">
-  <div id="bannerSlider" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="5000">
-    <div class="carousel-indicators">
-      <?php foreach (($banners ?? []) as $index => $b): ?>
-        <button type="button" data-bs-target="#bannerSlider" data-bs-slide-to="<?= $index ?>" <?= $index === 0 ? 'class="active"' : '' ?> aria-label="Slide <?= $index + 1 ?>"></button>
-      <?php endforeach; ?>
-    </div>
-    <div class="carousel-inner rounded-4 shadow-sm overflow-hidden">
-      <?php foreach (($banners ?? []) as $index => $b): ?>
-        <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
-          <?php
-            $imageUrl = $b['image_url'] ?? '';
-            $mobileImageUrl = $b['mobile_image_url'] ?? '';
-            $linkUrl = $b['link_url'] ?? '';
-            $altText = $b['alt_text'] ?? $b['title'] ?? 'Banner';
-          ?>
-          <?php if (!empty($linkUrl)): ?>
-            <a href="<?= htmlspecialchars($linkUrl) ?>">
-          <?php endif; ?>
-          <!-- Mobile image (shown on small screens) -->
-          <?php if (!empty($mobileImageUrl)): ?>
-            <picture>
-              <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($mobileImageUrl) ?>">
-              <img src="<?= htmlspecialchars($imageUrl) ?>" class="d-block w-100" alt="<?= htmlspecialchars($altText) ?>"
-                   style="max-height: 600px; object-fit: cover; object-position: center;"
-                   fetchpriority="<?= $index === 0 ? 'high' : 'auto' ?>">
-            </picture>
-          <?php else: ?>
-            <img src="<?= htmlspecialchars($imageUrl) ?>" class="d-block w-100" alt="<?= htmlspecialchars($altText) ?>"
-                 style="max-height: 600px; object-fit: cover; object-position: center;"
-                 fetchpriority="<?= $index === 0 ? 'high' : 'auto' ?>">
-          <?php endif; ?>
-          <?php if (!empty($linkUrl)): ?>
-            </a>
-          <?php endif; ?>
-        </div>
-      <?php endforeach; ?>
-    </div>
-    <?php if (count($banners ?? []) > 1): ?>
-      <button class="carousel-control-prev" type="button" data-bs-target="#bannerSlider" data-bs-slide="prev">
-        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Previous</span>
-      </button>
-      <button class="carousel-control-next" type="button" data-bs-target="#bannerSlider" data-bs-slide="next">
-        <span class="carousel-control-next-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Next</span>
-      </button>
-    <?php endif; ?>
-  </div>
-</section>
+<?php include BASE_PATH . '/app/views/home/_modern_slider.php'; ?>
 <?php else: ?>
 <!-- Hero (fallback when no banners) -->
 <section class="bg-light rounded-4 shadow-sm my-4 my-md-5" style="background:linear-gradient(135deg,#f8f9fa,#eef6ff)">
