@@ -1,56 +1,35 @@
-<!-- Modern Banner Carousel - Each banner has its own internal carousel -->
+<!-- Modern Banner Carousel - Each image becomes a slide -->
 <?php if (!empty($banners ?? [])): ?>
 <section class="banner-carousel-section my-4 my-md-5">
   <div class="banner-carousel" id="modernBannerSlider">
     <!-- Carousel Track -->
     <div class="carousel-track-container">
       <div class="carousel-track">
-        <?php foreach (($banners ?? []) as $bIndex => $b): ?>
+        <?php foreach (($banners ?? []) as $b): ?>
           <?php
             $carouselImages = $b['carousel_images'] ?? [];
-            $hasMultipleImages = count($carouselImages) > 1;
-            $firstImage = $carouselImages[0] ?? ($b['image_url'] ?? '');
+            // If banner has carousel_images, use each as a separate slide
+            // Otherwise use the single image_url
+            $imagesToUse = !empty($carouselImages) ? $carouselImages : [$b['image_url'] ?? ''];
             $linkUrl = $b['link_url'] ?? '';
             $altText = $b['alt_text'] ?? $b['title'] ?? 'Banner';
-            $bannerId = 'banner-' . ($b['id'] ?? $bIndex);
+            $bannerId = $b['id'];
           ?>
-          <div class="carousel-slide" data-banner-id="<?= $bannerId ?>">
-            <?php if (!empty($linkUrl)): ?>
-              <a href="<?= htmlspecialchars($linkUrl) ?>" class="banner-card banner-card-link">
-            <?php else: ?>
-              <div class="banner-card">
-            <?php endif; ?>
-
-              <?php if ($hasMultipleImages): ?>
-                <!-- Internal carousel for this banner -->
-                <div class="internal-carousel" id="<?= $bannerId ?>">
-                  <div class="internal-carousel-slides">
-                    <?php foreach ($carouselImages as $iIndex => $img): ?>
-                      <div class="internal-slide <?= $iIndex === 0 ? 'active' : '' ?>">
-                        <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($altText) ?> #<?= $iIndex + 1 ?>" loading="lazy">
-                      </div>
-                    <?php endforeach; ?>
-                  </div>
-                  <!-- Internal carousel indicators -->
-                  <?php if (count($carouselImages) > 1): ?>
-                    <div class="internal-carousel-dots">
-                      <?php foreach ($carouselImages as $iIndex => $img): ?>
-                        <button class="internal-dot <?= $iIndex === 0 ? 'active' : '' ?>" data-slide="<?= $iIndex ?>"></button>
-                      <?php endforeach; ?>
-                    </div>
-                  <?php endif; ?>
-                </div>
+          <?php foreach ($imagesToUse as $img): ?>
+            <div class="carousel-slide">
+              <?php if (!empty($linkUrl)): ?>
+                <a href="<?= htmlspecialchars($linkUrl) ?>" class="banner-card banner-card-link">
               <?php else: ?>
-                <!-- Single image -->
-                <img src="<?= htmlspecialchars($firstImage) ?>" alt="<?= htmlspecialchars($altText) ?>" loading="lazy">
+                <div class="banner-card">
               <?php endif; ?>
-
-            <?php if (!empty($linkUrl)): ?>
-              </a>
-            <?php else: ?>
+                <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($altText) ?>" loading="lazy">
+              <?php if (!empty($linkUrl)): ?>
+                </a>
+              <?php else: ?>
               </div>
-            <?php endif; ?>
-          </div>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
         <?php endforeach; ?>
       </div>
     </div>
@@ -146,77 +125,6 @@
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-/* Internal Carousel (per banner) */
-.internal-carousel {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.internal-carousel-slides {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.internal-slide {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-
-.internal-slide.active {
-  opacity: 1;
-  z-index: 1;
-}
-
-.internal-slide img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* Internal Carousel Dots */
-.internal-carousel-dots {
-  position: absolute;
-  bottom: 0.75rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 0.375rem;
-  z-index: 10;
-  padding: 0.375rem 0.75rem;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
-  border-radius: 1rem;
-}
-
-.internal-dot {
-  width: 8px;
-  height: 8px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  padding: 0;
-}
-
-.internal-dot:hover {
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.internal-dot.active {
-  background: #fff;
-  width: 20px;
-  border-radius: 4px;
 }
 
 /* Navigation Arrows */
@@ -342,43 +250,6 @@
   let slidesPerView = getSlidesPerView();
   let autoPlayInterval;
   const autoPlayDelay = 4000;
-
-  // Initialize internal carousels (per banner)
-  function initInternalCarousels() {
-    slides.forEach(slide => {
-      const bannerId = slide.dataset.bannerId;
-      const internalCarousel = document.getElementById(bannerId);
-      if (!internalCarousel) return;
-
-      const internalSlides = internalCarousel.querySelectorAll('.internal-slide');
-      const internalDots = internalCarousel.querySelectorAll('.internal-dot');
-
-      if (internalSlides.length <= 1) return;
-
-      let currentInternal = 0;
-
-      function showInternalSlide(index) {
-        currentInternal = index % internalSlides.length;
-        internalSlides.forEach((s, i) => s.classList.toggle('active', i === currentInternal));
-        internalDots.forEach((d, i) => d.classList.toggle('active', i === currentInternal));
-      }
-
-      function nextInternalSlide() {
-        showInternalSlide(currentInternal + 1);
-      }
-
-      // Auto-rotate internal carousel
-      setInterval(nextInternalSlide, 3000);
-
-      // Click on dots
-      internalDots.forEach((dot, index) => {
-        dot.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showInternalSlide(index);
-        });
-      });
-    });
-  }
 
   // Create dots
   function createDots() {
@@ -537,7 +408,6 @@
   createDots();
   updateTrack();
   startAutoPlay();
-  initInternalCarousels();
 })();
 </script>
 <?php endif; ?>
