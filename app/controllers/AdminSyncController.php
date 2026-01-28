@@ -587,7 +587,7 @@ class AdminSyncController extends Controller
                 if ($hasProductImages && !$dryRun) {
                     try {
                         $imageUrls = trim((string)($row['ImageURLs'] ?? ''));
-                        if ($imageUrls !== '') {
+                        if ($fsc !== null || $imageUrls !== '') {
                             // Get product ID - try by FSC first, then fallback to slug/title
                             if ($fsc !== null) {
                                 $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
@@ -596,26 +596,36 @@ class AdminSyncController extends Controller
                                 $pid = (int)$pdo->query('SELECT id FROM products WHERE slug='.$pdo->quote($slugTitle).' OR title='.$pdo->quote($title).' LIMIT 1')->fetchColumn();
                             }
                             if ($pid) {
-                                // Parse comma-separated URLs
-                                $urls = array_map('trim', explode(',', $imageUrls));
+                                $urlsToImport = [];
+
+                                // If CSV has ImageURLs column, use those
+                                if ($imageUrls !== '') {
+                                    $urlsToImport = array_map('trim', explode(',', $imageUrls));
+                                } else {
+                                    // Auto-detect images from uploads folder based on FSC
+                                    $urlsToImport = $this->autoDetectImagesForProduct($pdo, $pid, $fsc);
+                                }
 
                                 // For updates with update_images option, delete existing images first
-                                if ($updateImages && $p) {
+                                if ($updateImages && $p && count($urlsToImport) > 0) {
                                     $pdo->prepare('DELETE FROM product_images WHERE product_id=?')->execute([$pid]);
                                 }
 
                                 // Only import images if this is a new product or update_images is enabled
-                                if (!$p || $updateImages) {
-                                    foreach ($urls as $url) {
+                                if ((!$p || $updateImages) && count($urlsToImport) > 0) {
+                                    $sortOrder = 0;
+                                    foreach ($urlsToImport as $url) {
                                         if ($url === '') continue;
                                         // Store URL as-is (can be absolute or relative)
                                         $pdo->prepare('INSERT INTO product_images (product_id, url, sort_order) VALUES (?, ?, ?)')
-                                            ->execute([$pid, $url, 0]);
+                                            ->execute([$pid, $url, $sortOrder++]);
                                     }
                                 }
                             }
                         }
-                    } catch (\Throwable $e) { /* ignore image import failures */ }
+                    } catch (\Throwable $e) {
+                        error_log('Image import error for FSC ' . ($fsc ?? 'null') . ': ' . $e->getMessage());
+                    }
                 }
             }
             if ($dryRun) {
@@ -680,6 +690,61 @@ class AdminSyncController extends Controller
         $pdo = DB::pdo();
         $st = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
         $st->execute([$key,$value]);
+    }
+
+    /**
+     * Auto-detect images from uploads folder based on FSC
+     * Scans /uploads/products/ folder for files matching the pattern: {FSC}-{random}.{ext}
+     *
+     * @param \PDO $pdo Database connection
+     * @param int $productId Product ID
+     * @param string|null $fsc FSC code to match
+     * @return array Array of image URLs found
+     */
+    private function autoDetectImagesForProduct(\PDO $pdo, int $productId, ?string $fsc): array
+    {
+        if ($fsc === null || $fsc === '') {
+            return [];
+        }
+
+        $urls = [];
+        $uploadsDir = BASE_PATH . '/public/uploads/products';
+
+        if (!is_dir($uploadsDir)) {
+            return [];
+        }
+
+        // Scan for files matching FSC pattern in any product subfolder
+        // Pattern: {FSC}-{random}.{ext}
+        $pattern = '/' . preg_quote($fsc, '/') . '-[^.]+\.(jpg|jpeg|png|gif|webp)/i';
+
+        // Recursive directory scan
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($uploadsDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $file) {
+            if ($file->isFile() && preg_match($pattern, $file->getFilename())) {
+                // Get relative path from public/uploads
+                $relativePath = str_replace(BASE_PATH . '/public/', '', $file->getPathname());
+                $urls[] = '/' . $relativePath;
+
+                // Also ensure the product's upload folder exists
+                $productUploadDir = BASE_PATH . '/public/uploads/products/' . $productId;
+                if (!is_dir($productUploadDir)) {
+                    mkdir($productUploadDir, 0755, true);
+                }
+
+                // Copy image to product's folder for consistency
+                $destPath = $productUploadDir . '/' . $file->getFilename();
+                if (!file_exists($destPath)) {
+                    @copy($file->getPathname(), $destPath);
+                }
+            }
+        }
+
+        return $urls;
     }
 
     // Minimal XLSX parser using ZipArchive + SimpleXML (Active sheet only)

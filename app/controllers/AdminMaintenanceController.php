@@ -213,10 +213,23 @@ class AdminMaintenanceController extends Controller
             }
 
             // Reset all variant relationships (including draft products)
-            $pdo->exec("UPDATE products SET parent_product_id = NULL, variant_attributes = NULL");
+            // BUT only reset products that actually have variant info in their title
+            $stmt = $pdo->query("
+                SELECT id, title
+                FROM products
+                WHERE (parent_product_id IS NULL OR parent_product_id = 0)
+            ");
+            $products = $stmt->fetchAll();
 
-            // DO NOT regenerate slugs - this was causing issues!
-            // Slugs should remain stable to avoid breaking links
+            foreach ($products as $product) {
+                $baseTitle = \App\Core\qc_extract_base_title($product['title']);
+                // Only reset if this product looks like it could be a variant
+                // (has a pattern that could be stripped)
+                if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
+                    $pdo->prepare("UPDATE products SET parent_product_id = NULL, variant_attributes = NULL WHERE id = ?")
+                        ->execute([$product['id']]);
+                }
+            }
 
             // Re-run the auto-merge
             $variantResult = $this->autoMergeVariants($pdo);

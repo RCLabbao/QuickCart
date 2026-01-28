@@ -310,38 +310,8 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         $parentProduct = $groupProducts[0];
         $parentId = $parentProduct['id'];
 
-        // Update parent title to base title if needed
-        if ($parentProduct['original_title'] !== $baseTitle) {
-            try {
-                $pdo->prepare('UPDATE products SET title = ? WHERE id = ?')
-                    ->execute([$baseTitle, $parentId]);
-            } catch (\Throwable $e) {
-                $result['errors'][] = "Could not update parent product ID {$parentId}: " . $e->getMessage();
-            }
-        }
-
-        // Update parent slug if needed
-        $newSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($baseTitle));
-        $newSlug = trim($newSlug, '-');
-        if ($newSlug !== '' && $newSlug !== $parentProduct['slug']) {
-            try {
-                // Ensure unique slug
-                $baseSlug = $newSlug;
-                $suffix = 1;
-                $checkSlug = $pdo->prepare('SELECT COUNT(*) FROM products WHERE slug = ? AND id != ?');
-                do {
-                    $checkSlug->execute([$newSlug, $parentId]);
-                    $count = (int)$checkSlug->fetchColumn();
-                    if ($count > 0) {
-                        $newSlug = $baseSlug . '-' . $suffix++;
-                    }
-                } while ($count > 0 && $suffix <= 100);
-                $pdo->prepare('UPDATE products SET slug = ? WHERE id = ?')
-                    ->execute([$newSlug, $parentId]);
-            } catch (\Throwable $e) {
-                // Ignore slug errors
-            }
-        }
+        // DON'T update parent title or slug - keep original to preserve variant info!
+        // Only set parent_product_id and variant_attributes
 
         // Set parent product to active status so it shows on frontend
         try {
