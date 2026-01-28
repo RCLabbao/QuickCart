@@ -274,11 +274,11 @@ class AdminMaintenanceController extends Controller
             $message = "Variant relationships reset ({$resetCount} products cleared). ";
             if ($variantResult['merged_groups'] > 0) {
                 $message .= "Re-detected and merged {$variantResult['merged_groups']} variant groups ({$variantResult['merged_products']} products linked as variants).";
-                if (isset($variantResult['debug']['parents_created']) && $variantResult['debug']['parents_created'] > 0) {
-                    $message .= " Created {$variantResult['debug']['parents_created']} new parent products.";
+                if (isset($variantResult['debug']['titles_updated']) && $variantResult['debug']['titles_updated'] > 0) {
+                    $message .= " Updated {$variantResult['debug']['titles_updated']} product titles to remove variant suffixes.";
                 }
-                if (isset($variantResult['debug']['placeholder_parents_deleted']) && $variantResult['debug']['placeholder_parents_deleted'] > 0) {
-                    $message .= " Cleaned up {$variantResult['debug']['placeholder_parents_deleted']} placeholder parent products.";
+                if (isset($variantResult['debug']['drafts_activated']) && $variantResult['debug']['drafts_activated'] > 0) {
+                    $message .= " Activated {$variantResult['debug']['drafts_activated']} draft products.";
                 }
             } else {
                 $message .= "No variant groups were found in product titles.";

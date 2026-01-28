@@ -349,7 +349,12 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             // Found an exact match - use it as parent
             $parentId = $exactMatch['id'];
         } else {
-            // No exact match - create a new clean parent product
+            // No exact match - UPDATE the first product to be the parent (remove variant suffix from title)
+            $firstProduct = $realProducts[0];
+            $parentId = $firstProduct['id'];
+
+            // Update the first product's title to the base title (remove variant suffix)
+            // Generate new slug based on base title
             $parentSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($baseTitle));
             $parentSlug = trim($parentSlug, '-');
             if ($parentSlug === '') {
@@ -363,28 +368,20 @@ function qc_auto_merge_variants(\PDO $pdo): array {
                 if ($suffix > 1000) break;
             }
 
-            // Create the parent product with variant info from first product
-            $firstProduct = $realProducts[0];
+            // Extract variant from the original title and store it
+            $variantAttr = qc_extract_variant_attribute($firstProduct['original_title']);
+
             try {
                 $pdo->prepare('
-                    INSERT INTO products (title, slug, fsc, price, sale_price, status, stock, collection_id, parent_product_id, variant_attributes, created_at)
-                    SELECT ?, ?, NULL, 0, 0, "active", 0, collection_id, NULL, NULL, NOW()
-                    FROM products WHERE id = ?
-                ')->execute([$baseTitle, $parentSlug, $firstProduct['id']]);
-                $parentId = (int)$pdo->lastInsertId();
-                $result['debug']['parents_created'] = ($result['debug']['parents_created'] ?? 0) + 1;
+                    UPDATE products
+                    SET title = ?, slug = ?, variant_attributes = ?, status = "active", parent_product_id = NULL
+                    WHERE id = ?
+                ')->execute([$baseTitle, $parentSlug, $variantAttr, $parentId]);
+                $result['debug']['titles_updated'] = ($result['debug']['titles_updated'] ?? 0) + 1;
             } catch (\Throwable $e) {
-                $result['errors'][] = "Could not create parent product for '{$baseTitle}': " . $e->getMessage();
+                $result['errors'][] = "Could not update product ID {$parentId} to parent: " . $e->getMessage();
                 continue;
             }
-        }
-
-        // Set parent product to active status and ensure parent_product_id is NULL
-        try {
-            $pdo->prepare('UPDATE products SET status = "active", parent_product_id = NULL WHERE id = ?')
-                ->execute([$parentId]);
-        } catch (\Throwable $e) {
-            // Ignore status errors
         }
 
         // Link all products as variants (including the one that might have been used as parent before)
