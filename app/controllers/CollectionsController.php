@@ -27,7 +27,19 @@ class CollectionsController extends Controller
         $c = $st->fetch();
         $hidden = \App\Core\hidden_collection_ids();
         if(!$c || (!empty($hidden) && in_array((int)$c['id'], $hidden, true))){ http_response_code(404); $this->view('errors/404'); return; }
-        $ps = $pdo->prepare('SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active" AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize);
+
+        // Check if variant support is enabled and exclude variant products from listing
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
+        $variantFilter = '';
+        if ($hasVariants) {
+            $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
+        }
+
+        $ps = $pdo->prepare('SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize);
         $ps->execute([$c['id']]); $products = $ps->fetchAll();
         $this->view('collections/show', ['collection'=>$c, 'products'=>$products]);
     }
@@ -41,7 +53,19 @@ class CollectionsController extends Controller
         $col = $st->fetch();
         $hidden = \App\Core\hidden_collection_ids();
         if(!$col || (!empty($hidden) && in_array((int)$col['id'], $hidden, true))){ $this->json(['html'=>'','hasMore'=>false]); return; }
-        $q = 'SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active" AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+
+        // Check if variant support is enabled and exclude variant products from listing
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
+        $variantFilter = '';
+        if ($hasVariants) {
+            $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
+        }
+
+        $q = 'SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
         $ps = $pdo->prepare($q); $ps->execute([$col['id']]); $products = $ps->fetchAll();
         ob_start(); foreach ($products as $p) { include BASE_PATH . '/app/views/products/_card.php'; } $html = ob_get_clean();
         $this->json(['html'=>$html, 'hasMore'=>count($products)===$this->pageSize]);
