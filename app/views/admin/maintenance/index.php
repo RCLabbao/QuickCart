@@ -221,7 +221,77 @@
       </div>
     </div>
 
-    <!-- Reset, Wipe, Wipe Demo are already below in the file and remain accessible within this tab -->
+    <!-- Reset Database, Wipe, Wipe Demo -->
+    <div class="row g-4 mt-4">
+      <div class="col-12">
+        <h6 class="text-muted text-uppercase fw-bold mb-3" style="font-size: 0.75rem; letter-spacing: 1px;">Danger Zone</h6>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Reset Database -->
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100 border-warning">
+          <div class="card-header bg-white border-bottom border-warning">
+            <h5 class="card-title mb-0 text-warning-emphasis">
+              <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Database
+            </h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Reinstall schema + seed samples. Wipes catalog/orders but preserves admin users and settings.</p>
+            <form method="post" action="/admin/maintenance/reset-db" onsubmit="return confirmAction('reset the database. This will DELETE all catalog/order data and reinstall the schema with sample data.')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-outline-warning w-100">
+                <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Database
+              </button>
+            </form>
+            <div class="mt-3"><small class="text-muted"><i class="bi bi-info-circle me-1"></i>Use only if database is corrupted or migrations failed.</small></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wipe Catalog & Orders -->
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100 border-danger">
+          <div class="card-header bg-white border-bottom border-danger">
+            <h5 class="card-title mb-0 text-danger">
+              <i class="bi bi-trash3 me-2"></i>Wipe Catalog & Orders
+            </h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Permanently delete all products, collections, orders, addresses, coupons, and customer profiles.</p>
+            <form method="post" action="/admin/maintenance/wipe" onsubmit="return confirmAction('wipe ALL catalog and order data. This cannot be undone!')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-danger w-100">
+                <i class="bi bi-exclamation-triangle me-2"></i>Wipe All Data
+              </button>
+            </form>
+            <div class="mt-3"><small class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Users and settings are preserved.</small></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Remove Demo Data -->
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-eraser me-2"></i>Remove Demo Data
+            </h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Remove "Demo Product ..." items and seeded test orders only. Real data remains intact.</p>
+            <form method="post" action="/admin/maintenance/wipe-demo" onsubmit="return confirmAction('remove demo data added by the seeder')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-outline-danger w-100">
+                <i class="bi bi-eraser me-2"></i>Remove Demo Data
+              </button>
+            </form>
+            <div class="mt-3"><small class="text-muted"><i class="bi bi-info-circle me-1"></i>Safely removes only demo/test data.</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="tab-pane fade" id="tab-backup" role="tabpanel">
@@ -362,77 +432,6 @@
       </div>
     </div>
     <?php endif; ?>
-  </div>
-</div>
-
-  </div>
-</div>
-
-<!-- Reset Database (Reinstall schema + seed samples) -->
-<div class="row g-4 mt-1">
-  <div class="col-lg-12">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Database (Reinstall schema + seed samples)
-        </h5>
-      </div>
-      <div class="card-body">
-        <p class="text-danger">
-          This will reinstall database structures and wipe catalog, orders, addresses, tags and related data, then seed sample data.
-          Admin users and settings are preserved. Use only if your database is corrupted or migrations failed.
-        </p>
-        <form method="post" action="/admin/maintenance/reset-db" onsubmit="return confirm('This will REINSTALL the database schema and DELETE all catalog/order data, then add sample data. Admin users and settings are preserved. Proceed?');">
-          <?= csrf_field() ?>
-          <button type="submit" class="btn btn-outline-warning">
-            <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Database
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Dangerous: Wipe Data -->
-<div class="row g-4 mt-1">
-  <div class="col-lg-12">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-trash3 me-2"></i>Wipe Catalog & Orders
-        </h5>
-      </div>
-      <div class="card-body">
-        <p class="text-danger">This permanently deletes all products, images, collections, orders, addresses, coupons, delivery fees, and customer profiles. Users and settings are preserved.</p>
-        <form method="post" action="/admin/maintenance/wipe" onsubmit="return confirm('This will permanently DELETE all catalog and order data. Are you absolutely sure?');">
-          <?= csrf_field() ?>
-          <button type="submit" class="btn btn-danger">
-            <i class="bi bi-exclamation-triangle me-2"></i>Delete All Catalog & Orders
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- Wipe Demo Data -->
-<div class="row g-4 mt-1">
-  <div class="col-lg-12">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-eraser me-2"></i>Remove Demo Data Only
-        </h5>
-      </div>
-      <div class="card-body">
-        <p class="text-muted">Removes products named "Demo Product ..." and seeded test orders. Real data remains.</p>
-        <form method="post" action="/admin/maintenance/wipe-demo" onsubmit="return confirm('Remove demo data added by the seeder?');">
-          <?= csrf_field() ?>
-          <button type="submit" class="btn btn-outline-danger">
-            <i class="bi bi-eraser me-2"></i>Remove Demo Data
-          </button>
-        </form>
-      </div>
-    </div>
   </div>
 </div>
 
