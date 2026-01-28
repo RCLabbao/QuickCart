@@ -212,22 +212,27 @@ class AdminMaintenanceController extends Controller
                 $productBackup[$row['id']] = $row;
             }
 
-            // Reset all variant relationships (including draft products)
-            // BUT only reset products that actually have variant info in their title
+            // CRITICAL FIX: Reset ALL products that look like variants, not just ones without parent_product_id
+            // The previous version only reset products where parent_product_id IS NULL, which skipped
+            // products that were already linked during CSV import - causing them to never be re-merged!
             $stmt = $pdo->query("
-                SELECT id, title
+                SELECT id, title, parent_product_id
                 FROM products
-                WHERE (parent_product_id IS NULL OR parent_product_id = 0)
             ");
-            $products = $stmt->fetchAll();
+            $allProducts = $stmt->fetchAll();
 
-            foreach ($products as $product) {
+            $resetCount = 0;
+            foreach ($allProducts as $product) {
                 $baseTitle = \App\Core\qc_extract_base_title($product['title']);
-                // Only reset if this product looks like it could be a variant
-                // (has a pattern that could be stripped)
-                if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
+                // Reset if this product looks like a variant (has a pattern that could be stripped)
+                // OR if it's a variant (has parent_product_id set)
+                $looksLikeVariant = ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5);
+                $isVariant = !empty($product['parent_product_id']);
+
+                if ($looksLikeVariant || $isVariant) {
                     $pdo->prepare("UPDATE products SET parent_product_id = NULL, variant_attributes = NULL WHERE id = ?")
                         ->execute([$product['id']]);
+                    $resetCount++;
                 }
             }
 
@@ -238,9 +243,9 @@ class AdminMaintenanceController extends Controller
             $_SESSION['variant_reset_backup'] = $productBackup;
             $_SESSION['variant_reset_backup_time'] = time();
 
-            $message = "Variant relationships reset. ";
+            $message = "Variant relationships reset ({$resetCount} products cleared). ";
             if ($variantResult['merged_groups'] > 0) {
-                $message .= "Re-detected and merged {$variantResult['merged_groups']} variant groups ({$variantResult['merged_products']} products).";
+                $message .= "Re-detected and merged {$variantResult['merged_groups']} variant groups ({$variantResult['merged_products']} products linked as variants).";
             } else {
                 $message .= "No variant groups were found in product titles.";
                 if (isset($variantResult['debug'])) {

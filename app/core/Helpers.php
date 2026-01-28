@@ -220,8 +220,8 @@ function qc_extract_variant_attribute(string $title): string {
         '/\s+(XXXXL|2XL|3XL|4XL|5XL)\s*$/i'   => 1,
         '/\s+(XL|XS)\s*$/i'                  => 1,
         '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
+        '/\s+(PACK\s+[LMS])\s*$/i'           => 1, // PACK L, PACK M, PACK S (must come before single letter)
         '/\s+([LMS])\s*$/i'                  => 1, // Single letter
-        '/\s+PACK\s+([LMS])\s*$/i'           => 1, // PACK L, PACK M, PACK S
         '/\s+(\d{1,2})\s*$/i'                => 1, // Numbers
     ];
 

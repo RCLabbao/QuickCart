@@ -833,6 +833,8 @@ class AdminSyncController extends Controller
             '(?:\s+)(XL|XS)\s*$',
             // Word sizes: LARGE, MEDIUM, SMALL
             '(?:\s+)(LARGE|MEDIUM|SMALL)\s*$',
+            // PACK sizes: PACK L, PACK M, PACK S (for bikini briefs - must come before single letter)
+            '(?:\s+)(PACK\s+[LMS])\s*$',
             // Single letter sizes: L, M, S
             '(?:\s+)([LMS])\s*$',
             // Numeric sizes: 36, 37, 38, etc. (standalone numbers at end)
