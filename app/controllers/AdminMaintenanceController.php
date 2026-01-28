@@ -246,7 +246,10 @@ class AdminMaintenanceController extends Controller
             $message = "Variant relationships reset ({$resetCount} products cleared). ";
             if ($variantResult['merged_groups'] > 0) {
                 $message .= "Re-detected and merged {$variantResult['merged_groups']} variant groups ({$variantResult['merged_products']} products linked as variants).";
-                if (isset($variantResult['debug']['placeholder_parents_deleted'])) {
+                if (isset($variantResult['debug']['parents_created']) && $variantResult['debug']['parents_created'] > 0) {
+                    $message .= " Created {$variantResult['debug']['parents_created']} new parent products.";
+                }
+                if (isset($variantResult['debug']['placeholder_parents_deleted']) && $variantResult['debug']['placeholder_parents_deleted'] > 0) {
                     $message .= " Cleaned up {$variantResult['debug']['placeholder_parents_deleted']} placeholder parent products.";
                 }
             } else {

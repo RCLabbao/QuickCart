@@ -331,18 +331,53 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             continue;
         }
 
-        // Sort by ID to use the first/oldest as parent
-        usort($realProducts, function($a, $b) {
-            return $a['id'] - $b['id'];
-        });
+        // CRITICAL FIX: Look for a product that matches the base title exactly to use as parent
+        // If no exact match exists, we'll create a new clean parent product
+        $exactMatch = null;
+        foreach ($realProducts as $p) {
+            // Use strcasecmp for case-insensitive comparison
+            if (strcasecmp($p['original_title'], $baseTitle) === 0) {
+                $exactMatch = $p;
+                break;
+            }
+        }
 
-        $parentProduct = $realProducts[0];
-        $parentId = $parentProduct['id'];
+        $parentId = null;
+        if ($exactMatch) {
+            // Found an exact match - use it as parent
+            $parentId = $exactMatch['id'];
+        } else {
+            // No exact match - create a new clean parent product
+            $parentSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($baseTitle));
+            $parentSlug = trim($parentSlug, '-');
+            if ($parentSlug === '') {
+                $parentSlug = 'product-'.substr(md5($baseTitle . microtime(true)), 0, 6);
+            }
+            // Ensure unique slug
+            $baseSlug = $parentSlug;
+            $suffix = 1;
+            while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($parentSlug))->fetchColumn() > 0) {
+                $parentSlug = $baseSlug.'-'.$suffix++;
+                if ($suffix > 1000) break;
+            }
 
-        // DON'T update parent title or slug - keep original to preserve variant info!
-        // Only set parent_product_id and variant_attributes
+            // Create the parent product with variant info from first product
+            $firstProduct = $realProducts[0];
+            try {
+                $pdo->prepare('
+                    INSERT INTO products (title, slug, fsc, price, sale_price, status, stock, collection_id, parent_product_id, variant_attributes, created_at)
+                    SELECT ?, ?, NULL, 0, 0, "active", 0, collection_id, NULL, NULL, NOW()
+                    FROM products WHERE id = ?
+                ')->execute([$baseTitle, $parentSlug, $firstProduct['id']]);
+                $parentId = (int)$pdo->lastInsertId();
+                $result['debug']['parents_created'] = ($result['debug']['parents_created'] ?? 0) + 1;
+            } catch (\Throwable $e) {
+                $result['errors'][] = "Could not create parent product for '{$baseTitle}': " . $e->getMessage();
+                continue;
+            }
+        }
 
-        // Set parent product to active status so it shows on frontend
+        // Set parent product to active status and ensure parent_product_id is NULL
         try {
             $pdo->prepare('UPDATE products SET status = "active", parent_product_id = NULL WHERE id = ?')
                 ->execute([$parentId]);
@@ -350,9 +385,14 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             // Ignore status errors
         }
 
-        // Link other products as variants
-        foreach (array_slice($realProducts, 1) as $variantProduct) {
+        // Link all products as variants (including the one that might have been used as parent before)
+        foreach ($realProducts as $variantProduct) {
             $variantId = $variantProduct['id'];
+
+            // Don't link the parent product to itself
+            if ($variantId == $parentId) {
+                continue;
+            }
 
             // Extract variant attribute from ORIGINAL title (before it was changed)
             $variantAttr = qc_extract_variant_attribute($variantProduct['original_title']);
