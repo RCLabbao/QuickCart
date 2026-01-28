@@ -40,7 +40,7 @@ class AdminMaintenanceController extends Controller
         foreach ($checkItems as [$tbl,$col,$label]) {
             try { $checks[$label] = $this->columnExists($pdo, $tbl, $col); } catch (\Throwable $e) { $checks[$label] = false; }
         }
-        foreach (['coupons','order_events','delivery_fees','customer_profiles'] as $tbl) {
+        foreach (['banners','coupons','order_events','delivery_fees','customer_profiles'] as $tbl) {
             try { $checks[$tbl.' table'] = $this->tableExists($pdo, $tbl); } catch (\Throwable $e) { $checks[$tbl.' table'] = false; }
         }
 
@@ -168,6 +168,8 @@ class AdminMaintenanceController extends Controller
         $variantResult = $this->autoMergeVariants($pdo);
 
         // Ensure tables for future features
+        $this->ensureTable($pdo, 'banners',
+            'CREATE TABLE banners (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL, image_url VARCHAR(500) NULL, mobile_image_url VARCHAR(500) NULL, link_url VARCHAR(500) NULL, alt_text VARCHAR(500) NULL, sort_order INT NOT NULL DEFAULT 0, status ENUM("active","draft") NOT NULL DEFAULT "active", created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_status_sort (status, sort_order)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
         $this->ensureTable($pdo, 'order_events',
             'CREATE TABLE order_events (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, user_id INT NULL, type VARCHAR(64) NOT NULL, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
         $this->ensureTable($pdo, 'coupons',
