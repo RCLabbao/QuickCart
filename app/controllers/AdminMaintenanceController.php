@@ -65,12 +65,40 @@ class AdminMaintenanceController extends Controller
             });
         }
 
+        // Get variant debug info
+        $variantDebug = [];
+        try {
+            // Get database summary
+            $variantDebug['summary'] = $pdo->query('
+                SELECT
+                    COUNT(*) as total_products,
+                    SUM(CASE WHEN parent_product_id IS NULL THEN 1 ELSE 0 END) as parent_products,
+                    SUM(CASE WHEN parent_product_id IS NOT NULL THEN 1 ELSE 0 END) as variant_products
+                FROM products
+            ')->fetch();
+
+            // Get sample of products with variant patterns but no parent_product_id
+            $variantDebug['unlinked_variants'] = $pdo->query('
+                SELECT id, title, slug, parent_product_id
+                FROM products
+                WHERE parent_product_id IS NULL
+                AND (title LIKE "%38A" OR title LIKE "%36A" OR title LIKE "%34A"
+                     OR title LIKE "%PACK L" OR title LIKE "%PACK M"
+                     OR title LIKE "%LARGE" OR title LIKE "%MEDIUM" OR title LIKE "%SMALL")
+                ORDER BY title
+                LIMIT 10
+            ')->fetchAll();
+        } catch (\Throwable $e) {
+            $variantDebug = ['error' => $e->getMessage()];
+        }
+
         $this->adminView('admin/maintenance/index', [
             'title' => 'System Maintenance',
             'stats' => $stats,
             'table_sizes' => $tableSizes,
             'checks' => $checks,
-            'backup_files' => $backupFiles
+            'backup_files' => $backupFiles,
+            'variant_debug' => $variantDebug
         ]);
     }
 

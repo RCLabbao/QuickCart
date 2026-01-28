@@ -317,14 +317,16 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         $realProducts = array_values($realProducts); // Re-index array
 
         if (count($realProducts) <= 1) {
-            // If only 1 real product (rest are placeholders), skip this group
-            // but delete the placeholder parents
+            // If only 0 or 1 real product (rest are drafts), DON'T delete anything!
+            // The drafts are actually the real products - they just need to be set to active
+            // Just activate all draft products in this group and skip
             foreach ($groupProducts as $p) {
                 if ($p['status'] === 'draft') {
                     try {
-                        $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$p['id']]);
+                        $pdo->prepare('UPDATE products SET status = "active", parent_product_id = NULL WHERE id = ?')
+                            ->execute([$p['id']]);
                     } catch (\Throwable $e) {
-                        $result['errors'][] = "Could not delete placeholder product ID {$p['id']}: " . $e->getMessage();
+                        $result['errors'][] = "Could not activate product ID {$p['id']}: " . $e->getMessage();
                     }
                 }
             }
@@ -410,14 +412,15 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             }
         }
 
-        // Delete placeholder parent products (created during CSV import)
+        // Activate all draft products in this group
         foreach ($groupProducts as $p) {
             if ($p['status'] === 'draft' && $p['id'] != $parentId) {
                 try {
-                    $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$p['id']]);
-                    $result['debug']['placeholder_parents_deleted'] = ($result['debug']['placeholder_parents_deleted'] ?? 0) + 1;
+                    $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
+                        ->execute([$p['id']]);
+                    $result['debug']['drafts_activated'] = ($result['debug']['drafts_activated'] ?? 0) + 1;
                 } catch (\Throwable $e) {
-                    $result['errors'][] = "Could not delete placeholder product ID {$p['id']}: " . $e->getMessage();
+                    $result['errors'][] = "Could not activate product ID {$p['id']}: " . $e->getMessage();
                 }
             }
         }

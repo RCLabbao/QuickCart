@@ -135,6 +135,73 @@
         </div>
       </div>
     </div>
+
+    <!-- Variant Debug Section -->
+    <?php if (!empty($variant_debug) && empty($variant_debug['error'])): ?>
+    <div class="row g-4 mt-1">
+      <div class="col-12">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0"><i class="bi bi-bug me-2"></i>Variant Relationship Debug</h5>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#variantDebugBody">
+              <i class="bi bi-chevron-down"></i> Toggle
+            </button>
+          </div>
+          <div class="collapse show" id="variantDebugBody">
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-4">
+                  <h6 class="text-muted mb-3">Database Summary</h6>
+                  <table class="table table-sm table-bordered">
+                    <tr><th>Total Products</th><td><?= number_format($variant_debug['summary']['total_products'] ?? 0) ?></td></tr>
+                    <tr><th>Parent Products</th><td class="text-success"><?= number_format($variant_debug['summary']['parent_products'] ?? 0) ?></td></tr>
+                    <tr><th>Variant Products</th><td class="text-info"><?= number_format($variant_debug['summary']['variant_products'] ?? 0) ?></td></tr>
+                  </table>
+                </div>
+                <div class="col-md-8">
+                  <h6 class="text-muted mb-3">
+                    Products With Variant Patterns (should be linked)
+                    <?php if (count($variant_debug['unlinked_variants'] ?? []) > 0): ?>
+                      <span class="badge bg-danger ms-2"><?= count($variant_debug['unlinked_variants']) ?> FOUND</span>
+                    <?php else: ?>
+                      <span class="badge bg-success ms-2">ALL LINKED</span>
+                    <?php endif; ?>
+                  </h6>
+                  <?php if (!empty($variant_debug['unlinked_variants'])): ?>
+                    <div class="table-responsive" style="max-height: 200px;">
+                      <table class="table table-sm table-bordered table-striped">
+                        <thead class="table-dark">
+                          <tr><th>ID</th><th>Title</th><th>parent_product_id</th></tr>
+                        </thead>
+                        <tbody>
+                          <?php foreach ($variant_debug['unlinked_variants'] as $p): ?>
+                            <tr>
+                              <td><?= $p['id'] ?></td>
+                              <td><?= htmlspecialchars($p['title']) ?></td>
+                              <td class="text-danger"><?= $p['parent_product_id'] ?? 'NULL' ?></td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="alert alert-warning mt-2 mb-0 small">
+                      <i class="bi bi-exclamation-triangle me-1"></i>
+                      <strong>These products should have parent_product_id set!</strong> Run "Reset & Re-detect Variants" to fix.
+                    </div>
+                  <?php else: ?>
+                    <div class="alert alert-success mb-0 small">
+                      <i class="bi bi-check-circle me-1"></i>
+                      All products with variant patterns are correctly linked to their parents!
+                    </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <div class="tab-pane fade" id="tab-actions" role="tabpanel">
