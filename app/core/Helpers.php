@@ -352,11 +352,9 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             // Found an exact match - use it as parent
             $parentId = $exactMatch['id'];
         } else {
-            // No exact match - UPDATE the first product to be the parent (remove variant suffix from title)
-            $firstProduct = $allProductsInGroup[0];
-            $parentId = $firstProduct['id'];
+            // No exact match - CREATE a NEW parent product instead of converting a variant
+            // This ensures variants like "BEVERLY UW FULL CUP LACE 34A" remain as variants
 
-            // Update the first product's title to the base title (remove variant suffix)
             // Generate new slug based on base title
             $parentSlug = preg_replace('/[^a-z0-9]+/','-', strtolower($baseTitle));
             $parentSlug = trim($parentSlug, '-');
@@ -371,33 +369,27 @@ function qc_auto_merge_variants(\PDO $pdo): array {
                 if ($suffix > 1000) break;
             }
 
-            // Extract variant from the original title and store it in the PARENT (so we know what variant this product was originally)
-            $variantAttr = qc_extract_variant_attribute($firstProduct['original_title']);
+            // Get collection_id from the first product to use for parent
+            $firstProduct = $allProductsInGroup[0];
+            $collectionId = null;
+            try {
+                $colStmt = $pdo->prepare('SELECT collection_id FROM products WHERE id = ?');
+                $colStmt->execute([$firstProduct['id']]);
+                $collectionId = $colStmt->fetchColumn();
+            } catch (\Throwable $e) {}
 
             try {
-                // CRITICAL: Update parent title and slug, but DON'T set variant_attributes on parent
-                // The parent should have variant_attributes = NULL because it represents ALL variants
+                // Create a NEW parent product with the base title
+                // Use default price/stock from first variant, but parent doesn't sell itself
                 $pdo->prepare('
-                    UPDATE products
-                    SET title = ?, slug = ?, variant_attributes = NULL, status = "active", parent_product_id = NULL
-                    WHERE id = ?
-                ')->execute([$baseTitle, $parentSlug, $parentId]);
+                    INSERT INTO products (title, slug, fsc, price, sale_price, stock, status, collection_id, parent_product_id, variant_attributes, created_at)
+                    VALUES (?, ?, NULL, 0, 0, 0, "active", ?, NULL, NULL, NOW())
+                ')->execute([$baseTitle, $parentSlug, $collectionId]);
 
-                // Verify the update worked
-                $check = $pdo->prepare('SELECT title, variant_attributes FROM products WHERE id = ?');
-                $check->execute([$parentId]);
-                $checkResult = $check->fetch();
-
-                if ($checkResult['title'] !== $baseTitle) {
-                    $result['errors'][] = "Failed to update title for product ID {$parentId}: expected '$baseTitle' but got '{$checkResult['title']}'";
-                }
-                if ($checkResult['variant_attributes'] !== null) {
-                    $result['errors'][] = "Parent product ID {$parentId} has variant_attributes set to '{$checkResult['variant_attributes']}' - should be NULL!";
-                }
-
-                $result['debug']['titles_updated'] = ($result['debug']['titles_updated'] ?? 0) + 1;
+                $parentId = (int)$pdo->lastInsertId();
+                $result['debug']['parents_created'] = ($result['debug']['parents_created'] ?? 0) + 1;
             } catch (\Throwable $e) {
-                $result['errors'][] = "Could not update product ID {$parentId} to parent: " . $e->getMessage();
+                $result['errors'][] = "Could not create parent product for '{$baseTitle}': " . $e->getMessage();
                 continue;
             }
         }
