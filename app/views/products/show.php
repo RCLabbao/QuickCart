@@ -355,6 +355,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const currentProductId = <?= (int)$product['id'] ?>;
   const selectedVariantBtn = document.querySelector(`.variant-btn[data-variant-id="${currentProductId}"]`);
 
+  // Determine the parent slug for URL updates
+  // If viewing a variant, use parent's slug; otherwise use current product's slug
+  const parentSlug = '<?= htmlspecialchars(!empty($parentProduct) ? $parentProduct['slug'] : $product['slug']) ?>';
+
   if (selectedVariantBtn) {
     // Trigger the variant selection logic for the current product
     setTimeout(() => {
@@ -525,8 +529,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
 
-      // Update page URL without reload
-      const newUrl = '/products/' + (variantFsc || variantId);
+      // Update page URL without reload - use parent slug to stay on the same product page
+      const newUrl = '/products/' + parentSlug;
       window.history.replaceState({}, '', newUrl);
 
       // Update selected variant info display

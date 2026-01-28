@@ -548,6 +548,9 @@ class AdminSyncController extends Controller
                     }
                     if ($dryRun) { $updated++; continue; }
                     $fields = ['stock = ?']; $vals = [$stock];
+                    // IMPORTANT: Always update FSC to ensure variants have their correct FSC codes from CSV
+                    $fields[] = 'fsc = ?';
+                    $vals[] = $fsc;
                     if ($updatePrice) { $fields[] = 'price = ?'; $vals[] = $price; }
                     // Always update sale price from brochure price in CSV
                     $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;

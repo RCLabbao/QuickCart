@@ -61,9 +61,20 @@
             </div>
           </div>
           <div class="col-md-6">
+            <?php
+            // Check if this is a parent product with variants
+            $hasVariantsStock = $hasVariants && !empty($product['parent_product_id']) === false && !empty($variants);
+            ?>
             <label class="form-label fw-semibold">Stock Quantity</label>
-            <input class="form-control" type="number" name="stock" value="<?= (int)($product['stock'] ?? 0) ?>" placeholder="0">
-            <div class="form-text">Leave empty for unlimited stock</div>
+            <?php if ($hasVariantsStock): ?>
+              <input class="form-control" type="number" name="stock" value="<?= (int)($product['stock'] ?? 0) ?>" placeholder="0" readonly style="background-color: #f8f9fa;">
+              <div class="form-text text-warning">
+                <i class="bi bi-info-circle me-1"></i>This parent product has variants. Stock is managed at the variant level.
+              </div>
+            <?php else: ?>
+              <input class="form-control" type="number" name="stock" value="<?= (int)($product['stock'] ?? 0) ?>" placeholder="0">
+              <div class="form-text">Leave empty for unlimited stock</div>
+            <?php endif; ?>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">FSC</label>
@@ -369,8 +380,9 @@
               <input type="text" class="form-control" name="variant_attributes" required placeholder="e.g., 38A, 36B, Small">
             </div>
             <div class="mb-3">
-              <label class="form-label">FSC</label>
-              <input type="text" class="form-control" name="fsc" placeholder="FSC code">
+              <label class="form-label">FSC <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="fsc" placeholder="Enter unique FSC code for this variant" required>
+              <div class="form-text">Each variant should have its own unique FSC code from the CSV/import.</div>
             </div>
             <div class="mb-3">
               <label class="form-label">Barcode</label>
