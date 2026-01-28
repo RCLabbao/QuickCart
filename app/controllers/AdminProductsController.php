@@ -978,28 +978,65 @@ class AdminProductsController extends Controller
         if ($title === '') return '';
 
         // Common variant patterns to remove from the end
-        // Use (?:\s|$) to ensure we only match after a space or at end, not mid-word
         $patterns = [
-            '(?:\s+)\d{2,3}[A-Z]{1,3}\s*$',      // Bra sizes: 38A, 36B, 34C, 32DD
-            '(?:\s+)\d{1,2}\.\d{1,2}\s*$',       // Decimal: 28.5
-            '(?:\s+)\d+(?:XL|XS|L|M|S)\s*$',     // 2XL, 3XL, 2XS
-            '(?:\s+)(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$',
-            '(?:\s+)(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
-            '(?:\s+)(?:XL|XS)\s*$',
-            '(?:\s+)(?:LARGE|MEDIUM|SMALL)\s*$',
-            '(?:\s+)[LMS]\s*$',                  // Single letter sizes
-            '(?:\s+)\d{1,2}\s*$',               // Standalone numbers
+            '/\s+\d{2,3}[A-Z]{1,3}\s*$/i',      // Bra sizes: 38A, 36B, 34C, 32DD
+            '/\s+\d{1,2}\.\d{1,2}\s*$/i',       // Decimal: 28.5
+            '/\s+\d+(?:XL|XS|L|M|S)\s*$/i',     // 2XL, 3XL, 2XS
+            '/\s+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
+            '/\s+(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$/i',
+            '/\s+(?:XL|XS)\s*$/i',
+            '/\s+(?:LARGE|MEDIUM|SMALL)\s*$/i',
+            '/\s+[LMS]\s*$/i',                  // Single letter sizes
+            '/\s+\d{1,2}\s*$/i',               // Standalone numbers
         ];
 
+        $originalTitle = $title;
         foreach ($patterns as $pattern) {
-            $newTitle = preg_replace('/' . $pattern . '/i', '', $title);
+            $newTitle = preg_replace($pattern, '', $title);
+            if ($newTitle === null) {
+                continue; // preg_replace failed
+            }
             $newTitle = trim($newTitle);
             if ($newTitle !== $title && strlen($newTitle) >= 5) {
-                return $newTitle;
+                // Verify we haven't removed too much (base title should have at least 2 words)
+                $wordCount = count(preg_split('/\s+/', $newTitle));
+                if ($wordCount >= 2) {
+                    return $newTitle;
+                }
             }
         }
 
-        return $title; // Return original if no pattern matched
+        return $originalTitle; // Return original if no pattern matched
+    }
+
+    // Extract variant from title (returns array with 'variant' key)
+    private function extractVariantFromTitle(string $title): array
+    {
+        $title = trim($title);
+        if ($title === '') {
+            return ['variant' => ''];
+        }
+
+        // Common variant patterns - use regex to extract the variant part
+        $patterns = [
+            '/\s+(\d{2,3}[A-Z]{1,3})\s*$/i'      => 1, // Bra sizes: 38A
+            '/\s+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal sizes: 28.5
+            '/\s+(\d+(?:XL|XS|L|M|S))\s*$/i'     => 1, // 2XL, 3XL, etc.
+            '/\s+(EXTRA LARGE|EXTRA SMALL)\s*$/i'  => 1,
+            '/\s+(XXXXL|2XL|3XL|4XL|5XL)\s*$/i'   => 1,
+            '/\s+(XL|XS)\s*$/i'                  => 1,
+            '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
+            '/\s+([LMS])\s*$/i'                  => 1, // Single letter
+            '/\s+(\d{1,2})\s*$/i'                => 1, // Numbers
+        ];
+
+        foreach ($patterns as $pattern => $groupIndex) {
+            if (preg_match($pattern, $title, $matches)) {
+                return ['variant' => strtoupper(trim($matches[$groupIndex]))];
+            }
+        }
+
+        return ['variant' => ''];
     }
 
     // Merge suggested products as variants
@@ -1199,15 +1236,43 @@ class AdminProductsController extends Controller
                 }
             }
 
+            // Update parent slug if needed
+            $newSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($baseTitle));
+            $newSlug = trim($newSlug, '-');
+            if ($newSlug !== '' && $newSlug !== $parentProduct['fsc']) {
+                try {
+                    // Ensure unique slug
+                    $baseSlug = $newSlug;
+                    $suffix = 1;
+                    $checkSlug = $pdo->prepare('SELECT COUNT(*) FROM products WHERE slug = ? AND id != ?');
+                    do {
+                        $checkSlug->execute([$newSlug, $parentId]);
+                        $count = (int)$checkSlug->fetchColumn();
+                        if ($count > 0) {
+                            $newSlug = $baseSlug . '-' . $suffix++;
+                        }
+                    } while ($count > 0 && $suffix <= 100);
+                    $pdo->prepare('UPDATE products SET slug = ? WHERE id = ?')
+                        ->execute([$newSlug, $parentId]);
+                } catch (\Throwable $e) {
+                    // Ignore slug errors
+                }
+            }
+
+            // Set parent product to active status so it shows on frontend
+            try {
+                $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
+                    ->execute([$parentId]);
+            } catch (\Throwable $e) {
+                // Ignore status errors
+            }
+
             // Link other products as variants
             foreach (array_slice($groupProducts, 1) as $variantProduct) {
                 $variantId = $variantProduct['id'];
 
-                // Extract variant attribute
-                $variantAttr = trim(substr($variantProduct['title'], strlen($baseTitle)));
-                if ($variantAttr === '') {
-                    $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
-                }
+                // Extract variant attribute using regex (more reliable than substr)
+                $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
 
                 try {
                     $pdo->prepare('

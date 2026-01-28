@@ -204,11 +204,31 @@ class AdminMaintenanceController extends Controller
                 $this->redirect('/admin/maintenance?tab=actions');
             }
 
-            // Reset all variant relationships
+            // Reset all variant relationships (including draft products)
             $pdo->exec("UPDATE products SET parent_product_id = NULL, variant_attributes = NULL");
 
-            // Clear any orphaned slugs that might cause issues
-            $pdo->exec("UPDATE products SET slug = CONCAT(slug, '-', id) WHERE slug IN (SELECT slug FROM (SELECT slug, COUNT(*) as cnt FROM products GROUP BY slug HAVING cnt > 1) as duplicates)");
+            // Fix duplicate slugs by regenerating from title
+            $stmt = $pdo->query("SELECT id, title FROM products");
+            $products = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $slugCounts = [];
+            foreach ($products as $product) {
+                $baseSlug = $this->generateSlug($product['title']);
+                if (!isset($slugCounts[$baseSlug])) {
+                    $slugCounts[$baseSlug] = [];
+                }
+                $slugCounts[$baseSlug][] = $product['id'];
+            }
+
+            foreach ($slugCounts as $slug => $ids) {
+                if (count($ids) > 1) {
+                    foreach ($ids as $index => $id) {
+                        $finalSlug = $index > 0 ? $slug . '-' . ($index + 1) : $slug;
+                        $pdo->prepare("UPDATE products SET slug = ? WHERE id = ?")->execute([$finalSlug, $id]);
+                    }
+                } else {
+                    $pdo->prepare("UPDATE products SET slug = ? WHERE id = ?")->execute([$slug, $ids[0]]);
+                }
+            }
 
             // Re-run the auto-merge
             $variantResult = $this->autoMergeVariants($pdo);
@@ -217,7 +237,16 @@ class AdminMaintenanceController extends Controller
             if ($variantResult['merged_groups'] > 0) {
                 $message .= "Re-detected and merged {$variantResult['merged_groups']} variant groups ({$variantResult['merged_products']} products).";
             } else {
-                $message .= "No variant groups were found in product titles. Products may already be properly organized.";
+                $message .= "No variant groups were found in product titles.";
+                if (isset($variantResult['debug'])) {
+                    $message .= " Processed {$variantResult['debug']['total_products']} products, skipped {$variantResult['debug']['skipped_products']} (no variant pattern found).";
+                }
+                $message .= " Products may already be properly organized.";
+            }
+
+            // Log any errors for debugging
+            if (!empty($variantResult['errors'])) {
+                error_log('Variant merge errors: ' . implode('; ', $variantResult['errors']));
             }
 
             $_SESSION['success'] = $message;
@@ -226,6 +255,17 @@ class AdminMaintenanceController extends Controller
         }
 
         $this->redirect('/admin/maintenance?tab=actions');
+    }
+
+    /**
+     * Generate a clean URL-friendly slug from a title
+     */
+    private function generateSlug(string $title): string
+    {
+        $slug = strtolower(trim($title));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+        $slug = trim($slug, '-');
+        return $slug === '' ? 'product' : $slug;
     }
 
     /**
@@ -636,7 +676,7 @@ class AdminMaintenanceController extends Controller
      */
     private function autoMergeVariants(\PDO $pdo): array
     {
-        $result = ['merged_groups' => 0, 'merged_products' => 0, 'errors' => []];
+        $result = ['merged_groups' => 0, 'merged_products' => 0, 'errors' => [], 'debug' => []];
 
         // Check if variant support is enabled
         $hasVariantsColumn = false;
@@ -649,17 +689,20 @@ class AdminMaintenanceController extends Controller
         }
 
         // Get all products that are not already variants (parent_product_id IS NULL or 0)
+        // Include both active and draft products
         $stmt = $pdo->query('
             SELECT id, title, slug, parent_product_id
             FROM products
             WHERE (parent_product_id IS NULL OR parent_product_id = 0)
-            AND status = "active"
             ORDER BY title
         ');
         $products = $stmt->fetchAll();
 
+        $result['debug']['total_products'] = count($products);
+
         // Group products by base title
         $groups = [];
+        $skipped = 0;
         foreach ($products as $product) {
             $baseTitle = $this->extractBaseTitle($product['title']);
 
@@ -669,8 +712,13 @@ class AdminMaintenanceController extends Controller
                     $groups[$baseTitle] = [];
                 }
                 $groups[$baseTitle][] = $product;
+            } else {
+                $skipped++;
             }
         }
+
+        $result['debug']['skipped_products'] = $skipped;
+        $result['debug']['variant_groups_found'] = count($groups);
 
         // Merge each group
         foreach ($groups as $baseTitle => $groupProducts) {
@@ -697,8 +745,7 @@ class AdminMaintenanceController extends Controller
             }
 
             // Update parent slug if needed
-            $newSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($baseTitle));
-            $newSlug = trim($newSlug, '-');
+            $newSlug = $this->generateSlug($baseTitle);
             if ($newSlug !== '' && $newSlug !== $parentProduct['slug']) {
                 try {
                     // Ensure unique slug
@@ -719,15 +766,20 @@ class AdminMaintenanceController extends Controller
                 }
             }
 
+            // Set parent product to active status so it shows on frontend
+            try {
+                $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
+                    ->execute([$parentId]);
+            } catch (\Throwable $e) {
+                // Ignore status errors
+            }
+
             // Link other products as variants
             foreach (array_slice($groupProducts, 1) as $variantProduct) {
                 $variantId = $variantProduct['id'];
 
-                // Extract variant attribute from the title
-                $variantAttr = trim(substr($variantProduct['title'], strlen($baseTitle)));
-                if ($variantAttr === '') {
-                    $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
-                }
+                // Extract variant attribute using regex (more reliable than substr)
+                $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
 
                 try {
                     $pdo->prepare('
@@ -757,29 +809,45 @@ class AdminMaintenanceController extends Controller
             return '';
         }
 
-        // Common variant patterns to remove from the end
-        // Use (?:\s+) to ensure we only match after a space, not mid-word
+        // Variant patterns to try - in order from most specific to least
         $patterns = [
-            '(?:\s+)\d{2,3}[A-Z]{1,3}\s*$',      // Bra sizes: 38A, 36B, 34C, 32DD
-            '(?:\s+)\d{1,2}\.\d{1,2}\s*$',       // Decimal: 28.5
-            '(?:\s+)\d+(?:XL|XS|L|M|S)\s*$',     // 2XL, 3XL, 2XS
-            '(?:\s+)(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$',
-            '(?:\s+)(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
-            '(?:\s+)(?:XL|XS)\s*$',
-            '(?:\s+)(?:LARGE|MEDIUM|SMALL)\s*$',
-            '(?:\s+)[LMS]\s*$',                  // Single letter sizes
-            '(?:\s+)\d{1,2}\s*$',               // Standalone numbers
+            // Bra sizes: 38A, 36B, 34C, 32DD, 40DD, 40C, 40B, etc. (must be at end of title)
+            '/\s+\d{2,3}[A-Z]{1,3}\s*$/i',
+            // Decimal sizes: 28.5, 29.5, etc.
+            '/\s+\d{1,2}\.\d{1,2}\s*$/i',
+            // Sizes like 2XL, 3XL, 4XL, 5XL
+            '/\s+\d+(?:XL|XS|L|M|S)\s*$/i',
+            // Word sizes: EXTRA LARGE, EXTRA SMALL
+            '/\s+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
+            '/\s+(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$/i',
+            // XL, XS
+            '/\s+(?:XL|XS)\s*$/i',
+            // LARGE, MEDIUM, SMALL
+            '/\s+(?:LARGE|MEDIUM|SMALL)\s*$/i',
+            // Single letters: L, M, S (but only if preceded by space and at end)
+            '/\s+[LMS]\s*$/i',
+            // Standalone numbers: 36, 37, 38, etc. (but be careful with years or model numbers)
+            '/\s+\d{1,2}\s*$/i',
         ];
 
+        $originalTitle = $title;
         foreach ($patterns as $pattern) {
-            $newTitle = preg_replace('/' . $pattern . '/i', '', $title);
+            $newTitle = preg_replace($pattern, '', $title);
+            if ($newTitle === null) {
+                continue; // preg_replace failed
+            }
             $newTitle = trim($newTitle);
-            if ($newTitle !== $title && strlen($newTitle) >= 5) {
-                return $newTitle;
+            // Check if we extracted something and result is still meaningful
+            if ($newTitle !== $originalTitle && strlen($newTitle) >= 5) {
+                // Verify we haven't removed too much (base title should have at least 2 words)
+                $wordCount = count(preg_split('/\s+/', $newTitle));
+                if ($wordCount >= 2) {
+                    return $newTitle;
+                }
             }
         }
 
-        return $title;
+        return $originalTitle; // Return original if no pattern matched
     }
 
     /**
@@ -792,22 +860,22 @@ class AdminMaintenanceController extends Controller
             return ['variant' => ''];
         }
 
-        // Common variant patterns
+        // Common variant patterns - use regex to extract the variant part
         $patterns = [
-            '(?:\s+)(\d{2,3}[A-Z]{1,3})\s*$'      => 1, // Bra sizes
-            '(?:\s+)(\d{1,2}\.\d{1,2})\s*$'       => 1, // Decimal sizes
-            '(?:\s+)(\d+(?:XL|XS|L|M|S))\s*$'     => 1, // 2XL, etc.
-            '(?:\s+)(EXTRA LARGE|EXTRA SMALL)\s*$'  => 1,
-            '(?:\s+)(XXXXL|2XL|3XL)\s*$'           => 1,
-            '(?:\s+)(XL|XS)\s*$'                  => 1,
-            '(?:\s+)(LARGE|MEDIUM|SMALL)\s*$'     => 1,
-            '(?:\s+)([LMS])\s*$'                  => 1, // Single letter
-            '(?:\s+)(\d{1,2})\s*$'                => 1, // Numbers
+            '/\s+(\d{2,3}[A-Z]{1,3})\s*$/i'      => 1, // Bra sizes: 38A
+            '/\s+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal sizes: 28.5
+            '/\s+(\d+(?:XL|XS|L|M|S))\s*$/i'     => 1, // 2XL, 3XL, etc.
+            '/\s+(EXTRA LARGE|EXTRA SMALL)\s*$/i'  => 1,
+            '/\s+(XXXXL|2XL|3XL|4XL|5XL)\s*$/i'   => 1,
+            '/\s+(XL|XS)\s*$/i'                  => 1,
+            '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
+            '/\s+([LMS])\s*$/i'                  => 1, // Single letter
+            '/\s+(\d{1,2})\s*$/i'                => 1, // Numbers
         ];
 
         foreach ($patterns as $pattern => $groupIndex) {
-            if (preg_match('/' . $pattern . '/i', $title, $matches)) {
-                return ['variant' => strtoupper(trim($matches[1]))];
+            if (preg_match($pattern, $title, $matches)) {
+                return ['variant' => strtoupper(trim($matches[$groupIndex]))];
             }
         }
 
