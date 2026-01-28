@@ -224,7 +224,7 @@ class AdminBannersController extends Controller
 
         $dest = $base . '/' . $final;
         if (@move_uploaded_file($tmp, $dest)) {
-            return '/uploads/banners/' . $final;
+            return '/public/uploads/banners/' . $final;
         }
 
         return null;

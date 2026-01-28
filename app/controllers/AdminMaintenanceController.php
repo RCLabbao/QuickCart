@@ -150,6 +150,14 @@ class AdminMaintenanceController extends Controller
             $pdo->exec("UPDATE product_images SET url = CONCAT('/public', url) WHERE url NOT LIKE '/public%' AND url LIKE '/uploads/%'");
         } catch (\Throwable $e) { /* ignore */ }
 
+        // Fix banner image URLs - add /public prefix if missing
+        try {
+            $pdo->exec("UPDATE banners SET image_url = CONCAT('/public', image_url) WHERE image_url IS NOT NULL AND image_url NOT LIKE '/public%' AND image_url LIKE '/uploads/%'");
+        } catch (\Throwable $e) { /* ignore */ }
+        try {
+            $pdo->exec("UPDATE banners SET mobile_image_url = CONCAT('/public', mobile_image_url) WHERE mobile_image_url IS NOT NULL AND mobile_image_url NOT LIKE '/public%' AND mobile_image_url LIKE '/uploads/%'");
+        } catch (\Throwable $e) { /* ignore */ }
+
         // Rename products.sku -> products.fsc if needed
         try {
             $hasSku = $this->columnExists($pdo, 'products', 'sku');
