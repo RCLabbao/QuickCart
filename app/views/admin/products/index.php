@@ -22,26 +22,9 @@
       <i class="bi bi-diagram-3 me-2"></i>Bulk Detect Variants
     </a>
 
-    <div class="btn-group">
-      <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-        <i class="bi bi-download me-2"></i>Export
-      </button>
-      <ul class="dropdown-menu">
-        <li><a class="dropdown-item" href="/admin/products/export">
-          <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export CSV with Images
-        </a></li>
-        <li><hr class="dropdown-divider"></li>
-        <li>
-          <form class="dropdown-item p-0" method="post" action="/admin/products/import-stock" enctype="multipart/form-data">
-            <?= csrf_field() ?>
-            <label class="d-block px-3 py-2 mb-0" style="cursor: pointer;">
-              <i class="bi bi-upload me-2"></i>Import Stock CSV
-              <input type="file" name="csv" accept=".csv" onchange="this.form.submit()" hidden>
-            </label>
-          </form>
-        </li>
-      </ul>
-    </div>
+    <a class="btn btn-outline-success" href="/admin/products/export">
+      <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export CSV
+    </a>
   </div>
 </div>
 

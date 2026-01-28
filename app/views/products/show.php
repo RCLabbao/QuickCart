@@ -180,7 +180,13 @@
     <?php endif; ?>
     <form id="pdpAddToCartForm" class="addToCart mb-3" method="post" action="/cart/add">
       <?= \App\Core\csrf_field() ?>
-      <input type="hidden" name="product_id" value="<?= (int)$product['id'] ?>"/>
+      <input type="hidden" name="product_id" value="<?= (int)$product['id'] ?>" id="cartProductId"/>
+      <?php if (!empty($variants) && $hasVariants): ?>
+      <div class="alert alert-info small mb-2">
+        <i class="bi bi-info-circle me-1"></i>
+        <span id="selectedVariantInfo">Selected: <strong><?= htmlspecialchars($product['title']) ?></strong></span>
+      </div>
+      <?php endif; ?>
       <div class="input-group">
         <button class="btn btn-outline-secondary" type="button" data-qty="-1" <?= $stk<=0?'disabled':'' ?>>-</button>
         <input class="form-control text-center" name="qty" value="1" style="max-width:80px" <?= $stk<=0?'disabled':'' ?>>
@@ -340,7 +346,8 @@
 document.addEventListener('DOMContentLoaded', function() {
   const productCarousel = document.getElementById('productCarousel');
   const modalCarousel = document.getElementById('modalCarousel');
-  const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+  const imageModalEl = document.getElementById('imageModal');
+  const imageModal = imageModalEl ? new bootstrap.Modal(imageModalEl) : null;
   const currentImageIndex = document.getElementById('currentImageIndex');
   const thumbnails = document.querySelectorAll('.thumbnail-item');
 
@@ -370,12 +377,15 @@ document.addEventListener('DOMContentLoaded', function() {
   // Go to specific slide
   window.goToSlide = function(index) {
     const carousel = bootstrap.Carousel.getInstance(productCarousel);
-    carousel.to(index);
-    updateImageDisplay(index);
+    if (carousel) {
+      carousel.to(index);
+      updateImageDisplay(index);
+    }
   };
 
   // Open image modal at specific index
   window.openImageModal = function(index) {
+    if (!imageModal) return;
     const modalCarouselInstance = bootstrap.Carousel.getInstance(modalCarousel) || new bootstrap.Carousel(modalCarousel);
     modalCarouselInstance.to(index);
     imageModal.show();
@@ -400,14 +410,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Keyboard navigation for modal
   document.addEventListener('keydown', function(e) {
-    if (document.getElementById('imageModal').classList.contains('show')) {
+    if (imageModalEl && imageModalEl.classList.contains('show')) {
       const modalCarouselInstance = bootstrap.Carousel.getInstance(modalCarousel);
       if (e.key === 'ArrowLeft') {
         modalCarouselInstance.prev();
       } else if (e.key === 'ArrowRight') {
         modalCarouselInstance.next();
       } else if (e.key === 'Escape') {
-        imageModal.hide();
+        imageModal?.hide();
       }
     }
   });
@@ -429,14 +439,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Variant Selection
   const variantBtns = document.querySelectorAll('.variant-btn');
+  console.log('Found variant buttons:', variantBtns.length);
+
   variantBtns.forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
       const variantId = this.dataset.variantId;
       const variantPrice = parseFloat(this.dataset.variantPrice);
       const variantSalePrice = this.dataset.variantSalePrice ? parseFloat(this.dataset.variantSalePrice) : null;
       const variantStock = parseInt(this.dataset.variantStock);
       const variantFsc = this.dataset.variantFsc;
       const variantTitle = this.dataset.variantTitle;
+      const variantAttr = this.textContent.trim();
+
+      console.log('Variant clicked:', { variantId, variantTitle, variantAttr, variantPrice, variantStock });
 
       // Update selected button style
       variantBtns.forEach(b => {
@@ -460,6 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const submitBtn = form.querySelector('button[type="submit"]');
 
       productIdInput.value = variantId;
+      console.log('Updated product_id input to:', variantId);
 
       // Update price display with sale pricing support
       const priceDisplay = document.querySelector('.fs-3.fw-bold');
@@ -509,8 +528,23 @@ document.addEventListener('DOMContentLoaded', function() {
       // Update page URL without reload
       const newUrl = '/products/' + (variantFsc || variantId);
       window.history.replaceState({}, '', newUrl);
+
+      // Update selected variant info display
+      const selectedInfo = document.getElementById('selectedVariantInfo');
+      if (selectedInfo) {
+        selectedInfo.innerHTML = 'Selected: <strong>' + variantTitle + '</strong> (' + variantAttr + ')';
+      }
     });
   });
+
+  // Form submission handler for debugging
+  const addToCartForm = document.getElementById('pdpAddToCartForm');
+  if (addToCartForm) {
+    addToCartForm.addEventListener('submit', function(e) {
+      const productId = document.getElementById('cartProductId').value;
+      console.log('Form submitting with product_id:', productId);
+    });
+  }
 
   // Helper function for number formatting
   function number_format(number, decimals) {

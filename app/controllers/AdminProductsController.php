@@ -751,30 +751,6 @@ class AdminProductsController extends Controller
         $this->redirect('/admin/products');
     }
 
-    public function importStock(): void
-    {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { $this->redirect('/admin/products'); }
-        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/products'); }
-        if (empty($_FILES['csv']['tmp_name'])) { $this->redirect('/admin/products'); }
-        $f = fopen($_FILES['csv']['tmp_name'],'r'); if(!$f){ $this->redirect('/admin/products'); }
-        // Expect headers: id,stock
-        $pdo = DB::pdo(); $upd = $pdo->prepare('UPDATE products SET stock=? WHERE id=?');
-        $log = $pdo->prepare('INSERT INTO product_stock_events (product_id,user_id,delta,reason,created_at) VALUES (?,?,?,?,NOW())');
-        $get = $pdo->prepare('SELECT COALESCE(stock,0) FROM products WHERE id=?');
-        $i=0; while (($row = fgetcsv($f)) !== false) {
-            if ($i===0 && preg_match('/id/i', $row[0] ?? '') ) { $i++; continue; }
-            $pid = (int)($row[0] ?? 0); $stk = max(0, (int)($row[1] ?? 0));
-            if($pid>0){
-                $get->execute([$pid]); $prev=(int)($get->fetchColumn() ?? 0);
-                $upd->execute([$stk,$pid]);
-                $delta = $stk - $prev; if ($delta !== 0) { try { $log->execute([$pid, \App\Core\Auth::userId(), $delta, 'csv import']); } catch (\Throwable $e) {} }
-            }
-            $i++;
-        }
-        fclose($f);
-        $this->redirect('/admin/products');
-    }
-
     public function search(): void
     {
         // Admin JSON search for scan/typeahead
