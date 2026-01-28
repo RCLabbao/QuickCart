@@ -319,10 +319,13 @@ class AdminSyncController extends Controller
             foreach ($rows as $row) {
                 $seen++;
                 $fsc = trim((string)($row['FSC'] ?? ''));
-                if ($fsc==='') { $errors++; if ($collectDebug && count($debugRows) < 500) { $debugRows[] = ['fsc'=>'','category_raw'=>'','slug'=>'','collection'=>null,'action'=>'skip','reason'=>'Missing FSC']; } continue; }
+                // Convert empty FSC to NULL to avoid duplicate key constraint issues with UNIQUE index
+                if ($fsc === '') {
+                    $fsc = null;
+                }
                 $title = trim((string)($row['Title'] ?? ''));
                 // If title is empty, use FSC as fallback (but prefer keeping existing title when updating)
-                if ($title === '') { $title = $fsc; }
+                if ($title === '' && $fsc !== null) { $title = $fsc; }
                 $price = (float)($row['RegPrice'] ?? 0);
                 $stock = (int)($row['TotalSOH'] ?? 0);
                 $category = trim((string)($row['Categorycode'] ?? ''));
@@ -425,7 +428,7 @@ class AdminSyncController extends Controller
                                 if ($suffix > 1000) break;
                             }
                             $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'draft\',0,?, NULL, NULL, NOW())')
-                                ->execute([$parentTitle,$parentSlug,'',0,0,$collectionId]);
+                                ->execute([$parentTitle,$parentSlug,null,0,0,$collectionId]);
                             $parentProductId = (int)$pdo->lastInsertId();
                         }
                     }
@@ -569,7 +572,13 @@ class AdminSyncController extends Controller
                         $t = $pdo->prepare('INSERT INTO tags (name,slug) VALUES (?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)');
                         $t->execute([$ptype,$slug]);
                         $tagId = (int)$pdo->query('SELECT id FROM tags WHERE slug='.$pdo->quote($slug))->fetchColumn();
-                        $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
+                        // Get product ID - try by FSC first, then fallback to slug/title
+                        if ($fsc !== null) {
+                            $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
+                        } else {
+                            $slugTitle = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$title));
+                            $pid = (int)$pdo->query('SELECT id FROM products WHERE slug='.$pdo->quote($slugTitle).' OR title='.$pdo->quote($title).' LIMIT 1')->fetchColumn();
+                        }
                         if ($tagId && $pid) { $pdo->prepare('INSERT IGNORE INTO product_tags (product_id, tag_id) VALUES (?,?)')->execute([$pid,$tagId]); }
                     } catch (\Throwable $e) { /* ignore tags failures */ }
                 }
@@ -579,8 +588,13 @@ class AdminSyncController extends Controller
                     try {
                         $imageUrls = trim((string)($row['ImageURLs'] ?? ''));
                         if ($imageUrls !== '') {
-                            // Get product ID
-                            $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
+                            // Get product ID - try by FSC first, then fallback to slug/title
+                            if ($fsc !== null) {
+                                $pid = (int)$pdo->query('SELECT id FROM products WHERE fsc='.$pdo->quote($fsc))->fetchColumn();
+                            } else {
+                                $slugTitle = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$title));
+                                $pid = (int)$pdo->query('SELECT id FROM products WHERE slug='.$pdo->quote($slugTitle).' OR title='.$pdo->quote($title).' LIMIT 1')->fetchColumn();
+                            }
                             if ($pid) {
                                 // Parse comma-separated URLs
                                 $urls = array_map('trim', explode(',', $imageUrls));
