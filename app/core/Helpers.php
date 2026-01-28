@@ -259,22 +259,26 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         return $result;
     }
 
-    // Get all products that are not already variants
+    // CRITICAL FIX: Get ALL products (not just ones without parent_product_id)
+    // The old query only selected products where parent_product_id IS NULL, which
+    // completely skipped products that were already linked during CSV import!
+    // We need to query ALL products and re-group them properly.
     $stmt = $pdo->query('
-        SELECT id, title, slug, parent_product_id
+        SELECT id, title, slug, parent_product_id, status
         FROM products
-        WHERE (parent_product_id IS NULL OR parent_product_id = 0)
         ORDER BY title
     ');
-    $products = $stmt->fetchAll();
+    $allProducts = $stmt->fetchAll();
 
-    $result['debug']['total_products'] = count($products);
+    $result['debug']['total_products'] = count($allProducts);
 
     // Group products by base title using the SHARED function
     // CRITICAL: Store original titles BEFORE any updates
     $groups = [];
     $skipped = 0;
-    foreach ($products as $product) {
+    $placeholderParents = []; // Track placeholder parent products created during CSV import
+
+    foreach ($allProducts as $product) {
         $baseTitle = qc_extract_base_title($product['title']);
 
         // Only group if base title is different from full title AND is meaningful
@@ -286,8 +290,15 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             $groups[$baseTitle][] = [
                 'id' => $product['id'],
                 'original_title' => $product['title'],  // Store original!
-                'slug' => $product['slug']
+                'slug' => $product['slug'],
+                'status' => $product['status'],
+                'parent_product_id' => $product['parent_product_id']
             ];
+
+            // Track placeholder parents (created during CSV import with status='draft')
+            if (!empty($product['parent_product_id']) && $product['status'] === 'draft') {
+                $placeholderParents[$product['parent_product_id']] = true;
+            }
         } else {
             $skipped++;
         }
@@ -295,19 +306,37 @@ function qc_auto_merge_variants(\PDO $pdo): array {
 
     $result['debug']['skipped_products'] = $skipped;
     $result['debug']['variant_groups_found'] = count($groups);
+    $result['debug']['placeholder_parents_found'] = count($placeholderParents);
 
     // Merge each group
     foreach ($groups as $baseTitle => $groupProducts) {
-        if (count($groupProducts) <= 1) {
-            continue; // Skip groups with only 1 product
+        // Filter out placeholder parent products (draft status, created during CSV import)
+        $realProducts = array_filter($groupProducts, function($p) {
+            return $p['status'] !== 'draft';
+        });
+        $realProducts = array_values($realProducts); // Re-index array
+
+        if (count($realProducts) <= 1) {
+            // If only 1 real product (rest are placeholders), skip this group
+            // but delete the placeholder parents
+            foreach ($groupProducts as $p) {
+                if ($p['status'] === 'draft') {
+                    try {
+                        $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$p['id']]);
+                    } catch (\Throwable $e) {
+                        $result['errors'][] = "Could not delete placeholder product ID {$p['id']}: " . $e->getMessage();
+                    }
+                }
+            }
+            continue;
         }
 
         // Sort by ID to use the first/oldest as parent
-        usort($groupProducts, function($a, $b) {
+        usort($realProducts, function($a, $b) {
             return $a['id'] - $b['id'];
         });
 
-        $parentProduct = $groupProducts[0];
+        $parentProduct = $realProducts[0];
         $parentId = $parentProduct['id'];
 
         // DON'T update parent title or slug - keep original to preserve variant info!
@@ -315,14 +344,14 @@ function qc_auto_merge_variants(\PDO $pdo): array {
 
         // Set parent product to active status so it shows on frontend
         try {
-            $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
+            $pdo->prepare('UPDATE products SET status = "active", parent_product_id = NULL WHERE id = ?')
                 ->execute([$parentId]);
         } catch (\Throwable $e) {
             // Ignore status errors
         }
 
         // Link other products as variants
-        foreach (array_slice($groupProducts, 1) as $variantProduct) {
+        foreach (array_slice($realProducts, 1) as $variantProduct) {
             $variantId = $variantProduct['id'];
 
             // Extract variant attribute from ORIGINAL title (before it was changed)
@@ -338,6 +367,18 @@ function qc_auto_merge_variants(\PDO $pdo): array {
                 $result['merged_products']++;
             } catch (\Throwable $e) {
                 $result['errors'][] = "Could not link product ID {$variantId}: " . $e->getMessage();
+            }
+        }
+
+        // Delete placeholder parent products (created during CSV import)
+        foreach ($groupProducts as $p) {
+            if ($p['status'] === 'draft' && $p['id'] != $parentId) {
+                try {
+                    $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$p['id']]);
+                    $result['debug']['placeholder_parents_deleted'] = ($result['debug']['placeholder_parents_deleted'] ?? 0) + 1;
+                } catch (\Throwable $e) {
+                    $result['errors'][] = "Could not delete placeholder product ID {$p['id']}: " . $e->getMessage();
+                }
             }
         }
 
