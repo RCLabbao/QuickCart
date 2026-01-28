@@ -156,6 +156,20 @@
 
       <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom"><h5 class="card-title mb-0"><i class="bi bi-patch-exclamation me-2"></i>Fix FSC Duplicates</h5></div>
+          <div class="card-body">
+            <p class="text-muted mb-4">Fix "Duplicate entry for key products.fsc" error by converting empty FSC strings to NULL.</p>
+            <form method="post" action="/admin/maintenance/fix-fsc" onsubmit="return confirmAction('fix FSC duplicates')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-success w-100"><i class="bi bi-check-circle me-2"></i>Fix FSC Issues</button>
+            </form>
+            <div class="mt-3"><small class="text-muted"><i class="bi bi-lightbulb me-1"></i>Resolves import errors when products have empty FSC values. Also optimizes the table.</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white border-bottom"><h5 class="card-title mb-0"><i class="bi bi-database-add me-2"></i>Demo Data</h5></div>
           <div class="card-body">
             <p class="text-muted mb-4">Add sample products, orders, and collections for testing and demonstration purposes.</p>

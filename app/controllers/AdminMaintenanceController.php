@@ -133,6 +133,9 @@ class AdminMaintenanceController extends Controller
             }
         } catch (\Throwable $e) { /* ignore migration errors */ }
 
+        // Fix FSC duplicate entry issue: convert empty strings to NULL
+        $this->fixFscDuplicates($pdo);
+
         // Ensure tables for future features
         $this->ensureTable($pdo, 'order_events',
             'CREATE TABLE order_events (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, user_id INT NULL, type VARCHAR(64) NOT NULL, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
@@ -159,6 +162,58 @@ class AdminMaintenanceController extends Controller
 
         $_SESSION['success'] = 'Optimization complete.';
         $this->redirect('/admin/maintenance?tab=actions');
+    }
+
+    /**
+     * Fix FSC duplicate entry issue
+     * Converts empty FSC strings to NULL to avoid duplicate key constraint violations
+     */
+    public function fixFsc(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+        $pdo = DB::pdo();
+        $result = $this->fixFscDuplicates($pdo);
+        $_SESSION['success'] = "FSC optimization complete. Fixed {$result['fixed']} empty FSC values. Table optimized.";
+        $this->redirect('/admin/maintenance?tab=actions');
+    }
+
+    /**
+     * Internal method to fix FSC duplicate entry issue
+     * Returns array with results
+     */
+    private function fixFscDuplicates(\PDO $pdo): array
+    {
+        $result = ['fixed' => 0, 'error' => null];
+
+        try {
+            // Check if products table has FSC column
+            $hasFsc = $this->columnExists($pdo, 'products', 'fsc');
+            if (!$hasFsc) {
+                $result['error'] = 'FSC column does not exist in products table';
+                return $result;
+            }
+
+            // Count empty FSC strings before fix
+            $emptyCount = (int)$pdo->query("SELECT COUNT(*) FROM products WHERE fsc = '' OR fsc = '")->fetchColumn();
+
+            if ($emptyCount > 0) {
+                // Convert empty FSC strings to NULL
+                $pdo->exec("UPDATE products SET fsc = NULL WHERE fsc = '' OR fsc = ' '");
+                $result['fixed'] = $emptyCount;
+            }
+
+            // Optimize the table to reclaim space
+            try {
+                $pdo->exec("OPTIMIZE TABLE products");
+            } catch (\Throwable $e) {
+                // Optimization may fail on some systems, ignore
+            }
+
+        } catch (\Throwable $e) {
+            $result['error'] = $e->getMessage();
+        }
+
+        return $result;
     }
 
     public function seedDemo(): void
