@@ -655,17 +655,21 @@ class AdminMaintenanceController extends Controller
             }
 
             // Update parent slug if needed
-            $newSlug = preg_replace('/[^a-z0-9]+/ '-', strtolower($baseTitle));
+            $newSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($baseTitle));
             $newSlug = trim($newSlug, '-');
             if ($newSlug !== '' && $newSlug !== $parentProduct['slug']) {
                 try {
                     // Ensure unique slug
                     $baseSlug = $newSlug;
                     $suffix = 1;
-                    while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug = ' . $pdo->quote($newSlug) . ' AND id != ' . $parentId)->fetchColumn() > 0) {
-                        $newSlug = $baseSlug . '-' . $suffix++;
-                        if ($suffix > 100) break;
-                    }
+                    $checkSlug = $pdo->prepare('SELECT COUNT(*) FROM products WHERE slug = ? AND id != ?');
+                    do {
+                        $checkSlug->execute([$newSlug, $parentId]);
+                        $count = (int)$checkSlug->fetchColumn();
+                        if ($count > 0) {
+                            $newSlug = $baseSlug . '-' . $suffix++;
+                        }
+                    } while ($count > 0 && $suffix <= 100);
                     $pdo->prepare('UPDATE products SET slug = ? WHERE id = ?')
                         ->execute([$newSlug, $parentId]);
                 } catch (\Throwable $e) {
