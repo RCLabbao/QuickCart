@@ -236,8 +236,6 @@ class AdminMaintenanceController extends Controller
                 $message .= " Products may already be properly organized.";
             }
 
-            $message .= " <strong>Backup stored in session for undo capability.</strong>";
-
             // Log any errors for debugging
             if (!empty($variantResult['errors'])) {
                 error_log('Variant merge errors: ' . implode('; ', $variantResult['errors']));

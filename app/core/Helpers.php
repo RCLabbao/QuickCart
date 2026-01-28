@@ -181,6 +181,7 @@ function qc_extract_base_title(string $title): string {
         '/\s+(?:XL|XS)\s*$/i',
         '/\s+(?:LARGE|MEDIUM|SMALL)\s*$/i',
         '/\s+[LMS]\s*$/i',                  // Single letter sizes
+        '/\s+PACK\s+[LMS]\s*$/i',           // PACK L, PACK M, PACK S (for bikini briefs)
         '/\s+\d{1,2}\s*$/i',               // Standalone numbers: 36, 37, 38
     ];
 
@@ -220,6 +221,7 @@ function qc_extract_variant_attribute(string $title): string {
         '/\s+(XL|XS)\s*$/i'                  => 1,
         '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
         '/\s+([LMS])\s*$/i'                  => 1, // Single letter
+        '/\s+PACK\s+([LMS])\s*$/i'           => 1, // PACK L, PACK M, PACK S
         '/\s+(\d{1,2})\s*$/i'                => 1, // Numbers
     ];
 
@@ -269,6 +271,7 @@ function qc_auto_merge_variants(\PDO $pdo): array {
     $result['debug']['total_products'] = count($products);
 
     // Group products by base title using the SHARED function
+    // CRITICAL: Store original titles BEFORE any updates
     $groups = [];
     $skipped = 0;
     foreach ($products as $product) {
@@ -279,7 +282,12 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             if (!isset($groups[$baseTitle])) {
                 $groups[$baseTitle] = [];
             }
-            $groups[$baseTitle][] = $product;
+            // Store BOTH original title and base title for each product
+            $groups[$baseTitle][] = [
+                'id' => $product['id'],
+                'original_title' => $product['title'],  // Store original!
+                'slug' => $product['slug']
+            ];
         } else {
             $skipped++;
         }
@@ -303,7 +311,7 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         $parentId = $parentProduct['id'];
 
         // Update parent title to base title if needed
-        if ($parentProduct['title'] !== $baseTitle) {
+        if ($parentProduct['original_title'] !== $baseTitle) {
             try {
                 $pdo->prepare('UPDATE products SET title = ? WHERE id = ?')
                     ->execute([$baseTitle, $parentId]);
@@ -347,8 +355,8 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         foreach (array_slice($groupProducts, 1) as $variantProduct) {
             $variantId = $variantProduct['id'];
 
-            // Extract variant attribute using the SHARED function
-            $variantAttr = qc_extract_variant_attribute($variantProduct['title']);
+            // Extract variant attribute from ORIGINAL title (before it was changed)
+            $variantAttr = qc_extract_variant_attribute($variantProduct['original_title']);
 
             try {
                 $pdo->prepare('
