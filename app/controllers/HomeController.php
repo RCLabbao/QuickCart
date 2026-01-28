@@ -36,25 +36,30 @@ class HomeController extends Controller
             ? 'COALESCE((SELECT SUM(stock) FROM products WHERE parent_product_id = p.id), p.stock, 0) AS stock'
             : 'COALESCE(p.stock,0) AS stock';
 
+        // Build first variant ID calculation for products with variants
+        $variantIdCalc = $hasVariants
+            ? ',(SELECT id FROM products WHERE parent_product_id = p.id AND status = "active" AND COALESCE(stock,0) > 0 ORDER BY stock DESC LIMIT 1) AS first_variant_id'
+            : ',NULL AS first_variant_id';
+
         // On Sale now (fallback if sale columns are missing)
         try {
-            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,' . $stockCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND sale_price IS NOT NULL AND sale_price < price AND (sale_start IS NULL OR sale_start <= NOW()) AND (sale_end IS NULL OR sale_end >= NOW())' . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,' . $stockCalc . $variantIdCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND sale_price IS NOT NULL AND sale_price < price AND (sale_start IS NULL OR sale_start <= NOW()) AND (sale_end IS NULL OR sale_end >= NOW())' . $exSql . ' ORDER BY created_at DESC LIMIT 12');
             $st->execute($exParams); $sale = $st->fetchAll();
         } catch (\Throwable $e) {
-            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,' . $stockCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,' . $stockCalc . $variantIdCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . $exSql . ' ORDER BY created_at DESC LIMIT 12');
             $st->execute($exParams); $sale = $st->fetchAll();
         }
         // New Arrivals
         try {
-            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,' . $stockCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,' . $stockCalc . $variantIdCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . $exSql . ' ORDER BY created_at DESC LIMIT 12');
             $st->execute($exParams); $new = $st->fetchAll();
         } catch (\Throwable $e) {
-            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,' . $stockCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . $exSql . ' ORDER BY created_at DESC LIMIT 12');
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,' . $stockCalc . $variantIdCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . $exSql . ' ORDER BY created_at DESC LIMIT 12');
             $st->execute($exParams); $new = $st->fetchAll();
         }
         // Best Sellers (last 30 days)
         try {
-            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,' . $stockCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,p.sale_price,p.sale_start,p.sale_end,' . $stockCalc . $variantIdCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
                                  FROM products p
                                  JOIN (
                                    SELECT i.product_id, SUM(i.quantity) qty
@@ -67,7 +72,7 @@ class HomeController extends Controller
                                  WHERE p.status="active"' . $variantFilter . $exSql);
             $st->execute($exParams); $best = $st->fetchAll();
         } catch (\Throwable $e) {
-            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,' . $stockCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
+            $st = $pdo->prepare('SELECT p.id,p.title,p.slug,p.price,' . $stockCalc . $variantIdCalc . ',p.created_at,(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url
                                  FROM products p
                                  JOIN (
                                    SELECT i.product_id, SUM(i.quantity) qty

@@ -116,11 +116,33 @@ class CheckoutController extends Controller
         $pdo = DB::pdo(); $pdo->beginTransaction();
         try {
             $subtotal = 0; $items = [];
+
+            // Check if variant support exists
+            $hasVariants = false;
+            try {
+                $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+            } catch (\Throwable $e) {}
+
             foreach ($cart as $pid=>$qty) {
-                $stmt = $pdo->prepare('SELECT id, title, price, sale_price, sale_start, sale_end, COALESCE(stock,0) AS stock FROM products WHERE id=?'); $stmt->execute([$pid]); $p=$stmt->fetch();
-                if(!$p) continue; $qty = max(0, min((int)$qty, (int)$p['stock'])); if ($qty<=0) continue;
-                $unit = \App\Core\effective_price($p);
-                $line = $unit*$qty; $subtotal += $line; $items[] = [$p,$qty,$line,$unit];
+                $stmt = $pdo->prepare('SELECT id, title, price, sale_price, sale_start, sale_end, COALESCE(stock,0) AS stock, parent_product_id FROM products WHERE id=?'); $stmt->execute([$pid]); $p=$stmt->fetch();
+                if(!$p) continue;
+
+                // CRITICAL FIX: If this is a parent product with variants, use the first available variant
+                $actualProduct = $p;
+                if ($hasVariants && $p['parent_product_id'] === null && (int)$p['stock'] === 0) {
+                    // This is a parent product - find the first available variant with stock
+                    $variantStmt = $pdo->prepare('SELECT id, title, price, sale_price, sale_start, sale_end, COALESCE(stock,0) AS stock FROM products WHERE parent_product_id = ? AND status = "active" AND COALESCE(stock,0) > 0 ORDER BY stock DESC LIMIT 1');
+                    $variantStmt->execute([$pid]);
+                    $variant = $variantStmt->fetch();
+                    if ($variant) {
+                        $actualProduct = $variant;
+                    }
+                }
+
+                $qty = max(0, min((int)$qty, (int)$actualProduct['stock']));
+                if ($qty<=0) continue;
+                $unit = \App\Core\effective_price($actualProduct);
+                $line = $unit*$qty; $subtotal += $line; $items[] = [$actualProduct,$qty,$line,$unit];
             }
             if (empty($items)) { $pdo->rollBack(); $_SESSION['checkout_error'] = 'Sorry, some items are no longer available or out of stock. Please review your cart.'; $this->redirect('/cart'); return; }
             // Load shipping fees from settings if set

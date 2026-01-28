@@ -111,6 +111,11 @@ class ProductController extends Controller
             ? ', COALESCE((SELECT SUM(stock) FROM products v WHERE v.parent_product_id = p.id), p.stock, 0) AS total_stock'
             : '';
 
+        // Build first variant ID calculation for products with variants
+        $variantIdSelect = $hasVariants
+            ? ', (SELECT id FROM products WHERE parent_product_id = p.id AND status = "active" AND COALESCE(stock,0) > 0 ORDER BY stock DESC LIMIT 1) AS first_variant_id'
+            : ', NULL AS first_variant_id';
+
         if ($q === '') { $products = []; $count = 0; }
         else {
             $like = "%$q%";
@@ -125,7 +130,7 @@ class ProductController extends Controller
                 $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
             }
 
-            $sql = 'SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url' . $stockCalcSelect . ' FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+            $sql = 'SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url' . $stockCalcSelect . $variantIdSelect . ' FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
             $stmt = $pdo->prepare($sql);
             $stmt->execute(array_merge([$like,$like], $exParams));
             $products = $stmt->fetchAll();
@@ -176,11 +181,16 @@ class ProductController extends Controller
             ? 'COALESCE((SELECT SUM(stock) FROM products WHERE parent_product_id = p.id), p.stock, 0)'
             : 'COALESCE(p.stock,0)';
 
+        // Build first variant ID calculation for products with variants
+        $variantIdCalc = $hasVariants
+            ? ', (SELECT id FROM products WHERE parent_product_id = p.id AND status = "active" AND COALESCE(stock,0) > 0 ORDER BY stock DESC LIMIT 1) AS first_variant_id'
+            : '';
+
         try {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, ' . $stockCalc . ' AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, ' . $stockCalc . ' AS stock' . $variantIdCalc . ', (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
             $stmt->execute(array_merge([$like, $like], $exParams));
         } catch (\Throwable $e) {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, ' . $stockCalc . ' AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, ' . $stockCalc . ' AS stock' . $variantIdCalc . ', (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
             $stmt->execute(array_merge([$like, $like], $exParams));
         }
         $products = $stmt->fetchAll();
@@ -205,16 +215,17 @@ class ProductController extends Controller
             $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
         } catch (\Throwable $e) {}
 
-        // Build SQL with aggregated stock from variants
+        // Build SQL with aggregated stock from variants and first variant ID
         if ($hasVariants) {
-            // For parent products: show total stock from all variants
+            // For parent products: show total stock from all variants and get first available variant ID
             // For standalone products: show their own stock
             $sql = 'SELECT p.*,
                 (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url,
                 COALESCE(
                     (SELECT SUM(stock) FROM products WHERE parent_product_id = p.id),
                     p.stock
-                ) AS total_stock
+                ) AS total_stock,
+                (SELECT id FROM products WHERE parent_product_id = p.id AND status = "active" AND COALESCE(stock,0) > 0 ORDER BY stock DESC LIMIT 1) AS first_variant_id
                 FROM products p ' . $where . ' ' . $order . ' LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
         } else {
             $sql = 'SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p ' . $where . ' ' . $order . ' LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;

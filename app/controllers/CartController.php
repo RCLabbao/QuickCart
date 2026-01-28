@@ -41,11 +41,29 @@ class CartController extends Controller
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->json(['ok'=>false], 400); return; }
         $id = (int)($_POST['product_id'] ?? 0); $qty = max(1, (int)($_POST['qty'] ?? 1));
-        $stmt = DB::pdo()->prepare('SELECT id, title, price, slug, COALESCE(stock,0) AS stock FROM products WHERE id=?');
+        $pdo = DB::pdo();
+
+        // Check if variant support exists
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
+        $stmt = $pdo->prepare('SELECT id, title, price, slug, COALESCE(stock,0) AS stock, parent_product_id FROM products WHERE id=?');
         $stmt->execute([$id]); $p = $stmt->fetch(); if (!$p) { $this->json(['ok'=>false],404); return; }
+
+        // CRITICAL FIX: If this is a parent product with variants and no stock, check variant availability
+        $actualStock = (int)$p['stock'];
+        if ($hasVariants && $p['parent_product_id'] === null && (int)$p['stock'] === 0) {
+            // This is a parent product - get total stock from variants
+            $stockStmt = $pdo->prepare('SELECT COALESCE(SUM(stock),0) AS total_stock FROM products WHERE parent_product_id = ? AND status = "active"');
+            $stockStmt->execute([$id]);
+            $actualStock = (int)$stockStmt->fetchColumn();
+        }
+
         $_SESSION['cart'] = $_SESSION['cart'] ?? [];
         $current = (int)($_SESSION['cart'][$id] ?? 0);
-        $max = (int)$p['stock'];
+        $max = $actualStock;
         if ($max <= 0) { $this->json(['ok'=>true,'count'=>array_sum($_SESSION['cart'])]); return; }
         $new = min($current + $qty, $max);
         $_SESSION['cart'][$id] = $new;
@@ -63,8 +81,37 @@ class CartController extends Controller
         $id = (int)($_POST['product_id'] ?? 0); $qty = max(0, (int)($_POST['qty'] ?? 1));
         $_SESSION['cart'] = $_SESSION['cart'] ?? [];
         if ($qty === 0) { unset($_SESSION['cart'][$id]); $this->json(['ok'=>true]); return; }
-        $stmt = DB::pdo()->prepare('SELECT COALESCE(stock,0) AS stock FROM products WHERE id=?'); $stmt->execute([$id]);
-        $max = (int)($stmt->fetchColumn() ?: 0);
+
+        $pdo = DB::pdo();
+
+        // Check if variant support exists
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
+        // Get stock (with variant support)
+        $max = 0;
+        if ($hasVariants) {
+            $stmt = $pdo->prepare('SELECT COALESCE(stock,0) AS stock, parent_product_id FROM products WHERE id=?');
+            $stmt->execute([$id]);
+            $p = $stmt->fetch();
+            if (!$p) { $this->json(['ok'=>false]); return; }
+            $stock = (int)$p['stock'];
+            // If parent product with no stock, check variants
+            if ($p['parent_product_id'] === null && $stock === 0) {
+                $stockStmt = $pdo->prepare('SELECT COALESCE(SUM(stock),0) AS total_stock FROM products WHERE parent_product_id = ? AND status = "active"');
+                $stockStmt->execute([$id]);
+                $max = (int)$stockStmt->fetchColumn();
+            } else {
+                $max = $stock;
+            }
+        } else {
+            $stmt = $pdo->prepare('SELECT COALESCE(stock,0) AS stock FROM products WHERE id=?');
+            $stmt->execute([$id]);
+            $max = (int)($stmt->fetchColumn() ?: 0);
+        }
+
         $_SESSION['cart'][$id] = min($qty, $max);
         $this->json(['ok'=>true]);
     }

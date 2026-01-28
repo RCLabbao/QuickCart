@@ -51,7 +51,11 @@
         </div>
         <form class="addToCart" method="post" action="/cart/add">
           <?= \App\Core\csrf_field() ?>
-          <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>"/>
+          <?php
+          // Use first available variant ID if this is a parent product with variants
+          $addToCartId = !empty($p['first_variant_id']) ? (int)$p['first_variant_id'] : (int)$p['id'];
+          ?>
+          <input type="hidden" name="product_id" value="<?= $addToCartId ?>"/>
           <?php $oos = (int)($p['stock'] ?? 0) <= 0; ?>
           <button class="btn btn-sm btn-dark" type="submit" <?= $oos?'disabled':'' ?>><?= $oos?'Sold out':'Add' ?></button>
         </form>
