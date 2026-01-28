@@ -134,7 +134,10 @@ class AdminMaintenanceController extends Controller
         } catch (\Throwable $e) { /* ignore migration errors */ }
 
         // Fix FSC duplicate entry issue: convert empty strings to NULL
-        $this->fixFscDuplicates($pdo);
+        $fscResult = $this->fixFscDuplicates($pdo);
+
+        // Auto-detect and merge product variants
+        $variantResult = $this->autoMergeVariants($pdo);
 
         // Ensure tables for future features
         $this->ensureTable($pdo, 'order_events',
@@ -160,7 +163,13 @@ class AdminMaintenanceController extends Controller
         $this->tryExec($pdo, 'CREATE INDEX idx_orders_email ON orders (email)');
         $this->tryExec($pdo, 'CREATE INDEX idx_collections_slug ON collections (slug)');
 
-        $_SESSION['success'] = 'Optimization complete.';
+        // Build success message with variant merge info
+        $successMsg = 'Optimization complete.';
+        if ($variantResult['merged_groups'] > 0) {
+            $successMsg .= " Merged {$variantResult['merged_groups']} variant groups ({$variantResult['merged_products']} products).";
+        }
+
+        $_SESSION['success'] = $successMsg;
         $this->redirect('/admin/maintenance?tab=actions');
     }
 
@@ -577,6 +586,186 @@ class AdminMaintenanceController extends Controller
         }
 
         $this->redirect('/admin/maintenance?tab=backup');
+    }
+
+    /**
+     * Automatically detect and merge product variants based on title patterns
+     * This helps organize products that have size/color variants in their titles
+     */
+    private function autoMergeVariants(\PDO $pdo): array
+    {
+        $result = ['merged_groups' => 0, 'merged_products' => 0, 'errors' => []];
+
+        // Check if variant support is enabled
+        $hasVariantsColumn = false;
+        try {
+            $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) { $hasVariantsColumn = false; }
+
+        if (!$hasVariantsColumn) {
+            return $result;
+        }
+
+        // Get all products that are not already variants (parent_product_id IS NULL or 0)
+        $stmt = $pdo->query('
+            SELECT id, title, slug, parent_product_id
+            FROM products
+            WHERE (parent_product_id IS NULL OR parent_product_id = 0)
+            AND status = "active"
+            ORDER BY title
+        ');
+        $products = $stmt->fetchAll();
+
+        // Group products by base title
+        $groups = [];
+        foreach ($products as $product) {
+            $baseTitle = $this->extractBaseTitle($product['title']);
+
+            // Only group if base title is different from full title AND is meaningful
+            if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
+                if (!isset($groups[$baseTitle])) {
+                    $groups[$baseTitle] = [];
+                }
+                $groups[$baseTitle][] = $product;
+            }
+        }
+
+        // Merge each group
+        foreach ($groups as $baseTitle => $groupProducts) {
+            if (count($groupProducts) <= 1) {
+                continue; // Skip groups with only 1 product
+            }
+
+            // Sort by ID to use the first/oldest as parent
+            usort($groupProducts, function($a, $b) {
+                return $a['id'] - $b['id'];
+            });
+
+            $parentProduct = $groupProducts[0];
+            $parentId = $parentProduct['id'];
+
+            // Update parent title to base title if needed
+            if ($parentProduct['title'] !== $baseTitle) {
+                try {
+                    $pdo->prepare('UPDATE products SET title = ? WHERE id = ?')
+                        ->execute([$baseTitle, $parentId]);
+                } catch (\Throwable $e) {
+                    $result['errors'][] = "Could not update parent product ID {$parentId}: " . $e->getMessage();
+                }
+            }
+
+            // Update parent slug if needed
+            $newSlug = preg_replace('/[^a-z0-9]+/ '-', strtolower($baseTitle));
+            $newSlug = trim($newSlug, '-');
+            if ($newSlug !== '' && $newSlug !== $parentProduct['slug']) {
+                try {
+                    // Ensure unique slug
+                    $baseSlug = $newSlug;
+                    $suffix = 1;
+                    while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug = ' . $pdo->quote($newSlug) . ' AND id != ' . $parentId)->fetchColumn() > 0) {
+                        $newSlug = $baseSlug . '-' . $suffix++;
+                        if ($suffix > 100) break;
+                    }
+                    $pdo->prepare('UPDATE products SET slug = ? WHERE id = ?')
+                        ->execute([$newSlug, $parentId]);
+                } catch (\Throwable $e) {
+                    // Ignore slug errors
+                }
+            }
+
+            // Link other products as variants
+            foreach (array_slice($groupProducts, 1) as $variantProduct) {
+                $variantId = $variantProduct['id'];
+
+                // Extract variant attribute from the title
+                $variantAttr = trim(substr($variantProduct['title'], strlen($baseTitle)));
+                if ($variantAttr === '') {
+                    $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
+                }
+
+                try {
+                    $pdo->prepare('
+                        UPDATE products
+                        SET parent_product_id = ?, variant_attributes = ?
+                        WHERE id = ?
+                    ')->execute([$parentId, $variantAttr, $variantId]);
+                    $result['merged_products']++;
+                } catch (\Throwable $e) {
+                    $result['errors'][] = "Could not link product ID {$variantId}: " . $e->getMessage();
+                }
+            }
+
+            $result['merged_groups']++;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Extract base title by removing variant patterns from the end
+     */
+    private function extractBaseTitle(string $title): string
+    {
+        $title = trim($title);
+        if ($title === '') {
+            return '';
+        }
+
+        // Common variant patterns to remove from the end
+        // Use (?:\s+) to ensure we only match after a space, not mid-word
+        $patterns = [
+            '(?:\s+)\d{2,3}[A-Z]{1,3}\s*$',      // Bra sizes: 38A, 36B, 34C, 32DD
+            '(?:\s+)\d{1,2}\.\d{1,2}\s*$',       // Decimal: 28.5
+            '(?:\s+)\d+(?:XL|XS|L|M|S)\s*$',     // 2XL, 3XL, 2XS
+            '(?:\s+)(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$',
+            '(?:\s+)(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
+            '(?:\s+)(?:XL|XS)\s*$',
+            '(?:\s+)(?:LARGE|MEDIUM|SMALL)\s*$',
+            '(?:\s+)[LMS]\s*$',                  // Single letter sizes
+            '(?:\s+)\d{1,2}\s*$',               // Standalone numbers
+        ];
+
+        foreach ($patterns as $pattern) {
+            $newTitle = preg_replace('/' . $pattern . '/i', '', $title);
+            $newTitle = trim($newTitle);
+            if ($newTitle !== $title && strlen($newTitle) >= 5) {
+                return $newTitle;
+            }
+        }
+
+        return $title;
+    }
+
+    /**
+     * Extract variant from title (returns array with 'variant' key)
+     */
+    private function extractVariantFromTitle(string $title): array
+    {
+        $title = trim($title);
+        if ($title === '') {
+            return ['variant' => ''];
+        }
+
+        // Common variant patterns
+        $patterns = [
+            '(?:\s+)(\d{2,3}[A-Z]{1,3})\s*$'      => 1, // Bra sizes
+            '(?:\s+)(\d{1,2}\.\d{1,2})\s*$'       => 1, // Decimal sizes
+            '(?:\s+)(\d+(?:XL|XS|L|M|S))\s*$'     => 1, // 2XL, etc.
+            '(?:\s+)(EXTRA LARGE|EXTRA SMALL)\s*$'  => 1,
+            '(?:\s+)(XXXXL|2XL|3XL)\s*$'           => 1,
+            '(?:\s+)(XL|XS)\s*$'                  => 1,
+            '(?:\s+)(LARGE|MEDIUM|SMALL)\s*$'     => 1,
+            '(?:\s+)([LMS])\s*$'                  => 1, // Single letter
+            '(?:\s+)(\d{1,2})\s*$'                => 1, // Numbers
+        ];
+
+        foreach ($patterns as $pattern => $groupIndex) {
+            if (preg_match('/' . $pattern . '/i', $title, $matches)) {
+                return ['variant' => strtoupper(trim($matches[1]))];
+            }
+        }
+
+        return ['variant' => ''];
     }
 
 private function ensureColumn(\PDO $pdo, string $table, string $column, string $alterSql): void
