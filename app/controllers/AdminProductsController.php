@@ -978,17 +978,17 @@ class AdminProductsController extends Controller
         if ($title === '') return '';
 
         // Common variant patterns to remove from the end
-        // Note: Don't use \b at start - it causes issues with spaces before the variant
+        // Use (?:\s|$) to ensure we only match after a space or at end, not mid-word
         $patterns = [
-            '\s*\d{2,3}[A-Z]{1,3}\s*$',        // Bra sizes: 38A, 36B, 34C, 32DD
-            '\s*\d{1,2}\.\d{1,2}\s*$',         // Decimal: 28.5
-            '\s*\d+(?:XL|XS|L|M|S)\s*$',       // 2XL, 3XL, 2XS
-            '\s*(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$',
-            '\s*(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
-            '\s*(?:XL|XS)\s*$',
-            '\s*(?:LARGE|MEDIUM|SMALL)\s*$',
-            '\s*[LMS]\s*$',                    // Single letter sizes
-            '\s*\d{1,2}\s*$',                 // Standalone numbers
+            '(?:\s+)\d{2,3}[A-Z]{1,3}\s*$',      // Bra sizes: 38A, 36B, 34C, 32DD
+            '(?:\s+)\d{1,2}\.\d{1,2}\s*$',       // Decimal: 28.5
+            '(?:\s+)\d+(?:XL|XS|L|M|S)\s*$',     // 2XL, 3XL, 2XS
+            '(?:\s+)(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$',
+            '(?:\s+)(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
+            '(?:\s+)(?:XL|XS)\s*$',
+            '(?:\s+)(?:LARGE|MEDIUM|SMALL)\s*$',
+            '(?:\s+)[LMS]\s*$',                  // Single letter sizes
+            '(?:\s+)\d{1,2}\s*$',               // Standalone numbers
         ];
 
         foreach ($patterns as $pattern) {

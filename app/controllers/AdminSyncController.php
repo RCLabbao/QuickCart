@@ -743,29 +743,29 @@ class AdminSyncController extends Controller
 
         // Common variant patterns to look for at the end of titles
         // ORDER MATTERS: More specific patterns must come first
-        // Note: Don't use \b at start - it causes issues with spaces before the variant
+        // Use (?:\s+) to ensure we only match after a space, not mid-word
         $sizePatterns = [
             // Bra sizes: 38A, 36B, 34C, 32DD, 40DD, etc. (must come FIRST - most specific)
-            '\s*(\d{2,3}[A-Z]{1,3})\s*$',
+            '(?:\s+)(\d{2,3}[A-Z]{1,3})\s*$',
             // Decimal sizes: 28.5, 29.5, etc.
-            '\s*(\d{1,2}\.\d{1,2})\s*$',
+            '(?:\s+)(\d{1,2}\.\d{1,2})\s*$',
             // Extra sizes with numbers: 2XL, 3XL, 4XL, 5XL, 2XS, 3XS, etc.
-            '\s*(\d+(?:XL|XS|L|M|S))\s*$',
+            '(?:\s+)(\d+(?:XL|XS|L|M|S))\s*$',
             // Extra sizes: EXTRA LARGE, EXTRA SMALL, EXTRA LONG, EXTRA SHORT, XXL, XXXL, XXXXL, XXXXXL
-            '\s*(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT|XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
+            '(?:\s+)(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT|XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
             // Standard sizes: XL, XS
-            '\s*(XL|XS)\s*$',
+            '(?:\s+)(XL|XS)\s*$',
             // Word sizes: LARGE, MEDIUM, SMALL
-            '\s*(LARGE|MEDIUM|SMALL)\s*$',
+            '(?:\s+)(LARGE|MEDIUM|SMALL)\s*$',
             // Single letter sizes: L, M, S
-            '\s*([LMS])\s*$',
+            '(?:\s+)([LMS])\s*$',
             // Numeric sizes: 36, 37, 38, etc. (standalone numbers at end)
-            '\s*(\d{1,2})\s*$',
+            '(?:\s+)(\d{1,2})\s*$',
         ];
 
         $colorPatterns = [
-            '\s*(RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY)\s*$',
-            '\s*(MULTICOLOR|MULTI-COLOR|MULTI COLOUR|MULTI COLOUR|MULTICOLOUR)\s*$',
+            '(?:\s+)(RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY)\s*$',
+            '(?:\s+)(MULTICOLOR|MULTI-COLOR|MULTI COLOUR|MULTI COLOUR|MULTICOLOUR)\s*$',
         ];
 
         $allPatterns = array_merge($sizePatterns, $colorPatterns);
