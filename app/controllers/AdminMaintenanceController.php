@@ -187,6 +187,48 @@ class AdminMaintenanceController extends Controller
     }
 
     /**
+     * Reset all variant relationships and re-detect from scratch
+     * This clears parent_product_id and variant_attributes, then re-runs the auto-merge
+     */
+    public function resetVariants(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+        $pdo = DB::pdo();
+
+        try {
+            // Check if variant support is enabled
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+
+            if (!$hasVariants) {
+                $_SESSION['error'] = 'Variant support is not enabled in the database.';
+                $this->redirect('/admin/maintenance?tab=actions');
+            }
+
+            // Reset all variant relationships
+            $pdo->exec("UPDATE products SET parent_product_id = NULL, variant_attributes = NULL");
+
+            // Clear any orphaned slugs that might cause issues
+            $pdo->exec("UPDATE products SET slug = CONCAT(slug, '-', id) WHERE slug IN (SELECT slug FROM (SELECT slug, COUNT(*) as cnt FROM products GROUP BY slug HAVING cnt > 1) as duplicates)");
+
+            // Re-run the auto-merge
+            $variantResult = $this->autoMergeVariants($pdo);
+
+            $message = "Variant relationships reset. ";
+            if ($variantResult['merged_groups'] > 0) {
+                $message .= "Re-detected and merged {$variantResult['merged_groups']} variant groups ({$variantResult['merged_products']} products).";
+            } else {
+                $message .= "No variant groups were found in product titles. Products may already be properly organized.";
+            }
+
+            $_SESSION['success'] = $message;
+        } catch (\Throwable $e) {
+            $_SESSION['error'] = 'Failed to reset variants: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/maintenance?tab=actions');
+    }
+
+    /**
      * Internal method to fix FSC duplicate entry issue
      * Returns array with results
      */

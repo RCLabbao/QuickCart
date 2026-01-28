@@ -170,6 +170,20 @@
 
       <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom"><h5 class="card-title mb-0"><i class="bi bi-arrow-counterclockwise me-2"></i>Reset & Re-detect Variants</h5></div>
+          <div class="card-body">
+            <p class="text-muted mb-4">Clear all variant relationships and re-detect product variants from scratch.</p>
+            <form method="post" action="/admin/maintenance/reset-variants" onsubmit="return confirmAction('reset and re-detect all variants')">
+              <?= csrf_field() ?>
+              <button type="submit" class="btn btn-info w-100"><i class="bi bi-arrow-clockwise me-2"></i>Reset & Re-detect Variants</button>
+            </form>
+            <div class="mt-3"><small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Use this if variants were merged incorrectly. This will clear all parent_product_id values and re-run detection.</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white border-bottom"><h5 class="card-title mb-0"><i class="bi bi-database-add me-2"></i>Demo Data</h5></div>
           <div class="card-body">
             <p class="text-muted mb-4">Add sample products, orders, and collections for testing and demonstration purposes.</p>

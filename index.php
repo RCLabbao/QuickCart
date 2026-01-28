@@ -259,6 +259,7 @@ $router->get('/admin/customers/export', 'AdminCustomersController@export', ['per
 $router->get('/admin/maintenance', 'AdminMaintenanceController@index', ['perm' => 'settings.read']);
 $router->post('/admin/maintenance/optimize', 'AdminMaintenanceController@optimize', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/fix-fsc', 'AdminMaintenanceController@fixFsc', ['perm' => 'settings.write']);
+$router->post('/admin/maintenance/reset-variants', 'AdminMaintenanceController@resetVariants', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/seed-demo', 'AdminMaintenanceController@seedDemo', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/wipe', 'AdminMaintenanceController@wipe', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/wipe-demo', 'AdminMaintenanceController@wipeDemo', ['perm' => 'settings.write']);
