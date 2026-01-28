@@ -39,8 +39,21 @@ class CollectionsController extends Controller
             $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
         }
 
-        $ps = $pdo->prepare('SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize);
+        // Build stock calculation for products with variants
+        $stockCalc = $hasVariants
+            ? 'COALESCE((SELECT SUM(stock) FROM products WHERE parent_product_id = p.id), p.stock, 0) AS stock'
+            : 'p.stock';
+
+        $ps = $pdo->prepare('SELECT p.*, ' . $stockCalc . ', (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize);
         $ps->execute([$c['id']]); $products = $ps->fetchAll();
+
+        // Map calculated stock back to stock key
+        foreach ($products as &$p) {
+            if (isset($p['stock'])) {
+                $p['stock'] = (int)$p['stock'];
+            }
+        }
+
         $this->view('collections/show', ['collection'=>$c, 'products'=>$products]);
     }
 
@@ -65,8 +78,21 @@ class CollectionsController extends Controller
             $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
         }
 
-        $q = 'SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+        // Build stock calculation for products with variants
+        $stockCalc = $hasVariants
+            ? 'COALESCE((SELECT SUM(stock) FROM products WHERE parent_product_id = p.id), p.stock, 0) AS stock'
+            : 'p.stock';
+
+        $q = 'SELECT p.*, ' . $stockCalc . ', (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status="active"' . $variantFilter . ' AND collection_id = ? ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
         $ps = $pdo->prepare($q); $ps->execute([$col['id']]); $products = $ps->fetchAll();
+
+        // Map calculated stock back to stock key
+        foreach ($products as &$p) {
+            if (isset($p['stock'])) {
+                $p['stock'] = (int)$p['stock'];
+            }
+        }
+
         ob_start(); foreach ($products as $p) { include BASE_PATH . '/app/views/products/_card.php'; } $html = ob_get_clean();
         $this->json(['html'=>$html, 'hasMore'=>count($products)===$this->pageSize]);
     }

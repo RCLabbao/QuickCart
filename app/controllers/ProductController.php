@@ -106,6 +106,11 @@ class ProductController extends Controller
             $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
         } catch (\Throwable $e) {}
 
+        // Build stock calculation for products with variants
+        $stockCalcSelect = $hasVariants
+            ? ', COALESCE((SELECT SUM(stock) FROM products v WHERE v.parent_product_id = p.id), p.stock, 0) AS total_stock'
+            : '';
+
         if ($q === '') { $products = []; $count = 0; }
         else {
             $like = "%$q%";
@@ -120,10 +125,18 @@ class ProductController extends Controller
                 $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
             }
 
-            $sql = 'SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+            $sql = 'SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url' . $stockCalcSelect . ' FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
             $stmt = $pdo->prepare($sql);
             $stmt->execute(array_merge([$like,$like], $exParams));
             $products = $stmt->fetchAll();
+
+            // Map total_stock back to stock for display
+            foreach ($products as &$p) {
+                if (isset($p['total_stock'])) {
+                    $p['stock'] = $p['total_stock'];
+                }
+            }
+
             $count = (int)$pdo->query('SELECT FOUND_ROWS()')->fetchColumn();
         }
         $this->view('search/index', compact('q','products','count','page'));
@@ -158,11 +171,16 @@ class ProductController extends Controller
             $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
         }
 
+        // Build stock calculation for products with variants
+        $stockCalc = $hasVariants
+            ? 'COALESCE((SELECT SUM(stock) FROM products WHERE parent_product_id = p.id), p.stock, 0)'
+            : 'COALESCE(p.stock,0)';
+
         try {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, ' . $stockCalc . ' AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
             $stmt->execute(array_merge([$like, $like], $exParams));
         } catch (\Throwable $e) {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, ' . $stockCalc . ' AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
             $stmt->execute(array_merge([$like, $like], $exParams));
         }
         $products = $stmt->fetchAll();
@@ -179,10 +197,41 @@ class ProductController extends Controller
     {
         $offset = ($page-1)*$this->pageSize;
         $order = $this->orderBy();
-        $sql = 'SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p ' . $where . ' ' . $order . ' LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
-        $st = DB::pdo()->prepare($sql);
+
+        // Check if variant support exists
+        $pdo = DB::pdo();
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
+        // Build SQL with aggregated stock from variants
+        if ($hasVariants) {
+            // For parent products: show total stock from all variants
+            // For standalone products: show their own stock
+            $sql = 'SELECT p.*,
+                (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url,
+                COALESCE(
+                    (SELECT SUM(stock) FROM products WHERE parent_product_id = p.id),
+                    p.stock
+                ) AS total_stock
+                FROM products p ' . $where . ' ' . $order . ' LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+        } else {
+            $sql = 'SELECT p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p ' . $where . ' ' . $order . ' LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+        }
+
+        $st = $pdo->prepare($sql);
         $st->execute($params);
-        return $st->fetchAll();
+        $products = $st->fetchAll();
+
+        // Map total_stock back to stock for display compatibility
+        foreach ($products as &$p) {
+            if (isset($p['total_stock'])) {
+                $p['stock'] = $p['total_stock'];
+            }
+        }
+
+        return $products;
     }
 
     private function buildFilters(): array
