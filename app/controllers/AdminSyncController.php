@@ -393,6 +393,10 @@ class AdminSyncController extends Controller
                     $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
                 } catch (\Throwable $e) { $hasVariantsColumn = false; }
 
+                // DISABLED: Don't create placeholder parents during CSV import
+                // This causes new products to be created instead of linking existing ones
+                // Import all products as-is, then use "Bulk Detect Variants" to link them
+                /*
                 if ($hasVariantsColumn) {
                     // First, check if ProductType column contains variant info (e.g., "Size: M, Color: Red")
                     if ($ptype !== '' && strtoupper($ptype) !== strtoupper($title)) {
@@ -433,6 +437,7 @@ class AdminSyncController extends Controller
                         }
                     }
                 }
+                */
                 // Find product by FSC
                 $pst = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE fsc=?');
                 $pst->execute([$fsc]);
@@ -506,10 +511,11 @@ class AdminSyncController extends Controller
                     }
                     // Map brochure price to sale_price field
                     $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;
-                    // Build INSERT with variant support
+                    // Build INSERT - ALWAYS import as standalone product (parent_product_id = NULL)
+                    // Variant linking is done separately via "Bulk Detect Variants"
                     if ($hasVariantsColumn) {
-                        $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, ?, ?, NOW())')
-                            ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId,$parentProductId,$variantAttributes]);
+                        $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NULL, NULL, NOW())')
+                            ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId]);
                     } else {
                         $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NOW())')
                             ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId]);
