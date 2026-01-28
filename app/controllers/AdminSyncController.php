@@ -743,28 +743,29 @@ class AdminSyncController extends Controller
 
         // Common variant patterns to look for at the end of titles
         // ORDER MATTERS: More specific patterns must come first
+        // Note: Don't use \b at start - it causes issues with spaces before the variant
         $sizePatterns = [
             // Bra sizes: 38A, 36B, 34C, 32DD, 40DD, etc. (must come FIRST - most specific)
-            '\b(\d{2,3}[A-Z]{1,3})\s*$',
+            '\s*(\d{2,3}[A-Z]{1,3})\s*$',
             // Decimal sizes: 28.5, 29.5, etc.
-            '\b(\d{1,2}\.\d{1,2})\s*$',
+            '\s*(\d{1,2}\.\d{1,2})\s*$',
             // Extra sizes with numbers: 2XL, 3XL, 4XL, 5XL, 2XS, 3XS, etc.
-            '\b(\d+(?:XL|XS|L|M|S))\b$',
+            '\s*(\d+(?:XL|XS|L|M|S))\s*$',
             // Extra sizes: EXTRA LARGE, EXTRA SMALL, EXTRA LONG, EXTRA SHORT, XXL, XXXL, XXXXL, XXXXXL
-            '\b(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT|XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\b$',
+            '\s*(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT|XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
             // Standard sizes: XL, XS
-            '\b(XL|XS)\b$',
+            '\s*(XL|XS)\s*$',
             // Word sizes: LARGE, MEDIUM, SMALL
-            '\b(LARGE|MEDIUM|SMALL)\b$',
+            '\s*(LARGE|MEDIUM|SMALL)\s*$',
             // Single letter sizes: L, M, S
-            '\b([LMS])\b$',
+            '\s*([LMS])\s*$',
             // Numeric sizes: 36, 37, 38, etc. (standalone numbers at end)
-            '\b(\d{1,2})\s*$',
+            '\s*(\d{1,2})\s*$',
         ];
 
         $colorPatterns = [
-            '\b(RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY)\b$',
-            '\b(MULTICOLOR|MULTI-COLOR|MULTI COLOUR|MULTI COLOUR|MULTICOLOUR)\b$',
+            '\s*(RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY)\s*$',
+            '\s*(MULTICOLOR|MULTI-COLOR|MULTI COLOUR|MULTI COLOUR|MULTICOLOUR)\s*$',
         ];
 
         $allPatterns = array_merge($sizePatterns, $colorPatterns);
@@ -773,7 +774,7 @@ class AdminSyncController extends Controller
         foreach ($allPatterns as $pattern) {
             if (preg_match('/' . $pattern . '/i', $title, $matches)) {
                 $variant = strtoupper(trim($matches[1]));
-                $baseTitle = preg_replace('/\s+' . $pattern . '/i', '', $title);
+                $baseTitle = preg_replace('/' . $pattern . '/i', '', $title);
                 $baseTitle = trim($baseTitle);
 
                 // Only return if base title is still meaningful
