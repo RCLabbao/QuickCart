@@ -259,13 +259,13 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         return $result;
     }
 
-    // CRITICAL FIX: Get ALL products (not just ones without parent_product_id)
-    // The old query only selected products where parent_product_id IS NULL, which
-    // completely skipped products that were already linked during CSV import!
-    // We need to query ALL products and re-group them properly.
+    // CRITICAL: Only process products that DON'T have a parent (parent_product_id IS NULL)
+    // Products that already have parent_product_id set are already correctly linked from CSV import
+    // and should NOT be re-processed!
     $stmt = $pdo->query('
         SELECT id, title, slug, parent_product_id, status
         FROM products
+        WHERE (parent_product_id IS NULL OR parent_product_id = 0)
         ORDER BY title
     ');
     $allProducts = $stmt->fetchAll();
@@ -276,7 +276,6 @@ function qc_auto_merge_variants(\PDO $pdo): array {
     // CRITICAL: Store original titles BEFORE any updates
     $groups = [];
     $skipped = 0;
-    $placeholderParents = []; // Track placeholder parent products created during CSV import
 
     foreach ($allProducts as $product) {
         $baseTitle = qc_extract_base_title($product['title']);
@@ -294,11 +293,6 @@ function qc_auto_merge_variants(\PDO $pdo): array {
                 'status' => $product['status'],
                 'parent_product_id' => $product['parent_product_id']
             ];
-
-            // Track placeholder parents (created during CSV import with status='draft')
-            if (!empty($product['parent_product_id']) && $product['status'] === 'draft') {
-                $placeholderParents[$product['parent_product_id']] = true;
-            }
         } else {
             $skipped++;
         }
@@ -306,24 +300,19 @@ function qc_auto_merge_variants(\PDO $pdo): array {
 
     $result['debug']['skipped_products'] = $skipped;
     $result['debug']['variant_groups_found'] = count($groups);
-    $result['debug']['placeholder_parents_found'] = count($placeholderParents);
 
     // Merge each group
     foreach ($groups as $baseTitle => $groupProducts) {
-        // Filter out placeholder parent products (draft status, created during CSV import)
-        $realProducts = array_filter($groupProducts, function($p) {
-            return $p['status'] !== 'draft';
-        });
-        $realProducts = array_values($realProducts); // Re-index array
+        // Use ALL products in the group (including drafts)
+        // Draft products are real products that just need to be activated
+        $allProductsInGroup = $groupProducts;
 
-        if (count($realProducts) <= 1) {
-            // If only 0 or 1 real product (rest are drafts), DON'T delete anything!
-            // The drafts are actually the real products - they just need to be set to active
-            // Just activate all draft products in this group and skip
-            foreach ($groupProducts as $p) {
+        if (count($allProductsInGroup) <= 1) {
+            // Only 1 product in group - can't form variants, just activate it if draft
+            foreach ($allProductsInGroup as $p) {
                 if ($p['status'] === 'draft') {
                     try {
-                        $pdo->prepare('UPDATE products SET status = "active", parent_product_id = NULL WHERE id = ?')
+                        $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
                             ->execute([$p['id']]);
                     } catch (\Throwable $e) {
                         $result['errors'][] = "Could not activate product ID {$p['id']}: " . $e->getMessage();
@@ -336,7 +325,7 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         // CRITICAL FIX: Look for a product that matches the base title exactly to use as parent
         // If no exact match exists, we'll create a new clean parent product
         $exactMatch = null;
-        foreach ($realProducts as $p) {
+        foreach ($allProductsInGroup as $p) {
             // Use strcasecmp for case-insensitive comparison
             if (strcasecmp($p['original_title'], $baseTitle) === 0) {
                 $exactMatch = $p;
@@ -350,7 +339,7 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             $parentId = $exactMatch['id'];
         } else {
             // No exact match - UPDATE the first product to be the parent (remove variant suffix from title)
-            $firstProduct = $realProducts[0];
+            $firstProduct = $allProductsInGroup[0];
             $parentId = $firstProduct['id'];
 
             // Update the first product's title to the base title (remove variant suffix)
@@ -385,7 +374,7 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         }
 
         // Link all products as variants (including the one that might have been used as parent before)
-        foreach ($realProducts as $variantProduct) {
+        foreach ($allProductsInGroup as $variantProduct) {
             $variantId = $variantProduct['id'];
 
             // Don't link the parent product to itself
@@ -410,7 +399,7 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         }
 
         // Handle draft products: Delete placeholder parents (FSC is NULL), activate real drafts (have FSC)
-        foreach ($groupProducts as $p) {
+        foreach ($allProductsInGroup as $p) {
             if ($p['status'] === 'draft' && $p['id'] != $parentId) {
                 // Check if this is a placeholder parent (created during CSV import with FSC=NULL)
                 // by looking at whether it has FSC or other real data
