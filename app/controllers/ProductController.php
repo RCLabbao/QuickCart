@@ -83,6 +83,13 @@ class ProductController extends Controller
             }
         }
 
+        // If viewing a parent product and it has variants, use the first variant's images if parent has no images
+        if (empty($gallery) && !empty($variants) && empty($product['parent_product_id'])) {
+            $firstVariantImages = $pdo->prepare('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order');
+            $firstVariantImages->execute([$variants[0]['id']]);
+            $gallery = $firstVariantImages->fetchAll();
+        }
+
         $this->view('products/show', compact('product', 'gallery', 'variants', 'parentProduct', 'hasVariants'));
     }
 
@@ -92,6 +99,13 @@ class ProductController extends Controller
         $page = max(1, (int)($_GET['page'] ?? 1));
         $offset = ($page-1)*$this->pageSize;
         $pdo = DB::pdo();
+
+        // Check if variant support is enabled
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
         if ($q === '') { $products = []; $count = 0; }
         else {
             $like = "%$q%";
@@ -99,7 +113,14 @@ class ProductController extends Controller
             $exSql = '';
             $exParams = [];
             if (!empty($hidden)) { $exSql = ' AND (p.collection_id IS NULL OR p.collection_id NOT IN ('.implode(',', array_fill(0, count($hidden), '?')).'))'; $exParams = $hidden; }
-            $sql = 'SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
+
+            // Add variant filtering to search
+            $variantFilter = '';
+            if ($hasVariants) {
+                $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
+            }
+
+            $sql = 'SELECT SQL_CALC_FOUND_ROWS p.*, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY created_at DESC LIMIT ' . $this->pageSize . ' OFFSET ' . $offset;
             $stmt = $pdo->prepare($sql);
             $stmt->execute(array_merge([$like,$like], $exParams));
             $products = $stmt->fetchAll();
@@ -119,22 +140,35 @@ class ProductController extends Controller
             return;
         }
 
+        // Check if variant support is enabled
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
         $like = "%$q%";
         $hidden = \App\Core\hidden_collection_ids();
         $exSql = '';
         $exParams = [];
         if (!empty($hidden)) { $exSql = ' AND (p.collection_id IS NULL OR p.collection_id NOT IN ('.implode(',', array_fill(0, count($hidden), '?')).'))'; $exParams = $hidden; }
+
+        // Add variant filtering to search API
+        $variantFilter = '';
+        if ($hasVariants) {
+            $variantFilter = ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
+        }
+
         try {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, p.sale_price, p.sale_start, p.sale_end, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
             $stmt->execute(array_merge([$like, $like], $exParams));
         } catch (\Throwable $e) {
-            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
+            $stmt = $pdo->prepare('SELECT p.id, p.title, p.slug, p.price, COALESCE(p.stock,0) AS stock, (SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql . ' ORDER BY title ASC LIMIT ' . $limit);
             $stmt->execute(array_merge([$like, $like], $exParams));
         }
         $products = $stmt->fetchAll();
 
         // Get total count for the query
-        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM products p WHERE status = "active" AND (title LIKE ? OR description LIKE ?)' . $exSql);
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM products p WHERE status = "active"' . $variantFilter . ' AND (title LIKE ? OR description LIKE ?)' . $exSql);
         $countStmt->execute(array_merge([$like, $like], $exParams));
         $count = (int)$countStmt->fetchColumn();
 
@@ -160,6 +194,19 @@ class ProductController extends Controller
             if (!empty($ref['query'])) { parse_str($ref['query'], $q); }
         }
         $where = 'WHERE p.status = "active"'; $params = [];
+
+        // Check if variant support is enabled and exclude variant products from main listing
+        $pdo = DB::pdo();
+        $hasVariants = false;
+        try {
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) {}
+
+        // Only show parent products (parent_product_id IS NULL) and standalone products
+        if ($hasVariants) {
+            $where .= ' AND (p.parent_product_id IS NULL OR p.parent_product_id = 0)';
+        }
+
         if (isset($q['min_price']) && $q['min_price'] !== '') { $where .= ' AND p.price >= ?'; $params[] = (float)$q['min_price']; }
         if (isset($q['max_price']) && $q['max_price'] !== '') { $where .= ' AND p.price <= ?'; $params[] = (float)$q['max_price']; }
         if (isset($q['collection_id']) && $q['collection_id'] !== '') { $where .= ' AND p.collection_id = ?'; $params[] = (int)$q['collection_id']; }

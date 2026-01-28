@@ -143,8 +143,10 @@
 
     <?php if (!empty($variants) && $hasVariants): ?>
     <!-- Variant Selector -->
-    <div class="mb-3 p-3 bg-light rounded">
-      <h6 class="mb-2"><i class="bi bi-diagram-3 me-1"></i>Select Variant:</h6>
+    <div class="mb-4">
+      <h6 class="text-muted mb-3 text-uppercase fw-bold" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+        Select Option
+      </h6>
       <div class="d-flex flex-wrap gap-2" id="variantSelector">
         <?php foreach ($variants as $v): ?>
           <?php
@@ -154,19 +156,22 @@
           $variantPrice = (float)$v['price'];
           $variantStock = (int)$v['stock'];
           $outOfStock = $variantStock <= 0;
+          $hasSale = !empty($v['sale_price']) && (float)$v['sale_price'] > 0 && (float)$v['sale_price'] < (float)$v['price'];
           ?>
-          <button class="variant-btn btn btn-sm <?= $isSelected ? 'btn-dark' : 'btn-outline-dark' ?>"
+          <button class="variant-btn position-relative <?= $isSelected ? 'selected' : '' ?><?= $outOfStock ? ' out-of-stock' : '' ?>"
                   data-variant-id="<?= $variantId ?>"
                   data-variant-price="<?= $variantPrice ?>"
+                  data-variant-sale-price="<?= $hasSale ? (float)$v['sale_price'] : '' ?>"
                   data-variant-stock="<?= $variantStock ?>"
                   data-variant-fsc="<?= htmlspecialchars($v['fsc'] ?? '') ?>"
+                  data-variant-title="<?= htmlspecialchars($v['title']) ?>"
                   <?= $outOfStock ? 'disabled' : '' ?>>
-            <span class="badge bg-info"><?= $variantAttr ?></span>
-            <?php if (!$isSelected): ?>
-              <small class="d-block text-muted">₱<?= number_format($variantPrice, 2) ?></small>
-            <?php endif; ?>
+            <?= $variantAttr ?>
             <?php if ($outOfStock): ?>
-              <small class="d-block text-danger">Out of stock</small>
+              <span class="stock-badge">Sold Out</span>
+            <?php endif; ?>
+            <?php if ($isSelected): ?>
+              <i class="bi bi-check2"></i>
             <?php endif; ?>
           </button>
         <?php endforeach; ?>
@@ -259,6 +264,76 @@
 #imageModal .carousel-control-next:hover {
   opacity: 1;
 }
+
+/* Modern Variant Selector */
+#variantSelector {
+  gap: 0.5rem;
+}
+
+.variant-btn {
+  position: relative;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 70px;
+  text-align: center;
+}
+
+.variant-btn:hover:not(:disabled) {
+  border-color: #3182ce;
+  color: #3182ce;
+  background: #ebf8ff;
+  transform: translateY(-1px);
+}
+
+.variant-btn.selected {
+  background: #3182ce;
+  border-color: #3182ce;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+}
+
+.variant-btn.selected i {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #22c55e;
+  color: #fff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  border: 2px solid #fff;
+}
+
+.variant-btn.out-of-stock {
+  background: #f7fafc;
+  border-color: #e2e8f0;
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.variant-btn .stock-badge {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #e53e3e;
+  color: #fff;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
 </style>
 
 <script>
@@ -268,6 +343,17 @@ document.addEventListener('DOMContentLoaded', function() {
   const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
   const currentImageIndex = document.getElementById('currentImageIndex');
   const thumbnails = document.querySelectorAll('.thumbnail-item');
+
+  // Initialize variant selection state on page load
+  const currentProductId = <?= (int)$product['id'] ?>;
+  const selectedVariantBtn = document.querySelector(`.variant-btn[data-variant-id="${currentProductId}"]`);
+
+  if (selectedVariantBtn) {
+    // Trigger the variant selection logic for the current product
+    setTimeout(() => {
+      selectedVariantBtn.click();
+    }, 100);
+  }
 
   // Update image counter and thumbnail active state
   function updateImageDisplay(index) {
@@ -347,16 +433,25 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', function() {
       const variantId = this.dataset.variantId;
       const variantPrice = parseFloat(this.dataset.variantPrice);
+      const variantSalePrice = this.dataset.variantSalePrice ? parseFloat(this.dataset.variantSalePrice) : null;
       const variantStock = parseInt(this.dataset.variantStock);
       const variantFsc = this.dataset.variantFsc;
+      const variantTitle = this.dataset.variantTitle;
 
       // Update selected button style
       variantBtns.forEach(b => {
-        b.classList.remove('btn-dark');
-        b.classList.add('btn-outline-dark');
+        b.classList.remove('selected');
+        // Remove checkmark from all buttons
+        const checkmark = b.querySelector('i');
+        if (checkmark) checkmark.remove();
       });
-      this.classList.remove('btn-outline-dark');
-      this.classList.add('btn-dark');
+      this.classList.add('selected');
+      // Add checkmark to selected button
+      if (!this.querySelector('i')) {
+        const checkmark = document.createElement('i');
+        checkmark.className = 'bi bi-check2';
+        this.appendChild(checkmark);
+      }
 
       // Update form
       const form = document.getElementById('pdpAddToCartForm');
@@ -366,14 +461,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
       productIdInput.value = variantId;
 
-      // Update price display and add to cart button
+      // Update price display with sale pricing support
       const priceDisplay = document.querySelector('.fs-3.fw-bold');
       const outOfStock = variantStock <= 0;
 
-      // Create new price HTML
+      // Create new price HTML with sale pricing
       let priceHtml = '';
       if (outOfStock) {
-        priceHtml = '<span class="text-danger me-2">₱' + number_format(variantPrice, 2) + '</span>';
+        if (variantSalePrice && variantSalePrice < variantPrice) {
+          priceHtml = '<span class="text-danger me-2">₱' + number_format(variantSalePrice, 2) + '</span>';
+          priceHtml += '<s class="text-muted fs-5">₱' + number_format(variantPrice, 2) + '</s>';
+        } else {
+          priceHtml = '<span class="text-muted">₱' + number_format(variantPrice, 2) + '</span>';
+        }
+      } else if (variantSalePrice && variantSalePrice < variantPrice) {
+        priceHtml = '<span class="text-danger me-2">₱' + number_format(variantSalePrice, 2) + '</span>';
+        priceHtml += '<s class="text-muted fs-5">₱' + number_format(variantPrice, 2) + '</s>';
       } else {
         priceHtml = '₱' + number_format(variantPrice, 2);
       }
@@ -382,6 +485,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Update add to cart button
       submitBtn.textContent = outOfStock ? 'Sold out' : 'Add to cart';
       submitBtn.disabled = outOfStock;
+      submitBtn.className = outOfStock ? 'btn btn-secondary ms-2' : 'btn btn-dark ms-2';
       qtyInput.disabled = outOfStock;
 
       // Update quantity buttons
@@ -390,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
         qtyBtn.disabled = outOfStock;
       });
 
-      // Update stock badge if exists
+      // Update stock badge
       const stockInfo = document.querySelector('.small.mb-2');
       if (stockInfo) {
         if (outOfStock) {
