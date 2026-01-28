@@ -162,3 +162,208 @@ function qc_ensure_permissions(array $slugs): void {
         }
     } catch (\Throwable $e) {}
 }
+
+/**
+ * Extract base title by removing variant patterns from the end
+ * This is the SINGLE source of truth for variant detection
+ */
+function qc_extract_base_title(string $title): string {
+    $title = trim($title);
+    if ($title === '') return '';
+
+    // Variant patterns to remove - ordered from most specific to least specific
+    $patterns = [
+        '/\s+\d{2,3}[A-Z]{1,3}\s*$/i',      // Bra sizes: 38A, 36B, 34C, 32DD, 40DD
+        '/\s+\d{1,2}\.\d{1,2}\s*$/i',       // Decimal: 28.5, 29.5
+        '/\s+\d+(?:XL|XS|L|M|S)\s*$/i',     // 2XL, 3XL, 4XL, 2XS, 3XS
+        '/\s+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
+        '/\s+(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$/i',
+        '/\s+(?:XL|XS)\s*$/i',
+        '/\s+(?:LARGE|MEDIUM|SMALL)\s*$/i',
+        '/\s+[LMS]\s*$/i',                  // Single letter sizes
+        '/\s+\d{1,2}\s*$/i',               // Standalone numbers: 36, 37, 38
+    ];
+
+    $originalTitle = $title;
+    foreach ($patterns as $pattern) {
+        $newTitle = preg_replace($pattern, '', $title);
+        if ($newTitle === null) continue; // preg_replace failed
+        $newTitle = trim($newTitle);
+
+        // Only accept if we removed something AND result is meaningful
+        if ($newTitle !== $title && strlen($newTitle) >= 5) {
+            // Verify we haven't removed too much (base title should have at least 2 words)
+            $wordCount = count(preg_split('/\s+/', $newTitle));
+            if ($wordCount >= 2) {
+                return $newTitle;
+            }
+        }
+    }
+
+    return $originalTitle; // Return original if no pattern matched
+}
+
+/**
+ * Extract variant attribute from title (e.g., "38A" from "Product 38A")
+ */
+function qc_extract_variant_attribute(string $title): string {
+    $title = trim($title);
+    if ($title === '') return '';
+
+    // Variant patterns - must match the same ones used in qc_extract_base_title
+    $patterns = [
+        '/\s+(\d{2,3}[A-Z]{1,3})\s*$/i'      => 1, // Bra sizes: 38A
+        '/\s+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal: 28.5
+        '/\s+(\d+(?:XL|XS|L|M|S))\s*$/i'     => 1, // 2XL, 3XL, etc.
+        '/\s+(EXTRA LARGE|EXTRA SMALL)\s*$/i'  => 1,
+        '/\s+(XXXXL|2XL|3XL|4XL|5XL)\s*$/i'   => 1,
+        '/\s+(XL|XS)\s*$/i'                  => 1,
+        '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
+        '/\s+([LMS])\s*$/i'                  => 1, // Single letter
+        '/\s+(\d{1,2})\s*$/i'                => 1, // Numbers
+    ];
+
+    foreach ($patterns as $pattern => $groupIndex) {
+        if (preg_match($pattern, $title, $matches)) {
+            return strtoupper(trim($matches[$groupIndex]));
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Auto-detect and merge product variants
+ * This is the SINGLE unified function used by both AdminProducts and AdminMaintenance
+ *
+ * @param \PDO $pdo Database connection
+ * @return array Result with merged_groups, merged_products, and debug info
+ */
+function qc_auto_merge_variants(\PDO $pdo): array {
+    $result = [
+        'merged_groups' => 0,
+        'merged_products' => 0,
+        'errors' => [],
+        'debug' => []
+    ];
+
+    // Check if variant support is enabled
+    try {
+        $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        if (!$hasVariants) {
+            return $result;
+        }
+    } catch (\Throwable $e) {
+        return $result;
+    }
+
+    // Get all products that are not already variants
+    $stmt = $pdo->query('
+        SELECT id, title, slug, parent_product_id
+        FROM products
+        WHERE (parent_product_id IS NULL OR parent_product_id = 0)
+        ORDER BY title
+    ');
+    $products = $stmt->fetchAll();
+
+    $result['debug']['total_products'] = count($products);
+
+    // Group products by base title using the SHARED function
+    $groups = [];
+    $skipped = 0;
+    foreach ($products as $product) {
+        $baseTitle = qc_extract_base_title($product['title']);
+
+        // Only group if base title is different from full title AND is meaningful
+        if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
+            if (!isset($groups[$baseTitle])) {
+                $groups[$baseTitle] = [];
+            }
+            $groups[$baseTitle][] = $product;
+        } else {
+            $skipped++;
+        }
+    }
+
+    $result['debug']['skipped_products'] = $skipped;
+    $result['debug']['variant_groups_found'] = count($groups);
+
+    // Merge each group
+    foreach ($groups as $baseTitle => $groupProducts) {
+        if (count($groupProducts) <= 1) {
+            continue; // Skip groups with only 1 product
+        }
+
+        // Sort by ID to use the first/oldest as parent
+        usort($groupProducts, function($a, $b) {
+            return $a['id'] - $b['id'];
+        });
+
+        $parentProduct = $groupProducts[0];
+        $parentId = $parentProduct['id'];
+
+        // Update parent title to base title if needed
+        if ($parentProduct['title'] !== $baseTitle) {
+            try {
+                $pdo->prepare('UPDATE products SET title = ? WHERE id = ?')
+                    ->execute([$baseTitle, $parentId]);
+            } catch (\Throwable $e) {
+                $result['errors'][] = "Could not update parent product ID {$parentId}: " . $e->getMessage();
+            }
+        }
+
+        // Update parent slug if needed
+        $newSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($baseTitle));
+        $newSlug = trim($newSlug, '-');
+        if ($newSlug !== '' && $newSlug !== $parentProduct['slug']) {
+            try {
+                // Ensure unique slug
+                $baseSlug = $newSlug;
+                $suffix = 1;
+                $checkSlug = $pdo->prepare('SELECT COUNT(*) FROM products WHERE slug = ? AND id != ?');
+                do {
+                    $checkSlug->execute([$newSlug, $parentId]);
+                    $count = (int)$checkSlug->fetchColumn();
+                    if ($count > 0) {
+                        $newSlug = $baseSlug . '-' . $suffix++;
+                    }
+                } while ($count > 0 && $suffix <= 100);
+                $pdo->prepare('UPDATE products SET slug = ? WHERE id = ?')
+                    ->execute([$newSlug, $parentId]);
+            } catch (\Throwable $e) {
+                // Ignore slug errors
+            }
+        }
+
+        // Set parent product to active status so it shows on frontend
+        try {
+            $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
+                ->execute([$parentId]);
+        } catch (\Throwable $e) {
+            // Ignore status errors
+        }
+
+        // Link other products as variants
+        foreach (array_slice($groupProducts, 1) as $variantProduct) {
+            $variantId = $variantProduct['id'];
+
+            // Extract variant attribute using the SHARED function
+            $variantAttr = qc_extract_variant_attribute($variantProduct['title']);
+
+            try {
+                $pdo->prepare('
+                    UPDATE products
+                    SET parent_product_id = ?, variant_attributes = ?
+                    WHERE id = ?
+                ')->execute([$parentId, $variantAttr, $variantId]);
+                $result['merged_products']++;
+            } catch (\Throwable $e) {
+                $result['errors'][] = "Could not link product ID {$variantId}: " . $e->getMessage();
+            }
+        }
+
+        $result['merged_groups']++;
+    }
+
+    return $result;
+}

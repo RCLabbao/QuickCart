@@ -260,6 +260,7 @@ $router->get('/admin/maintenance', 'AdminMaintenanceController@index', ['perm' =
 $router->post('/admin/maintenance/optimize', 'AdminMaintenanceController@optimize', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/fix-fsc', 'AdminMaintenanceController@fixFsc', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/reset-variants', 'AdminMaintenanceController@resetVariants', ['perm' => 'settings.write']);
+$router->post('/admin/maintenance/undo-reset-variants', 'AdminMaintenanceController@undoResetVariants', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/seed-demo', 'AdminMaintenanceController@seedDemo', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/wipe', 'AdminMaintenanceController@wipe', ['perm' => 'settings.write']);
 $router->post('/admin/maintenance/wipe-demo', 'AdminMaintenanceController@wipeDemo', ['perm' => 'settings.write']);

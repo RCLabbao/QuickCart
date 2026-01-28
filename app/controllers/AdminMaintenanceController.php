@@ -189,6 +189,7 @@ class AdminMaintenanceController extends Controller
     /**
      * Reset all variant relationships and re-detect from scratch
      * This clears parent_product_id and variant_attributes, then re-runs the auto-merge
+     * SAFETY: Creates a backup before running!
      */
     public function resetVariants(): void
     {
@@ -204,56 +205,25 @@ class AdminMaintenanceController extends Controller
                 $this->redirect('/admin/maintenance?tab=actions');
             }
 
+            // IMPORTANT: Store current state BEFORE making changes
+            $backupStmt = $pdo->query("SELECT id, title, slug, parent_product_id, variant_attributes FROM products");
+            $productBackup = [];
+            while ($row = $backupStmt->fetch(\PDO::FETCH_ASSOC)) {
+                $productBackup[$row['id']] = $row;
+            }
+
             // Reset all variant relationships (including draft products)
             $pdo->exec("UPDATE products SET parent_product_id = NULL, variant_attributes = NULL");
 
-            // Fix duplicate slugs by regenerating from title
-            $stmt = $pdo->query("SELECT id, title, slug FROM products");
-            $products = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-            // First, collect all products that need slug updates
-            $slugUpdates = [];
-            foreach ($products as $product) {
-                $baseSlug = $this->generateSlug($product['title']);
-                $currentSlug = $product['slug'];
-
-                // If current slug is different from generated one, add to updates list
-                if ($currentSlug !== $baseSlug) {
-                    $slugUpdates[] = [
-                        'id' => $product['id'],
-                        'title' => $product['title'],
-                        'base_slug' => $baseSlug,
-                        'current_slug' => $currentSlug
-                    ];
-                }
-            }
-
-            // Now update slugs with proper duplicate checking
-            $usedSlugs = [];
-            $stmt = $pdo->query("SELECT slug FROM products");
-            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-                $usedSlugs[$row['slug']] = true;
-            }
-
-            foreach ($slugUpdates as $update) {
-                $newSlug = $update['base_slug'];
-                $suffix = 1;
-                $originalSlug = $newSlug;
-
-                // Keep incrementing until we find a unique slug
-                while (isset($usedSlugs[$newSlug])) {
-                    $newSlug = $originalSlug . '-' . $suffix++;
-                }
-
-                // Mark this slug as used
-                $usedSlugs[$newSlug] = true;
-
-                $pdo->prepare("UPDATE products SET slug = ? WHERE id = ?")
-                    ->execute([$newSlug, $update['id']]);
-            }
+            // DO NOT regenerate slugs - this was causing issues!
+            // Slugs should remain stable to avoid breaking links
 
             // Re-run the auto-merge
             $variantResult = $this->autoMergeVariants($pdo);
+
+            // Store backup in session for potential undo
+            $_SESSION['variant_reset_backup'] = $productBackup;
+            $_SESSION['variant_reset_backup_time'] = time();
 
             $message = "Variant relationships reset. ";
             if ($variantResult['merged_groups'] > 0) {
@@ -265,6 +235,8 @@ class AdminMaintenanceController extends Controller
                 }
                 $message .= " Products may already be properly organized.";
             }
+
+            $message .= " <strong>Backup stored in session for undo capability.</strong>";
 
             // Log any errors for debugging
             if (!empty($variantResult['errors'])) {
@@ -280,14 +252,58 @@ class AdminMaintenanceController extends Controller
     }
 
     /**
-     * Generate a clean URL-friendly slug from a title
+     * Undo the last variant reset by restoring from session backup
      */
-    private function generateSlug(string $title): string
+    public function undoResetVariants(): void
     {
-        $slug = strtolower(trim($title));
-        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
-        $slug = trim($slug, '-');
-        return $slug === '' ? 'product' : $slug;
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/maintenance'); }
+        $pdo = DB::pdo();
+
+        try {
+            if (empty($_SESSION['variant_reset_backup'])) {
+                $_SESSION['error'] = 'No backup found. Undo is only available for the most recent reset.';
+                $this->redirect('/admin/maintenance?tab=actions');
+            }
+
+            // Check if backup is too old (more than 1 hour)
+            if (isset($_SESSION['variant_reset_backup_time'])) {
+                $age = time() - $_SESSION['variant_reset_backup_time'];
+                if ($age > 3600) {
+                    $_SESSION['error'] = 'Backup has expired (older than 1 hour). Undo is no longer available.';
+                    unset($_SESSION['variant_reset_backup'], $_SESSION['variant_reset_backup_time']);
+                    $this->redirect('/admin/maintenance?tab=actions');
+                }
+            }
+
+            $backup = $_SESSION['variant_reset_backup'];
+            $restored = 0;
+
+            foreach ($backup as $productId => $data) {
+                $stmt = $pdo->prepare('
+                    UPDATE products
+                    SET title = ?, slug = ?, parent_product_id = ?, variant_attributes = ?
+                    WHERE id = ?
+                ');
+                $stmt->execute([
+                    $data['title'],
+                    $data['slug'],
+                    $data['parent_product_id'],
+                    $data['variant_attributes'],
+                    $productId
+                ]);
+                $restored++;
+            }
+
+            // Clear the backup
+            unset($_SESSION['variant_reset_backup'], $_SESSION['variant_reset_backup_time']);
+
+            $_SESSION['success'] = "Successfully restored {$restored} products to their previous state.";
+
+        } catch (\Throwable $e) {
+            $_SESSION['error'] = 'Failed to undo reset: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/maintenance?tab=actions');
     }
 
     /**
@@ -694,214 +710,12 @@ class AdminMaintenanceController extends Controller
 
     /**
      * Automatically detect and merge product variants based on title patterns
-     * This helps organize products that have size/color variants in their titles
+     * Now uses the SHARED qc_auto_merge_variants function from Helpers.php
+     * This ensures BOTH AdminProducts and AdminMaintenance use the exact same logic
      */
     private function autoMergeVariants(\PDO $pdo): array
     {
-        $result = ['merged_groups' => 0, 'merged_products' => 0, 'errors' => [], 'debug' => []];
-
-        // Check if variant support is enabled
-        $hasVariantsColumn = false;
-        try {
-            $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
-        } catch (\Throwable $e) { $hasVariantsColumn = false; }
-
-        if (!$hasVariantsColumn) {
-            return $result;
-        }
-
-        // Get all products that are not already variants (parent_product_id IS NULL or 0)
-        // Include both active and draft products
-        $stmt = $pdo->query('
-            SELECT id, title, slug, parent_product_id
-            FROM products
-            WHERE (parent_product_id IS NULL OR parent_product_id = 0)
-            ORDER BY title
-        ');
-        $products = $stmt->fetchAll();
-
-        $result['debug']['total_products'] = count($products);
-
-        // Group products by base title
-        $groups = [];
-        $skipped = 0;
-        foreach ($products as $product) {
-            $baseTitle = $this->extractBaseTitle($product['title']);
-
-            // Only group if base title is different from full title AND is meaningful
-            if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
-                if (!isset($groups[$baseTitle])) {
-                    $groups[$baseTitle] = [];
-                }
-                $groups[$baseTitle][] = $product;
-            } else {
-                $skipped++;
-            }
-        }
-
-        $result['debug']['skipped_products'] = $skipped;
-        $result['debug']['variant_groups_found'] = count($groups);
-
-        // Merge each group
-        foreach ($groups as $baseTitle => $groupProducts) {
-            if (count($groupProducts) <= 1) {
-                continue; // Skip groups with only 1 product
-            }
-
-            // Sort by ID to use the first/oldest as parent
-            usort($groupProducts, function($a, $b) {
-                return $a['id'] - $b['id'];
-            });
-
-            $parentProduct = $groupProducts[0];
-            $parentId = $parentProduct['id'];
-
-            // Update parent title to base title if needed
-            if ($parentProduct['title'] !== $baseTitle) {
-                try {
-                    $pdo->prepare('UPDATE products SET title = ? WHERE id = ?')
-                        ->execute([$baseTitle, $parentId]);
-                } catch (\Throwable $e) {
-                    $result['errors'][] = "Could not update parent product ID {$parentId}: " . $e->getMessage();
-                }
-            }
-
-            // Update parent slug if needed
-            $newSlug = $this->generateSlug($baseTitle);
-            if ($newSlug !== '' && $newSlug !== $parentProduct['slug']) {
-                try {
-                    // Ensure unique slug
-                    $baseSlug = $newSlug;
-                    $suffix = 1;
-                    $checkSlug = $pdo->prepare('SELECT COUNT(*) FROM products WHERE slug = ? AND id != ?');
-                    do {
-                        $checkSlug->execute([$newSlug, $parentId]);
-                        $count = (int)$checkSlug->fetchColumn();
-                        if ($count > 0) {
-                            $newSlug = $baseSlug . '-' . $suffix++;
-                        }
-                    } while ($count > 0 && $suffix <= 100);
-                    $pdo->prepare('UPDATE products SET slug = ? WHERE id = ?')
-                        ->execute([$newSlug, $parentId]);
-                } catch (\Throwable $e) {
-                    // Ignore slug errors
-                }
-            }
-
-            // Set parent product to active status so it shows on frontend
-            try {
-                $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
-                    ->execute([$parentId]);
-            } catch (\Throwable $e) {
-                // Ignore status errors
-            }
-
-            // Link other products as variants
-            foreach (array_slice($groupProducts, 1) as $variantProduct) {
-                $variantId = $variantProduct['id'];
-
-                // Extract variant attribute using regex (more reliable than substr)
-                $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
-
-                try {
-                    $pdo->prepare('
-                        UPDATE products
-                        SET parent_product_id = ?, variant_attributes = ?
-                        WHERE id = ?
-                    ')->execute([$parentId, $variantAttr, $variantId]);
-                    $result['merged_products']++;
-                } catch (\Throwable $e) {
-                    $result['errors'][] = "Could not link product ID {$variantId}: " . $e->getMessage();
-                }
-            }
-
-            $result['merged_groups']++;
-        }
-
-        return $result;
-    }
-
-    /**
-     * Extract base title by removing variant patterns from the end
-     */
-    private function extractBaseTitle(string $title): string
-    {
-        $title = trim($title);
-        if ($title === '') {
-            return '';
-        }
-
-        // Variant patterns to try - in order from most specific to least
-        $patterns = [
-            // Bra sizes: 38A, 36B, 34C, 32DD, 40DD, 40C, 40B, etc. (must be at end of title)
-            '/\s+\d{2,3}[A-Z]{1,3}\s*$/i',
-            // Decimal sizes: 28.5, 29.5, etc.
-            '/\s+\d{1,2}\.\d{1,2}\s*$/i',
-            // Sizes like 2XL, 3XL, 4XL, 5XL
-            '/\s+\d+(?:XL|XS|L|M|S)\s*$/i',
-            // Word sizes: EXTRA LARGE, EXTRA SMALL
-            '/\s+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
-            '/\s+(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$/i',
-            // XL, XS
-            '/\s+(?:XL|XS)\s*$/i',
-            // LARGE, MEDIUM, SMALL
-            '/\s+(?:LARGE|MEDIUM|SMALL)\s*$/i',
-            // Single letters: L, M, S (but only if preceded by space and at end)
-            '/\s+[LMS]\s*$/i',
-            // Standalone numbers: 36, 37, 38, etc. (but be careful with years or model numbers)
-            '/\s+\d{1,2}\s*$/i',
-        ];
-
-        $originalTitle = $title;
-        foreach ($patterns as $pattern) {
-            $newTitle = preg_replace($pattern, '', $title);
-            if ($newTitle === null) {
-                continue; // preg_replace failed
-            }
-            $newTitle = trim($newTitle);
-            // Check if we extracted something and result is still meaningful
-            if ($newTitle !== $originalTitle && strlen($newTitle) >= 5) {
-                // Verify we haven't removed too much (base title should have at least 2 words)
-                $wordCount = count(preg_split('/\s+/', $newTitle));
-                if ($wordCount >= 2) {
-                    return $newTitle;
-                }
-            }
-        }
-
-        return $originalTitle; // Return original if no pattern matched
-    }
-
-    /**
-     * Extract variant from title (returns array with 'variant' key)
-     */
-    private function extractVariantFromTitle(string $title): array
-    {
-        $title = trim($title);
-        if ($title === '') {
-            return ['variant' => ''];
-        }
-
-        // Common variant patterns - use regex to extract the variant part
-        $patterns = [
-            '/\s+(\d{2,3}[A-Z]{1,3})\s*$/i'      => 1, // Bra sizes: 38A
-            '/\s+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal sizes: 28.5
-            '/\s+(\d+(?:XL|XS|L|M|S))\s*$/i'     => 1, // 2XL, 3XL, etc.
-            '/\s+(EXTRA LARGE|EXTRA SMALL)\s*$/i'  => 1,
-            '/\s+(XXXXL|2XL|3XL|4XL|5XL)\s*$/i'   => 1,
-            '/\s+(XL|XS)\s*$/i'                  => 1,
-            '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
-            '/\s+([LMS])\s*$/i'                  => 1, // Single letter
-            '/\s+(\d{1,2})\s*$/i'                => 1, // Numbers
-        ];
-
-        foreach ($patterns as $pattern => $groupIndex) {
-            if (preg_match($pattern, $title, $matches)) {
-                return ['variant' => strtoupper(trim($matches[$groupIndex]))];
-            }
-        }
-
-        return ['variant' => ''];
+        return \App\Core\qc_auto_merge_variants($pdo);
     }
 
 private function ensureColumn(\PDO $pdo, string $table, string $column, string $alterSql): void

@@ -971,72 +971,16 @@ class AdminProductsController extends Controller
         echo json_encode(['success' => true, 'message' => 'Variant deleted']);
     }
 
-    // Extract base title by removing variant patterns from the end
+    // Extract base title - now uses SHARED function from Helpers.php
     private function extractBaseTitle(string $title): string
     {
-        $title = trim($title);
-        if ($title === '') return '';
-
-        // Common variant patterns to remove from the end
-        $patterns = [
-            '/\s+\d{2,3}[A-Z]{1,3}\s*$/i',      // Bra sizes: 38A, 36B, 34C, 32DD
-            '/\s+\d{1,2}\.\d{1,2}\s*$/i',       // Decimal: 28.5
-            '/\s+\d+(?:XL|XS|L|M|S)\s*$/i',     // 2XL, 3XL, 2XS
-            '/\s+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
-            '/\s+(?:XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$/i',
-            '/\s+(?:XL|XS)\s*$/i',
-            '/\s+(?:LARGE|MEDIUM|SMALL)\s*$/i',
-            '/\s+[LMS]\s*$/i',                  // Single letter sizes
-            '/\s+\d{1,2}\s*$/i',               // Standalone numbers
-        ];
-
-        $originalTitle = $title;
-        foreach ($patterns as $pattern) {
-            $newTitle = preg_replace($pattern, '', $title);
-            if ($newTitle === null) {
-                continue; // preg_replace failed
-            }
-            $newTitle = trim($newTitle);
-            if ($newTitle !== $title && strlen($newTitle) >= 5) {
-                // Verify we haven't removed too much (base title should have at least 2 words)
-                $wordCount = count(preg_split('/\s+/', $newTitle));
-                if ($wordCount >= 2) {
-                    return $newTitle;
-                }
-            }
-        }
-
-        return $originalTitle; // Return original if no pattern matched
+        return \App\Core\qc_extract_base_title($title);
     }
 
-    // Extract variant from title (returns array with 'variant' key)
+    // Extract variant attribute - now uses SHARED function from Helpers.php
     private function extractVariantFromTitle(string $title): array
     {
-        $title = trim($title);
-        if ($title === '') {
-            return ['variant' => ''];
-        }
-
-        // Common variant patterns - use regex to extract the variant part
-        $patterns = [
-            '/\s+(\d{2,3}[A-Z]{1,3})\s*$/i'      => 1, // Bra sizes: 38A
-            '/\s+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal sizes: 28.5
-            '/\s+(\d+(?:XL|XS|L|M|S))\s*$/i'     => 1, // 2XL, 3XL, etc.
-            '/\s+(EXTRA LARGE|EXTRA SMALL)\s*$/i'  => 1,
-            '/\s+(XXXXL|2XL|3XL|4XL|5XL)\s*$/i'   => 1,
-            '/\s+(XL|XS)\s*$/i'                  => 1,
-            '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
-            '/\s+([LMS])\s*$/i'                  => 1, // Single letter
-            '/\s+(\d{1,2})\s*$/i'                => 1, // Numbers
-        ];
-
-        foreach ($patterns as $pattern => $groupIndex) {
-            if (preg_match($pattern, $title, $matches)) {
-                return ['variant' => strtoupper(trim($matches[$groupIndex]))];
-            }
-        }
-
-        return ['variant' => ''];
+        return ['variant' => \App\Core\qc_extract_variant_attribute($title)];
     }
 
     // Merge suggested products as variants
@@ -1133,13 +1077,13 @@ class AdminProductsController extends Controller
         ');
         $products = $stmt->fetchAll();
 
-        // Group products by base title
+        // Group products by base title using SHARED function
         $groups = [];
         $productGroups = [];
 
         foreach ($products as $product) {
-            $extracted = $this->extractBaseTitle($product['title']);
-            $baseTitle = $extracted;
+            // Use the SHARED qc_extract_base_title function
+            $baseTitle = \App\Core\qc_extract_base_title($product['title']);
 
             // Only group if base title is different from full title and meaningful
             if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
@@ -1166,7 +1110,7 @@ class AdminProductsController extends Controller
         ]);
     }
 
-    // Bulk merge all detected variants
+    // Bulk merge all detected variants - now uses SHARED function from Helpers.php
     public function bulkMergeVariants(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) {
@@ -1187,114 +1131,15 @@ class AdminProductsController extends Controller
             return;
         }
 
-        // Get all products that are not already variants
-        $stmt = $pdo->query('
-            SELECT id, title, fsc, price, stock, status, collection_id
-            FROM products
-            WHERE parent_product_id IS NULL OR parent_product_id = 0
-            ORDER BY title
-        ');
-        $products = $stmt->fetchAll();
-
-        // Group products by base title
-        $groups = [];
-        foreach ($products as $product) {
-            $extracted = $this->extractBaseTitle($product['title']);
-            $baseTitle = $extracted;
-
-            if ($baseTitle !== $product['title'] && strlen($baseTitle) >= 5) {
-                if (!isset($groups[$baseTitle])) {
-                    $groups[$baseTitle] = [];
-                }
-                $groups[$baseTitle][] = $product;
-            }
-        }
-
-        // Merge each group
-        $mergedGroups = 0;
-        $mergedProducts = 0;
-        $errors = [];
-
-        foreach ($groups as $baseTitle => $groupProducts) {
-            if (count($groupProducts) <= 1) continue;
-
-            // Sort by ID to use the first/oldest as parent
-            usort($groupProducts, function($a, $b) {
-                return $a['id'] - $b['id'];
-            });
-
-            $parentProduct = $groupProducts[0];
-            $parentId = $parentProduct['id'];
-
-            // Update parent title to base title if it's not already
-            if ($parentProduct['title'] !== $baseTitle) {
-                try {
-                    $pdo->prepare('UPDATE products SET title=? WHERE id=?')
-                        ->execute([$baseTitle, $parentId]);
-                } catch (\Throwable $e) {
-                    $errors[] = "Could not update parent product ID {$parentId}: " . $e->getMessage();
-                }
-            }
-
-            // Update parent slug if needed
-            $newSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($baseTitle));
-            $newSlug = trim($newSlug, '-');
-            if ($newSlug !== '' && $newSlug !== $parentProduct['fsc']) {
-                try {
-                    // Ensure unique slug
-                    $baseSlug = $newSlug;
-                    $suffix = 1;
-                    $checkSlug = $pdo->prepare('SELECT COUNT(*) FROM products WHERE slug = ? AND id != ?');
-                    do {
-                        $checkSlug->execute([$newSlug, $parentId]);
-                        $count = (int)$checkSlug->fetchColumn();
-                        if ($count > 0) {
-                            $newSlug = $baseSlug . '-' . $suffix++;
-                        }
-                    } while ($count > 0 && $suffix <= 100);
-                    $pdo->prepare('UPDATE products SET slug = ? WHERE id = ?')
-                        ->execute([$newSlug, $parentId]);
-                } catch (\Throwable $e) {
-                    // Ignore slug errors
-                }
-            }
-
-            // Set parent product to active status so it shows on frontend
-            try {
-                $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
-                    ->execute([$parentId]);
-            } catch (\Throwable $e) {
-                // Ignore status errors
-            }
-
-            // Link other products as variants
-            foreach (array_slice($groupProducts, 1) as $variantProduct) {
-                $variantId = $variantProduct['id'];
-
-                // Extract variant attribute using regex (more reliable than substr)
-                $variantAttr = $this->extractVariantFromTitle($variantProduct['title'])['variant'];
-
-                try {
-                    $pdo->prepare('
-                        UPDATE products
-                        SET parent_product_id = ?, variant_attributes = ?
-                        WHERE id = ?
-                    ')->execute([$parentId, $variantAttr, $variantId]);
-                    $mergedProducts++;
-                } catch (\Throwable $e) {
-                    $errors[] = "Could not link product ID {$variantId}: " . $e->getMessage();
-                }
-            }
-
-            $mergedGroups++;
-        }
+        // Use the SHARED qc_auto_merge_variants function
+        $result = \App\Core\qc_auto_merge_variants($pdo);
 
         header('Content-Type: application/json');
         echo json_encode([
             'success' => true,
-            'merged_groups' => $mergedGroups,
-            'merged_products' => $mergedProducts,
-            'errors' => $errors
+            'merged_groups' => $result['merged_groups'],
+            'merged_products' => $result['merged_products'],
+            'errors' => $result['errors']
         ]);
     }
 

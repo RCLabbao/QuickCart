@@ -172,6 +172,16 @@
         <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white border-bottom"><h5 class="card-title mb-0"><i class="bi bi-arrow-counterclockwise me-2"></i>Reset & Re-detect Variants</h5></div>
           <div class="card-body">
+            <?php if (!empty($_SESSION['variant_reset_backup'])): ?>
+              <div class="alert alert-warning mb-3">
+                <strong><i class="bi bi-shield-exclamation me-2"></i>Backup Available!</strong>
+                <p class="mb-2 small">You can undo the last reset if something went wrong.</p>
+                <form method="post" action="/admin/maintenance/undo-reset-variants" onsubmit="return confirmAction('undo the last variant reset')">
+                  <?= csrf_field() ?>
+                  <button type="submit" class="btn btn-danger btn-sm w-100"><i class="bi bi-arrow-counterclockwise me-2"></i>Undo Last Reset</button>
+                </form>
+              </div>
+            <?php endif; ?>
             <p class="text-muted mb-4">Clear all variant relationships and re-detect product variants from scratch.</p>
             <form method="post" action="/admin/maintenance/reset-variants" onsubmit="return confirmAction('reset and re-detect all variants')">
               <?= csrf_field() ?>
