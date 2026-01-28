@@ -121,7 +121,26 @@
 
   <div class="col-md-6">
     <h1 class="h3 mb-1"><?= e($product['title']) ?></h1>
-    <?php $stk=(int)($product['stock']??0); ?>
+    <?php
+    // Use the correct stock value:
+    // - If viewing a variant, use the variant's stock
+    // - If viewing a parent with variants, use the first variant's stock
+    // - Otherwise, use the product's own stock
+    if (!empty($variants) && $hasVariants) {
+        // Find the current product in the variants array (viewing a variant)
+        $currentVariant = null;
+        foreach ($variants as $v) {
+            if ((int)$v['id'] === (int)$product['id']) {
+                $currentVariant = $v;
+                break;
+            }
+        }
+        // Use current variant's stock if found, otherwise use first variant's stock
+        $stk = $currentVariant ? (int)($currentVariant['stock'] ?? 0) : (int)($variants[0]['stock'] ?? 0);
+    } else {
+        $stk = (int)($product['stock'] ?? 0);
+    }
+    ?>
     <div class="small mb-2">
       <?php if($stk<=0): ?>
         <span class="badge bg-secondary">Out of stock</span>
