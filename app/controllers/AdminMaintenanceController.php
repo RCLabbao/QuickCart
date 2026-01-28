@@ -208,26 +208,48 @@ class AdminMaintenanceController extends Controller
             $pdo->exec("UPDATE products SET parent_product_id = NULL, variant_attributes = NULL");
 
             // Fix duplicate slugs by regenerating from title
-            $stmt = $pdo->query("SELECT id, title FROM products");
+            $stmt = $pdo->query("SELECT id, title, slug FROM products");
             $products = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-            $slugCounts = [];
+
+            // First, collect all products that need slug updates
+            $slugUpdates = [];
             foreach ($products as $product) {
                 $baseSlug = $this->generateSlug($product['title']);
-                if (!isset($slugCounts[$baseSlug])) {
-                    $slugCounts[$baseSlug] = [];
+                $currentSlug = $product['slug'];
+
+                // If current slug is different from generated one, add to updates list
+                if ($currentSlug !== $baseSlug) {
+                    $slugUpdates[] = [
+                        'id' => $product['id'],
+                        'title' => $product['title'],
+                        'base_slug' => $baseSlug,
+                        'current_slug' => $currentSlug
+                    ];
                 }
-                $slugCounts[$baseSlug][] = $product['id'];
             }
 
-            foreach ($slugCounts as $slug => $ids) {
-                if (count($ids) > 1) {
-                    foreach ($ids as $index => $id) {
-                        $finalSlug = $index > 0 ? $slug . '-' . ($index + 1) : $slug;
-                        $pdo->prepare("UPDATE products SET slug = ? WHERE id = ?")->execute([$finalSlug, $id]);
-                    }
-                } else {
-                    $pdo->prepare("UPDATE products SET slug = ? WHERE id = ?")->execute([$slug, $ids[0]]);
+            // Now update slugs with proper duplicate checking
+            $usedSlugs = [];
+            $stmt = $pdo->query("SELECT slug FROM products");
+            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                $usedSlugs[$row['slug']] = true;
+            }
+
+            foreach ($slugUpdates as $update) {
+                $newSlug = $update['base_slug'];
+                $suffix = 1;
+                $originalSlug = $newSlug;
+
+                // Keep incrementing until we find a unique slug
+                while (isset($usedSlugs[$newSlug])) {
+                    $newSlug = $originalSlug . '-' . $suffix++;
                 }
+
+                // Mark this slug as used
+                $usedSlugs[$newSlug] = true;
+
+                $pdo->prepare("UPDATE products SET slug = ? WHERE id = ?")
+                    ->execute([$newSlug, $update['id']]);
             }
 
             // Re-run the auto-merge
