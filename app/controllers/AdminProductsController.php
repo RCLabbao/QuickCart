@@ -364,18 +364,7 @@ class AdminProductsController extends Controller
         $pdo = DB::pdo();
         $productId = (int)$params['id'];
 
-        // Check if product is in draft status - if so, preserve images by not deleting
-        $stmt = $pdo->prepare('SELECT status FROM products WHERE id = ?');
-        $stmt->execute([$productId]);
-        $product = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-        if ($product && $product['status'] === 'draft') {
-            // Don't delete draft products - they should be kept to preserve images
-            $_SESSION['error'] = 'Cannot delete draft products. Change status to active first or use bulk delete to permanently remove.';
-            $this->redirect('/admin/products');
-        }
-
-        // For active products, proceed with deletion (CASCADE will handle related records)
+        // Delete product (CASCADE will handle related records)
         $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$productId]);
         $_SESSION['success'] = 'Product deleted successfully.';
         $this->redirect('/admin/products');
@@ -481,14 +470,8 @@ class AdminProductsController extends Controller
             $ref->execute($ids);
             $blocked = array_map('intval', $ref->fetchAll(\PDO::FETCH_COLUMN));
 
-            // Find draft products and skip them (preserve images for draft products)
-            $draftStmt = $pdo->prepare("SELECT id FROM products WHERE id IN ($in) AND status = 'draft'");
-            $draftStmt->execute($ids);
-            $draftProducts = array_map('intval', $draftStmt->fetchAll(\PDO::FETCH_COLUMN));
-
-            // Combine blocked products (order references + draft products)
-            $allBlocked = array_values(array_unique(array_merge($blocked, $draftProducts)));
-            $deletable = array_values(array_diff($ids, $allBlocked));
+            // Deletable products are those not blocked by order references
+            $deletable = array_values(array_diff($ids, $blocked));
 
             if ($deletable) {
                 $in2 = implode(',', array_fill(0, count($deletable), '?'));
@@ -508,9 +491,6 @@ class AdminProductsController extends Controller
             }
             if (count($blocked) > 0) {
                 $messages[] = count($blocked) . ' product(s) were not deleted because they are referenced by existing orders.';
-            }
-            if (count($draftProducts) > 0) {
-                $messages[] = count($draftProducts) . ' draft product(s) were preserved with their images.';
             }
 
             if (!empty($messages)) {
