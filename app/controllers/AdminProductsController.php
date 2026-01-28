@@ -367,7 +367,7 @@ class AdminProductsController extends Controller
         // Check if product is in draft status - if so, preserve images by not deleting
         $stmt = $pdo->prepare('SELECT status FROM products WHERE id = ?');
         $stmt->execute([$productId]);
-        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+        $product = $stmt->fetch(\PDO::FETCH_ASSOC);
 
         if ($product && $product['status'] === 'draft') {
             // Don't delete draft products - they should be kept to preserve images

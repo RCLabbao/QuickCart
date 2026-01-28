@@ -424,7 +424,7 @@ class AdminMaintenanceController extends Controller
             // Get all tables
             $tables = [];
             $result = $pdo->query("SHOW TABLES");
-            while ($row = $result->fetch(PDO::FETCH_NUM)) {
+            while ($row = $result->fetch(\PDO::FETCH_NUM)) {
                 $tables[] = $row[0];
             }
 
@@ -451,7 +451,7 @@ class AdminMaintenanceController extends Controller
                 $output .= "DROP TABLE IF EXISTS `{$table}`;\n";
 
                 // Get table creation statement
-                $createTable = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_NUM);
+                $createTable = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(\PDO::FETCH_NUM);
                 $output .= $createTable[1] . ";\n\n";
 
                 // Get table data
@@ -459,7 +459,7 @@ class AdminMaintenanceController extends Controller
                 $columnCount = $result->columnCount();
 
                 // Insert statements
-                while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+                while ($row = $result->fetch(\PDO::FETCH_ASSOC)) {
                     $columns = array_keys($row);
                     $values = array_values($row);
 
