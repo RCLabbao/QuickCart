@@ -398,28 +398,16 @@ function qc_auto_merge_variants(\PDO $pdo): array {
             }
         }
 
-        // Handle draft products: Delete placeholder parents (FSC is NULL), activate real drafts (have FSC)
+        // Activate all draft products in this group
+        // NEVER delete products - just activate them!
         foreach ($allProductsInGroup as $p) {
-            if ($p['status'] === 'draft' && $p['id'] != $parentId) {
-                // Check if this is a placeholder parent (created during CSV import with FSC=NULL)
-                // by looking at whether it has FSC or other real data
+            if ($p['status'] === 'draft') {
                 try {
-                    $stmt = $pdo->prepare('SELECT fsc FROM products WHERE id = ?');
-                    $stmt->execute([$p['id']]);
-                    $fsc = $stmt->fetchColumn();
-
-                    // If FSC is NULL, this is a placeholder parent - DELETE it
-                    if ($fsc === null || $fsc === '') {
-                        $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$p['id']]);
-                        $result['debug']['placeholder_parents_deleted'] = ($result['debug']['placeholder_parents_deleted'] ?? 0) + 1;
-                    } else {
-                        // Real product with FSC - just activate it
-                        $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
-                            ->execute([$p['id']]);
-                        $result['debug']['drafts_activated'] = ($result['debug']['drafts_activated'] ?? 0) + 1;
-                    }
+                    $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
+                        ->execute([$p['id']]);
+                    $result['debug']['drafts_activated'] = ($result['debug']['drafts_activated'] ?? 0) + 1;
                 } catch (\Throwable $e) {
-                    $result['errors'][] = "Could not process draft product ID {$p['id']}: " . $e->getMessage();
+                    $result['errors'][] = "Could not activate product ID {$p['id']}: " . $e->getMessage();
                 }
             }
         }
