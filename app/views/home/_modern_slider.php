@@ -1,31 +1,50 @@
-<!-- Modern Banner Carousel - Multiple items visible -->
+<!-- Modern Banner Carousel - Each banner has its own internal carousel -->
 <?php if (!empty($banners ?? [])): ?>
 <section class="banner-carousel-section my-4 my-md-5">
   <div class="banner-carousel" id="modernBannerSlider">
     <!-- Carousel Track -->
     <div class="carousel-track-container">
       <div class="carousel-track">
-        <?php foreach (($banners ?? []) as $index => $b): ?>
+        <?php foreach (($banners ?? []) as $bIndex => $b): ?>
           <?php
-            $imageUrl = $b['image_url'] ?? '';
-            $mobileImageUrl = $b['mobile_image_url'] ?? '';
+            $carouselImages = $b['carousel_images'] ?? [];
+            $hasMultipleImages = count($carouselImages) > 1;
+            $firstImage = $carouselImages[0] ?? ($b['image_url'] ?? '');
             $linkUrl = $b['link_url'] ?? '';
             $altText = $b['alt_text'] ?? $b['title'] ?? 'Banner';
+            $bannerId = 'banner-' . ($b['id'] ?? $bIndex);
           ?>
-          <div class="carousel-slide">
+          <div class="carousel-slide" data-banner-id="<?= $bannerId ?>">
             <?php if (!empty($linkUrl)): ?>
-              <a href="<?= htmlspecialchars($linkUrl) ?>" class="banner-card">
+              <a href="<?= htmlspecialchars($linkUrl) ?>" class="banner-card banner-card-link">
             <?php else: ?>
               <div class="banner-card">
             <?php endif; ?>
-              <?php if (!empty($mobileImageUrl)): ?>
-                <picture>
-                  <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($mobileImageUrl) ?>">
-                  <img src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($altText) ?>" loading="lazy">
-                </picture>
+
+              <?php if ($hasMultipleImages): ?>
+                <!-- Internal carousel for this banner -->
+                <div class="internal-carousel" id="<?= $bannerId ?>">
+                  <div class="internal-carousel-slides">
+                    <?php foreach ($carouselImages as $iIndex => $img): ?>
+                      <div class="internal-slide <?= $iIndex === 0 ? 'active' : '' ?>">
+                        <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($altText) ?> #<?= $iIndex + 1 ?>" loading="lazy">
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                  <!-- Internal carousel indicators -->
+                  <?php if (count($carouselImages) > 1): ?>
+                    <div class="internal-carousel-dots">
+                      <?php foreach ($carouselImages as $iIndex => $img): ?>
+                        <button class="internal-dot <?= $iIndex === 0 ? 'active' : '' ?>" data-slide="<?= $iIndex ?>"></button>
+                      <?php endforeach; ?>
+                    </div>
+                  <?php endif; ?>
+                </div>
               <?php else: ?>
-                <img src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($altText) ?>" loading="lazy">
+                <!-- Single image -->
+                <img src="<?= htmlspecialchars($firstImage) ?>" alt="<?= htmlspecialchars($altText) ?>" loading="lazy">
               <?php endif; ?>
+
             <?php if (!empty($linkUrl)): ?>
               </a>
             <?php else: ?>
@@ -104,7 +123,7 @@
 .banner-card {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 1 / 1;
   border-radius: 1rem;
   overflow: hidden;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
@@ -112,16 +131,92 @@
   position: relative;
 }
 
+.banner-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
 .banner-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
-.banner-card img {
+.banner-card > img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* Internal Carousel (per banner) */
+.internal-carousel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.internal-carousel-slides {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.internal-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.internal-slide.active {
+  opacity: 1;
+  z-index: 1;
+}
+
+.internal-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Internal Carousel Dots */
+.internal-carousel-dots {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.375rem;
+  z-index: 10;
+  padding: 0.375rem 0.75rem;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  border-radius: 1rem;
+}
+
+.internal-dot {
+  width: 8px;
+  height: 8px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.internal-dot:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.internal-dot.active {
+  background: #fff;
+  width: 20px;
+  border-radius: 4px;
 }
 
 /* Navigation Arrows */
@@ -140,7 +235,7 @@
   justify-content: center;
   color: #212529;
   transition: all 0.3s ease;
-  z-index: 10;
+  z-index: 20;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
@@ -220,11 +315,6 @@
   touch-action: pan-y;
   user-select: none;
 }
-
-/* Pause animation on hover */
-.carousel-track-container:hover .carousel-track {
-  animation-play-state: paused;
-}
 </style>
 
 <script>
@@ -252,6 +342,43 @@
   let slidesPerView = getSlidesPerView();
   let autoPlayInterval;
   const autoPlayDelay = 4000;
+
+  // Initialize internal carousels (per banner)
+  function initInternalCarousels() {
+    slides.forEach(slide => {
+      const bannerId = slide.dataset.bannerId;
+      const internalCarousel = document.getElementById(bannerId);
+      if (!internalCarousel) return;
+
+      const internalSlides = internalCarousel.querySelectorAll('.internal-slide');
+      const internalDots = internalCarousel.querySelectorAll('.internal-dot');
+
+      if (internalSlides.length <= 1) return;
+
+      let currentInternal = 0;
+
+      function showInternalSlide(index) {
+        currentInternal = index % internalSlides.length;
+        internalSlides.forEach((s, i) => s.classList.toggle('active', i === currentInternal));
+        internalDots.forEach((d, i) => d.classList.toggle('active', i === currentInternal));
+      }
+
+      function nextInternalSlide() {
+        showInternalSlide(currentInternal + 1);
+      }
+
+      // Auto-rotate internal carousel
+      setInterval(nextInternalSlide, 3000);
+
+      // Click on dots
+      internalDots.forEach((dot, index) => {
+        dot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showInternalSlide(index);
+        });
+      });
+    });
+  }
 
   // Create dots
   function createDots() {
@@ -410,6 +537,7 @@
   createDots();
   updateTrack();
   startAutoPlay();
+  initInternalCarousels();
 })();
 </script>
 <?php endif; ?>

@@ -8,23 +8,34 @@ class AdminBannersController extends Controller
 
     public function index(): void
     {
-        $rows = DB::pdo()->query('SELECT * FROM banners ORDER BY sort_order ASC, id DESC')->fetchAll();
-        $activeCount = DB::pdo()->query('SELECT COUNT(*) FROM banners WHERE status="active"')->fetchColumn();
+        $pdo = DB::pdo();
+        $rows = $pdo->query('SELECT * FROM banners ORDER BY sort_order ASC, id DESC')->fetchAll();
+        $activeCount = (int)$pdo->query('SELECT COUNT(*) FROM banners WHERE status="active"')->fetchColumn();
+
+        // Get images for each banner
+        foreach ($rows as &$banner) {
+            $stmt = $pdo->prepare('SELECT url FROM banner_images WHERE banner_id = ? ORDER BY sort_order ASC');
+            $stmt->execute([$banner['id']]);
+            $banner['images'] = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        }
+        unset($banner);
+
         $this->adminView('admin/banners/index', [
             'title' => 'Banner Slider',
             'banners' => $rows,
-            'activeCount' => (int)$activeCount,
+            'activeCount' => $activeCount,
             'maxBanners' => self::MAX_BANNERS
         ]);
     }
 
     public function create(): void
     {
-        $activeCount = DB::pdo()->query('SELECT COUNT(*) FROM banners WHERE status="active"')->fetchColumn();
+        $activeCount = (int)DB::pdo()->query('SELECT COUNT(*) FROM banners WHERE status="active"')->fetchColumn();
         $this->adminView('admin/banners/form', [
             'title' => 'Add Banner',
-            'activeCount' => (int)$activeCount,
-            'maxBanners' => self::MAX_BANNERS
+            'activeCount' => $activeCount,
+            'maxBanners' => self::MAX_BANNERS,
+            'bannerImages' => []
         ]);
     }
 
@@ -56,37 +67,51 @@ class AdminBannersController extends Controller
             $this->redirect('/admin/banners');
         }
 
-        // Handle image uploads
-        $imageUrl = $this->handleImageUpload('image');
-        $mobileImageUrl = $this->handleImageUpload('mobile_image');
+        // Handle multiple image uploads
+        $uploadedImages = $this->handleMultipleImageUploads('images');
 
-        if (!$imageUrl) {
-            $_SESSION['error'] = 'Desktop image is required.';
+        if (empty($uploadedImages)) {
+            $_SESSION['error'] = 'At least one image is required.';
             $this->redirect('/admin/banners');
         }
 
-        $stmt = $pdo->prepare('INSERT INTO banners (title, image_url, mobile_image_url, link_url, alt_text, sort_order, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())');
-        $stmt->execute([$title, $imageUrl, $mobileImageUrl ?: null, $linkUrl ?: null, $altText ?: null, $sortOrder, $status]);
+        // Insert banner with first image as the main image
+        $stmt = $pdo->prepare('INSERT INTO banners (title, image_url, link_url, alt_text, sort_order, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())');
+        $stmt->execute([$title, $uploadedImages[0], $linkUrl ?: null, $altText ?: null, $sortOrder, $status]);
+        $bannerId = (int)$pdo->lastInsertId();
 
-        $_SESSION['success'] = 'Banner added successfully.';
+        // Insert all images into banner_images table
+        $imgStmt = $pdo->prepare('INSERT INTO banner_images (banner_id, url, sort_order) VALUES (?, ?, ?)');
+        foreach ($uploadedImages as $index => $imageUrl) {
+            $imgStmt->execute([$bannerId, $imageUrl, $index]);
+        }
+
+        $_SESSION['success'] = 'Banner added successfully with ' . count($uploadedImages) . ' image(s).';
         $this->redirect('/admin/banners');
     }
 
     public function edit(array $params): void
     {
-        $st = DB::pdo()->prepare('SELECT * FROM banners WHERE id=?');
+        $pdo = DB::pdo();
+        $st = $pdo->prepare('SELECT * FROM banners WHERE id=?');
         $st->execute([$params['id']]);
         $banner = $st->fetch();
         if (!$banner) {
             $this->redirect('/admin/banners');
         }
 
-        $activeCount = DB::pdo()->query('SELECT COUNT(*) FROM banners WHERE status="active"')->fetchColumn();
+        // Get banner images
+        $imgStmt = $pdo->prepare('SELECT * FROM banner_images WHERE banner_id = ? ORDER BY sort_order ASC');
+        $imgStmt->execute([$params['id']]);
+        $bannerImages = $imgStmt->fetchAll();
+
+        $activeCount = (int)$pdo->query('SELECT COUNT(*) FROM banners WHERE status="active"')->fetchColumn();
         $this->adminView('admin/banners/form', [
             'title' => 'Edit Banner',
             'banner' => $banner,
-            'activeCount' => (int)$activeCount,
-            'maxBanners' => self::MAX_BANNERS
+            'activeCount' => $activeCount,
+            'maxBanners' => self::MAX_BANNERS,
+            'bannerImages' => $bannerImages
         ]);
     }
 
@@ -129,28 +154,30 @@ class AdminBannersController extends Controller
             $this->redirect('/admin/banners');
         }
 
-        // Handle image uploads
-        $imageUrl = $this->handleImageUpload('image');
-        $mobileImageUrl = $this->handleImageUpload('mobile_image');
+        // Handle new image uploads
+        $uploadedImages = $this->handleMultipleImageUploads('images');
+        $imageCount = count($uploadedImages);
 
-        // Build update query dynamically based on what changed
-        $fields = ['title = ?', 'link_url = ?', 'alt_text = ?', 'sort_order = ?', 'status = ?'];
-        $values = [$title, $linkUrl ?: null, $altText ?: null, $sortOrder, $status];
+        // If new images uploaded, replace existing images
+        if ($imageCount > 0) {
+            // Delete old images from database
+            $pdo->prepare('DELETE FROM banner_images WHERE banner_id = ?')->execute([$bannerId]);
 
-        if ($imageUrl) {
-            $fields[] = 'image_url = ?';
-            $values[] = $imageUrl;
+            // Insert new images
+            $imgStmt = $pdo->prepare('INSERT INTO banner_images (banner_id, url, sort_order) VALUES (?, ?, ?)');
+            foreach ($uploadedImages as $index => $imageUrl) {
+                $imgStmt->execute([$bannerId, $imageUrl, $index]);
+            }
+
+            // Update main image_url to first image
+            $pdo->prepare('UPDATE banners SET image_url = ? WHERE id = ?')->execute([$uploadedImages[0], $bannerId]);
         }
-        if ($mobileImageUrl) {
-            $fields[] = 'mobile_image_url = ?';
-            $values[] = $mobileImageUrl;
-        }
 
-        $values[] = $bannerId;
-        $sql = 'UPDATE banners SET ' . implode(', ', $fields) . ' WHERE id = ?';
-        $pdo->prepare($sql)->execute($values);
+        // Update banner details
+        $pdo->prepare('UPDATE banners SET title = ?, link_url = ?, alt_text = ?, sort_order = ?, status = ? WHERE id = ?')
+            ->execute([$title, $linkUrl ?: null, $altText ?: null, $sortOrder, $status, $bannerId]);
 
-        $_SESSION['success'] = 'Banner updated successfully.';
+        $_SESSION['success'] = 'Banner updated successfully.' . ($imageCount > 0 ? " Updated with {$imageCount} image(s)." : '');
         $this->redirect('/admin/banners');
     }
 
@@ -161,9 +188,60 @@ class AdminBannersController extends Controller
             $this->redirect('/admin/banners');
         }
 
-        DB::pdo()->prepare('DELETE FROM banners WHERE id=?')->execute([$params['id']]);
+        $pdo = DB::pdo();
+        $bannerId = (int)$params['id'];
+
+        // Delete banner images (cascade will handle this)
+        $pdo->prepare('DELETE FROM banner_images WHERE banner_id = ?')->execute([$bannerId]);
+
+        // Delete banner
+        $pdo->prepare('DELETE FROM banners WHERE id=?')->execute([$bannerId]);
+
         $_SESSION['success'] = 'Banner deleted successfully.';
         $this->redirect('/admin/banners');
+    }
+
+    public function deleteImage(array $params): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Invalid request']);
+            return;
+        }
+
+        $pdo = DB::pdo();
+        $imageId = (int)($params['id'] ?? 0);
+
+        // Get image info
+        $stmt = $pdo->prepare('SELECT banner_id, url FROM banner_images WHERE id = ?');
+        $stmt->execute([$imageId]);
+        $image = $stmt->fetch();
+
+        if (!$image) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Image not found']);
+            return;
+        }
+
+        // Delete image record
+        $pdo->prepare('DELETE FROM banner_images WHERE id = ?')->execute([$imageId]);
+
+        // Check if this was the main image, update if needed
+        $bannerStmt = $pdo->prepare('SELECT image_url FROM banners WHERE id = ?');
+        $bannerStmt->execute([$image['banner_id']]);
+        $banner = $bannerStmt->fetch();
+
+        if ($banner && $banner['image_url'] === $image['url']) {
+            // Get new first image
+            $newFirstStmt = $pdo->prepare('SELECT url FROM banner_images WHERE banner_id = ? ORDER BY sort_order ASC LIMIT 1');
+            $newFirstStmt->execute([$image['banner_id']]);
+            $newFirst = $newFirstStmt->fetchColumn();
+
+            // Update banner with new first image or null
+            $pdo->prepare('UPDATE banners SET image_url = ? WHERE id = ?')->execute([$newFirst ?: null, $image['banner_id']]);
+        }
+
+        echo json_encode(['success' => true]);
     }
 
     public function reorder(): void
@@ -191,42 +269,60 @@ class AdminBannersController extends Controller
         echo 'OK';
     }
 
+    /**
+     * Handle multiple image uploads
+     */
+    private function handleMultipleImageUploads(string $field): array
+    {
+        if (empty($_FILES[$field]['name'][0])) {
+            return [];
+        }
+
+        $uploadedFiles = [];
+        $fileCount = count($_FILES[$field]['name']);
+
+        for ($i = 0; $i < $fileCount; $i++) {
+            if ($_FILES[$field]['error'][$i] !== UPLOAD_ERR_OK) {
+                continue;
+            }
+
+            $tmp = $_FILES[$field]['tmp_name'][$i];
+            $size = (int)$_FILES[$field]['size'][$i];
+
+            // Max 10MB per image
+            if ($size > 10 * 1024 * 1024) {
+                continue;
+            }
+
+            $mime = function_exists('finfo_open')
+                ? finfo_file(finfo_open(FILEINFO_MIME_TYPE), $tmp)
+                : mime_content_type($tmp);
+
+            if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'])) {
+                continue;
+            }
+
+            $ext = $mime === 'image/png' ? 'png' : ($mime === 'image/webp' ? 'webp' : 'jpg');
+            $safe = preg_replace('/[^a-zA-Z0-9-_\.]/', '_', pathinfo($_FILES[$field]['name'][$i], PATHINFO_FILENAME));
+            $final = $safe . '-' . uniqid() . '.' . $ext;
+
+            $base = BASE_PATH . '/public/uploads/banners';
+            if (!is_dir($base)) {
+                @mkdir($base, 0775, true);
+            }
+
+            $dest = $base . '/' . $final;
+            if (@move_uploaded_file($tmp, $dest)) {
+                $uploadedFiles[] = '/public/uploads/banners/' . $final;
+            }
+        }
+
+        return $uploadedFiles;
+    }
+
     private function handleImageUpload(string $field): ?string
     {
-        if (empty($_FILES[$field]['name']) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            return null;
-        }
-
-        $tmp = $_FILES[$field]['tmp_name'];
-        $size = (int)$_FILES[$field]['size'];
-
-        // Max 10MB per image
-        if ($size > 10 * 1024 * 1024) {
-            return null;
-        }
-
-        $mime = function_exists('finfo_open')
-            ? finfo_file(finfo_open(FILEINFO_MIME_TYPE), $tmp)
-            : mime_content_type($tmp);
-
-        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'])) {
-            return null;
-        }
-
-        $ext = $mime === 'image/png' ? 'png' : ($mime === 'image/webp' ? 'webp' : 'jpg');
-        $safe = preg_replace('/[^a-zA-Z0-9-_\.]/', '_', pathinfo($_FILES[$field]['name'], PATHINFO_FILENAME));
-        $final = $safe . '-' . uniqid() . '.' . $ext;
-
-        $base = BASE_PATH . '/public/uploads/banners';
-        if (!is_dir($base)) {
-            @mkdir($base, 0775, true);
-        }
-
-        $dest = $base . '/' . $final;
-        if (@move_uploaded_file($tmp, $dest)) {
-            return '/public/uploads/banners/' . $final;
-        }
-
-        return null;
+        $files = $this->handleMultipleImageUploads($field);
+        return $files[0] ?? null;
     }
 }

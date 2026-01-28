@@ -5,7 +5,7 @@
   <div>
     <h1 class="h3 mb-1"><?= isset($banner) ? 'Edit Banner' : 'Add Banner' ?></h1>
     <p class="text-muted mb-0">
-      <?= isset($banner) ? 'Update banner details and images' : 'Add a new banner to the homepage slider' ?>
+      <?= isset($banner) ? 'Update banner details and images' : 'Add a new banner with multiple images for auto-carousel' ?>
     </p>
   </div>
   <div>
@@ -74,45 +74,37 @@
   <div class="col-lg-4">
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0"><i class="bi bi-desktop me-2"></i>Desktop Image</h5>
+        <h5 class="card-title mb-0"><i class="bi bi-images me-2"></i>Carousel Images</h5>
       </div>
       <div class="card-body">
         <div class="mb-3">
-          <label class="form-label fw-semibold">Image File <span class="text-danger">*</span></label>
-          <input class="form-control" type="file" name="image" accept="image/*" <?= !isset($banner) ? 'required' : '' ?>>
-          <div class="form-text">Recommended: 1920x600px, JPEG, PNG, or WEBP. Max 10 MB.</div>
-        </div>
-        <?php if (!empty($banner['image_url'])): ?>
-          <div class="mb-3">
-            <label class="form-label text-muted small">Current Image:</label>
-            <div class="border rounded p-2 bg-light">
-              <img src="<?= htmlspecialchars($banner['image_url']) ?>" class="img-fluid rounded" alt="Current banner" style="max-height: 200px; width: 100%; object-fit: cover;">
-            </div>
+          <label class="form-label fw-semibold">Select Images <span class="text-danger">*</span></label>
+          <input class="form-control" type="file" name="images[]" accept="image/*" multiple <?= !isset($banner) ? 'required' : '' ?>>
+          <div class="form-text">
+            Select multiple images to create an auto-carousel. Recommended: 1920x600px for desktop, 1:1 ratio for square cards. JPEG, PNG, or WEBP. Max 10 MB each.
           </div>
-        <?php endif; ?>
-      </div>
-    </div>
+        </div>
 
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white border-bottom">
-        <h5 class="card-title mb-0"><i class="bi bi-phone me-2"></i>Mobile Image (Optional)</h5>
-      </div>
-      <div class="card-body">
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Mobile Image File</label>
-          <input class="form-control" type="file" name="mobile_image" accept="image/*">
-          <div class="form-text">Recommended: 800x1000px (vertical), optimized for mobile screens.</div>
-        </div>
-        <?php if (!empty($banner['mobile_image_url'])): ?>
+        <?php if (!empty($bannerImages)): ?>
           <div class="mb-3">
-            <label class="form-label text-muted small">Current Mobile Image:</label>
-            <div class="border rounded p-2 bg-light">
-              <img src="<?= htmlspecialchars($banner['mobile_image_url']) ?>" class="img-fluid rounded" alt="Current mobile banner" style="max-height: 200px; width: 100%; object-fit: cover;">
+            <label class="form-label text-muted small">Current Carousel Images (<?= count($bannerImages) ?>):</label>
+            <div class="row g-2" id="existingImages">
+              <?php foreach ($bannerImages as $img): ?>
+                <div class="col-4 col-md-3 position-relative">
+                  <div class="border rounded p-1 bg-light position-relative">
+                    <img src="<?= htmlspecialchars($img['url']) ?>" class="img-fluid rounded" alt="Banner image" style="aspect-ratio: 1/1; object-fit: cover;">
+                    <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1 rounded-circle"
+                            onclick="deleteBannerImage(<?= (int)$img['id'] ?>, this)"
+                            style="width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                      <i class="bi bi-x" style="font-size: 14px;"></i>
+                    </button>
+                  </div>
+                </div>
+              <?php endforeach; ?>
             </div>
-          </div>
-        <?php else: ?>
-          <div class="alert alert-info small mb-0">
-            <i class="bi bi-info-circle me-1"></i>If not provided, desktop image will be used on mobile devices.
+            <div class="form-text mt-2">
+              <i class="bi bi-info-circle me-1"></i>Upload new images to replace all existing images.
+            </div>
           </div>
         <?php endif; ?>
       </div>
@@ -137,6 +129,8 @@
 .card { transition: all 0.2s ease; }
 .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important; }
 .form-control:focus, .form-select:focus { border-color: var(--bs-primary); box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25); }
+#existingImages img { transition: transform 0.2s ease; }
+#existingImages img:hover { transform: scale(1.05); }
 </style>
 
 <script>
@@ -148,4 +142,41 @@ document.querySelector('form').addEventListener('submit', function() {
     submitButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Saving...';
   }
 });
+
+// Delete banner image
+function deleteBannerImage(imageId, button) {
+  if (!confirm('Remove this image from the banner carousel?')) return;
+
+  const container = button.closest('.col-4') || button.closest('.col-md-3');
+
+  fetch('/admin/banners/images/' + imageId + '/delete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: '<?= csrf_field() ?>'
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      container.remove();
+      // Update count
+      const label = document.querySelector('#existingImages').previousElementSibling;
+      const currentCount = label.textContent.match(/\d+/);
+      if (currentCount) {
+        const newCount = parseInt(currentCount[0]) - 1;
+        if (newCount > 0) {
+          label.textContent = label.textContent.replace(/\d+/, newCount);
+        } else {
+          label.parentElement.remove();
+        }
+      }
+    } else {
+      alert('Failed to delete image: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(error => {
+    alert('Error deleting image: ' + error.message);
+  });
+}
 </script>

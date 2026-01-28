@@ -5,7 +5,7 @@
   <div>
     <h1 class="h3 mb-1">Banner Slider</h1>
     <p class="text-muted mb-0">
-      Manage homepage slider banners
+      Manage homepage slider banners. Each banner can have multiple images for auto-carousel.
       <?php if ($activeCount >= $maxBanners): ?>
         <span class="badge bg-danger ms-2">Limit Reached (<?= $activeCount ?>/<?= $maxBanners ?>)</span>
       <?php else: ?>
@@ -35,11 +35,26 @@
   <!-- Banners Grid -->
   <div class="row g-3" id="banners-container">
     <?php foreach ($banners as $b): ?>
+      <?php $images = $b['images'] ?? []; $imageCount = count($images); ?>
       <div class="col-12 col-md-6 col-lg-4 col-xl-3">
         <div class="card border-0 shadow-sm h-100 banner-card" data-banner-id="<?= (int)$b['id'] ?>" style="cursor: grab;">
           <div class="card-img-top position-relative" style="height: 180px; overflow: hidden;">
-            <img src="<?= htmlspecialchars($b['image_url'] ?? '') ?>" alt="<?= htmlspecialchars($b['alt_text'] ?? $b['title']) ?>"
-                 class="w-100 h-100" style="object-fit: cover;">
+            <?php if (!empty($images)): ?>
+              <!-- Show multiple images as mini grid -->
+              <?php if ($imageCount === 1): ?>
+                <img src="<?= htmlspecialchars($images[0]) ?>" alt="<?= htmlspecialchars($b['alt_text'] ?? $b['title']) ?>"
+                     class="w-100 h-100" style="object-fit: cover;">
+              <?php else: ?>
+                <div class="w-100 h-100" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px;">
+                  <?php foreach (array_slice($images, 0, 4) as $img): ?>
+                    <img src="<?= htmlspecialchars($img) ?>" alt="" class="w-100" style="object-fit: cover; height: 50%;">
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            <?php else: ?>
+              <img src="<?= htmlspecialchars($b['image_url'] ?? '') ?>" alt="<?= htmlspecialchars($b['alt_text'] ?? $b['title']) ?>"
+                   class="w-100 h-100" style="object-fit: cover;">
+            <?php endif; ?>
             <div class="position-absolute top-0 start-0 m-2">
               <span class="badge <?= ($b['status'] ?? 'active') === 'active' ? 'bg-success' : 'bg-secondary' ?>">
                 <?= ucfirst($b['status'] ?? 'active') ?>
@@ -48,9 +63,11 @@
             <div class="position-absolute top-0 end-0 m-2">
               <i class="bi bi-grip-vertical text-white bg-dark bg-opacity-50 rounded p-1" style="cursor: grab;"></i>
             </div>
-            <?php if (!empty($b['mobile_image_url'])): ?>
+            <?php if ($imageCount > 1): ?>
               <div class="position-absolute bottom-0 start-0 m-2">
-                <span class="badge bg-info"><i class="bi bi-phone me-1"></i>Has Mobile</span>
+                <span class="badge bg-primary">
+                  <i class="bi bi-images me-1"></i><?= $imageCount ?> images
+                </span>
               </div>
             <?php endif; ?>
           </div>
@@ -63,6 +80,9 @@
             <?php endif; ?>
             <div class="d-flex justify-content-between align-items-center">
               <small class="text-muted">Sort: <?= (int)$b['sort_order'] ?></small>
+              <small class="text-muted">
+                <?= $imageCount > 0 ? "{$imageCount} image" . ($imageCount > 1 ? 's' : '') : 'No images' ?>
+              </small>
             </div>
           </div>
           <div class="card-footer bg-white border-top">

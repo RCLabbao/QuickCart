@@ -7,10 +7,17 @@ class HomeController extends Controller
     public function index(): void
     {
         $pdo = DB::pdo();
-        // Get active banners for slider
+        // Get active banners for slider with their images
         $banners = [];
         try {
             $banners = $pdo->query('SELECT * FROM banners WHERE status="active" ORDER BY sort_order ASC')->fetchAll();
+            // Get images for each banner
+            foreach ($banners as &$banner) {
+                $stmt = $pdo->prepare('SELECT url FROM banner_images WHERE banner_id = ? ORDER BY sort_order ASC');
+                $stmt->execute([$banner['id']]);
+                $banner['carousel_images'] = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+            }
+            unset($banner);
         } catch (\Throwable $e) { $banners = []; }
 
         $hidden = \App\Core\hidden_collection_ids();

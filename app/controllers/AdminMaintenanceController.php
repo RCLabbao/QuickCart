@@ -178,6 +178,8 @@ class AdminMaintenanceController extends Controller
         // Ensure tables for future features
         $this->ensureTable($pdo, 'banners',
             'CREATE TABLE banners (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL, image_url VARCHAR(500) NULL, mobile_image_url VARCHAR(500) NULL, link_url VARCHAR(500) NULL, alt_text VARCHAR(500) NULL, sort_order INT NOT NULL DEFAULT 0, status ENUM("active","draft") NOT NULL DEFAULT "active", created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_status_sort (status, sort_order)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+        $this->ensureTable($pdo, 'banner_images',
+            'CREATE TABLE banner_images (id INT AUTO_INCREMENT PRIMARY KEY, banner_id INT NOT NULL, url VARCHAR(500) NOT NULL, sort_order INT NOT NULL DEFAULT 0, INDEX idx_banner_id (banner_id), INDEX idx_sort_order (sort_order), FOREIGN KEY (banner_id) REFERENCES banners(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
         $this->ensureTable($pdo, 'order_events',
             'CREATE TABLE order_events (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, user_id INT NULL, type VARCHAR(64) NOT NULL, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
         $this->ensureTable($pdo, 'coupons',
