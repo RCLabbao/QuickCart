@@ -301,6 +301,20 @@ function qc_auto_merge_variants(\PDO $pdo): array {
     $result['debug']['skipped_products'] = $skipped;
     $result['debug']['variant_groups_found'] = count($groups);
 
+    // Add detailed debug info for each group
+    if (!empty($groups)) {
+        $result['debug']['group_details'] = [];
+        foreach ($groups as $baseTitle => $productsInGroup) {
+            $result['debug']['group_details'][] = [
+                'base_title' => $baseTitle,
+                'product_count' => count($productsInGroup),
+                'product_ids' => array_column($productsInGroup, 'id'),
+                'product_titles' => array_column($productsInGroup, 'original_title'),
+                'draft_count' => count(array_filter($productsInGroup, fn($p) => $p['status'] === 'draft'))
+            ];
+        }
+    }
+
     // Merge each group
     foreach ($groups as $baseTitle => $groupProducts) {
         // Use ALL products in the group (including drafts)
@@ -357,15 +371,30 @@ function qc_auto_merge_variants(\PDO $pdo): array {
                 if ($suffix > 1000) break;
             }
 
-            // Extract variant from the original title and store it
+            // Extract variant from the original title and store it in the PARENT (so we know what variant this product was originally)
             $variantAttr = qc_extract_variant_attribute($firstProduct['original_title']);
 
             try {
+                // CRITICAL: Update parent title and slug, but DON'T set variant_attributes on parent
+                // The parent should have variant_attributes = NULL because it represents ALL variants
                 $pdo->prepare('
                     UPDATE products
-                    SET title = ?, slug = ?, variant_attributes = ?, status = "active", parent_product_id = NULL
+                    SET title = ?, slug = ?, variant_attributes = NULL, status = "active", parent_product_id = NULL
                     WHERE id = ?
-                ')->execute([$baseTitle, $parentSlug, $variantAttr, $parentId]);
+                ')->execute([$baseTitle, $parentSlug, $parentId]);
+
+                // Verify the update worked
+                $check = $pdo->prepare('SELECT title, variant_attributes FROM products WHERE id = ?');
+                $check->execute([$parentId]);
+                $checkResult = $check->fetch();
+
+                if ($checkResult['title'] !== $baseTitle) {
+                    $result['errors'][] = "Failed to update title for product ID {$parentId}: expected '$baseTitle' but got '{$checkResult['title']}'";
+                }
+                if ($checkResult['variant_attributes'] !== null) {
+                    $result['errors'][] = "Parent product ID {$parentId} has variant_attributes set to '{$checkResult['variant_attributes']}' - should be NULL!";
+                }
+
                 $result['debug']['titles_updated'] = ($result['debug']['titles_updated'] ?? 0) + 1;
             } catch (\Throwable $e) {
                 $result['errors'][] = "Could not update product ID {$parentId} to parent: " . $e->getMessage();
