@@ -15,7 +15,18 @@ class AdminSettingsController extends Controller
         $collections = [];
         try { $collections = $pdo->query('SELECT id, title, slug FROM collections ORDER BY title')->fetchAll(); } catch (\Throwable $e) { $collections = []; }
         $activeTab = strtolower(trim($_GET['tab'] ?? 'general'));
-        if (!in_array($activeTab, ['general','checkout','shipping','email','catalog'], true)) { $activeTab = 'general'; }
+        if (!in_array($activeTab, ['general','checkout','shipping','email','catalog','banners'], true)) { $activeTab = 'general'; }
+
+        // Fetch banners data for banners tab
+        $banners = [];
+        $bannerStats = ['total' => 0, 'active' => 0, 'draft' => 0];
+        try {
+            $banners = $pdo->query('SELECT * FROM banners ORDER BY sort_order ASC, id DESC')->fetchAll();
+            $bannerStats['total'] = count($banners);
+            $bannerStats['active'] = (int)$pdo->query('SELECT COUNT(*) FROM banners WHERE status="active"')->fetchColumn();
+            $bannerStats['draft'] = (int)$pdo->query('SELECT COUNT(*) FROM banners WHERE status="draft"')->fetchColumn();
+        } catch (\Throwable $e) { $banners = []; }
+
         $flash = $_SESSION['settings_flash'] ?? null; if ($flash) { unset($_SESSION['settings_flash']); }
         $this->adminView('admin/settings/index', [
             'title' => 'Settings',
@@ -23,7 +34,9 @@ class AdminSettingsController extends Controller
             'fees' => $fees,
             'collections' => $collections,
             'activeTab' => $activeTab,
-            'flash' => $flash
+            'flash' => $flash,
+            'banners' => $banners,
+            'bannerStats' => $bannerStats
         ]);
     }
 
@@ -90,7 +103,7 @@ class AdminSettingsController extends Controller
         try { \App\Core\fresh_settings(); } catch (\Throwable $e) {}
         $_SESSION['settings_flash'] = 'Settings saved successfully.';
         $tab = $scope;
-        if (!in_array($tab, ['general','checkout','shipping','email','catalog'], true)) { $tab = 'general'; }
+        if (!in_array($tab, ['general','checkout','shipping','email','catalog','banners'], true)) { $tab = 'general'; }
         $this->redirect('/admin/settings?tab=' . $tab);
     }
 

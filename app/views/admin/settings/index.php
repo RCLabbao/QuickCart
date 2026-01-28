@@ -24,6 +24,7 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
   <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='shipping'?'active':'' ?>" href="/admin/settings?tab=shipping" data-bs-toggle="tab" data-bs-target="#tab-shipping" role="tab">Shipping</a></li>
   <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='email'?'active':'' ?>" href="/admin/settings?tab=email" data-bs-toggle="tab" data-bs-target="#tab-email" role="tab">Email</a></li>
   <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='catalog'?'active':'' ?>" href="/admin/settings?tab=catalog" data-bs-toggle="tab" data-bs-target="#tab-catalog" role="tab">Catalog</a></li>
+  <li class="nav-item" role="presentation"><a class="nav-link <?= $activeTab==='banners'?'active':'' ?>" href="/admin/settings?tab=banners" data-bs-toggle="tab" data-bs-target="#tab-banners" role="tab">Banners</a></li>
 </ul>
 <div class="tab-content mt-3">
 <div class="tab-pane fade <?= $activeTab==='general'?'show active':'' ?>" id="tab-general" role="tabpanel">
@@ -482,6 +483,131 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
   </script>
 </div>
 
+<div class="tab-pane fade <?= $activeTab==='banners'?'show active':'' ?>" id="tab-banners" role="tabpanel">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h5 class="mb-1">Homepage Banner Slider</h5>
+      <p class="text-muted mb-0 small">Manage images that appear in the homepage carousel</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="/admin/banners/create" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>Add Banner
+      </a>
+    </div>
+  </div>
+
+  <!-- Quick Stats -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center">
+          <h4 class="mb-1"><?= number_format($bannerStats['total'] ?? 0) ?></h4>
+          <small class="text-muted">Total Banners</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center">
+          <h4 class="mb-1 text-success"><?= number_format($bannerStats['active'] ?? 0) ?></h4>
+          <small class="text-muted">Active (visible on site)</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center">
+          <h4 class="mb-1 text-secondary"><?= number_format($bannerStats['draft'] ?? 0) ?></h4>
+          <small class="text-muted">Draft (hidden)</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banners List -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+      <strong>All Banners</strong>
+      <a href="/admin/banners" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-gear me-1"></i>Manage Banners
+      </a>
+    </div>
+    <div class="card-body">
+      <?php if (empty($banners ?? [])): ?>
+        <div class="text-center py-5">
+          <i class="bi bi-images display-4 text-muted mb-3"></i>
+          <p class="text-muted mb-3">No banners yet. Create your first banner to display images on the homepage slider.</p>
+          <a href="/admin/banners/create" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>Add First Banner
+          </a>
+        </div>
+      <?php else: ?>
+        <div class="row g-3">
+          <?php foreach (($banners ?? []) as $b): ?>
+            <div class="col-12 col-md-6 col-lg-4">
+              <div class="card border shadow-sm">
+                <div class="card-img-top position-relative" style="height: 140px; overflow: hidden; background: #f8f9fa;">
+                  <?php if (!empty($b['image_url'])): ?>
+                    <img src="<?= htmlspecialchars($b['image_url']) ?>" alt="<?= htmlspecialchars($b['alt_text'] ?? $b['title']) ?>"
+                         class="w-100 h-100" style="object-fit: cover;">
+                  <?php else: ?>
+                    <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted">
+                      <i class="bi bi-image" style="font-size: 2rem;"></i>
+                    </div>
+                  <?php endif; ?>
+                  <div class="position-absolute top-0 start-0 m-2">
+                    <span class="badge <?= ($b['status'] ?? 'active') === 'active' ? 'bg-success' : 'bg-secondary' ?>">
+                      <?= ucfirst($b['status'] ?? 'active') ?>
+                    </span>
+                  </div>
+                  <div class="position-absolute top-0 end-0 m-2">
+                    <span class="badge bg-dark">#<?= (int)$b['sort_order'] ?></span>
+                  </div>
+                  <?php if (!empty($b['mobile_image_url'])): ?>
+                    <div class="position-absolute bottom-0 start-0 m-2">
+                      <span class="badge bg-info"><i class="bi bi-phone"></i></span>
+                    </div>
+                  <?php endif; ?>
+                </div>
+                <div class="card-body">
+                  <h6 class="card-title mb-1 text-truncate"><?= htmlspecialchars($b['title']) ?></h6>
+                  <?php if (!empty($b['link_url'])): ?>
+                    <small class="text-muted d-block mb-2 text-truncate">
+                      <i class="bi bi-link-45deg me-1"></i><?= htmlspecialchars($b['link_url']) ?>
+                    </small>
+                  <?php endif; ?>
+                </div>
+                <div class="card-footer bg-white border-top">
+                  <div class="btn-group btn-group-sm w-100">
+                    <a class="btn btn-outline-primary" href="/admin/banners/<?= (int)$b['id'] ?>/edit">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <form method="post" action="/admin/banners/<?= (int)$b['id'] ?>/delete" onsubmit="return confirm('Delete this banner?');" class="d-inline">
+                      <?= csrf_field() ?>
+                      <button class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </div>
+  </div>
+
+  <!-- Info Box -->
+  <div class="alert alert-info mt-3 mb-0">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Banner Slider Tips:</strong>
+    <ul class="mb-0 mt-2">
+      <li>Banners are displayed on the homepage in a carousel/slider</li>
+      <li>Only banners with <strong>Active</strong> status are visible to customers</li>
+      <li>Drag and drop banners on the <a href="/admin/banners" target="_blank">Banners page</a> to reorder them</li>
+      <li>Recommended image size: 1920x600px for desktop, 800x1000px for mobile</li>
+    </ul>
+  </div>
+</div>
 
 </div>
 </div>
