@@ -24,31 +24,43 @@ class AdminProductsController extends Controller
             // Detect optional FSC/barcode columns
             $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
             $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+            $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
             $like = '%'.$q.'%';
 
             // Build search condition - always search by title and available fields
-            if ($hasSku && $hasBarcode) {
-                $where[] = "(title LIKE ? OR fsc LIKE ? OR barcode LIKE ?)";
-                $params[]=$like; $params[]=$like; $params[]=$like;
+            // Also search in variants' FSC to show parent products when variant FSC is searched
+            $searchConditions = [];
+
+            // Title search
+            $searchConditions[] = 'p.title LIKE ?';
+
+            // FSC search (main product)
+            if ($hasSku) {
+                $searchConditions[] = 'p.fsc LIKE ?';
             }
-            elseif ($hasSku) {
-                $where[] = "(title LIKE ? OR fsc LIKE ?)";
-                $params[]=$like; $params[]=$like;
+
+            // Barcode search
+            if ($hasBarcode) {
+                $searchConditions[] = 'p.barcode LIKE ?';
             }
-            elseif ($hasBarcode) {
-                $where[] = "(title LIKE ? OR barcode LIKE ?)";
-                $params[]=$like; $params[]=$like;
+
+            // Variant FSC search - when searching for variant's FSC, show parent product
+            if ($hasVariants && $hasSku) {
+                // Search in variants' FSC and return the parent product
+                $searchConditions[] = 'p.id IN (SELECT DISTINCT parent_product_id FROM products WHERE parent_product_id IS NOT NULL AND parent_product_id != 0 AND fsc LIKE ?)';
             }
-            else {
-                $where[] = "title LIKE ?";
-                $params[]=$like;
+
+            // Combine all search conditions
+            $where[] = '(' . implode(' OR ', $searchConditions) . ')';
+            foreach ($searchConditions as $cond) {
+                $params[] = $like;
             }
 
             // If it's a pure number, also search by ID (as an additional OR condition)
             if (ctype_digit($q)) {
                 // Wrap the previous condition with ID search
                 $lastIndex = count($where) - 1;
-                $where[$lastIndex] = "(id = ? OR " . $where[$lastIndex] . ")";
+                $where[$lastIndex] = "(p.id = ? OR " . $where[$lastIndex] . ")";
                 // Add ID parameter at the beginning
                 array_unshift($params, (int)$q);
             }
@@ -70,7 +82,7 @@ class AdminProductsController extends Controller
         $offset = ($page - 1) * $perPage;
 
         // Count total products for pagination
-        $countSql = 'SELECT COUNT(*) FROM products WHERE ' . implode(' AND ', $where);
+        $countSql = 'SELECT COUNT(*) FROM products p WHERE ' . implode(' AND ', $where);
         $countSt = $pdo->prepare($countSql);
         $countSt->execute($params);
         $totalProducts = (int)$countSt->fetchColumn();

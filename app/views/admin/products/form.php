@@ -278,7 +278,15 @@
                   <td>
                     <span class="badge bg-info"><?= htmlspecialchars($v['variant_attributes']) ?></span>
                   </td>
-                  <td class="variant-fsc"><?= htmlspecialchars($v['fsc'] ?? '-') ?></td>
+                  <td class="variant-fsc">
+                    <?php if (!empty($v['fsc'])): ?>
+                      <span class="font-mono"><?= htmlspecialchars($v['fsc']) ?></span>
+                    <?php else: ?>
+                      <span class="badge bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle me-1"></i>No FSC
+                      </span>
+                    <?php endif; ?>
+                  </td>
                   <td class="variant-barcode"><?= htmlspecialchars($v['barcode'] ?? '-') ?></td>
                   <td class="variant-price">₱<?= number_format((float)$v['price'], 2) ?></td>
                   <td class="variant-stock"><?= (int)$v['stock'] ?></td>
@@ -579,17 +587,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Manual validation for modal form
         const variantAttr = addVariantForm.querySelector('[name="variant_attributes"]');
-        const fsc = addVariantForm.querySelector('[name="fsc"]');
 
         if (!variantAttr.value.trim()) {
           alert('Variant Attribute is required');
           variantAttr.focus();
-          return;
-        }
-
-        if (!fsc.value.trim()) {
-          alert('FSC is required');
-          fsc.focus();
           return;
         }
 
