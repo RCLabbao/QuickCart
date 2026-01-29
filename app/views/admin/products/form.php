@@ -1,5 +1,29 @@
 <?php use function App\Core\csrf_field; ?>
 
+<!-- Upload Messages -->
+<?php if (!empty($_SESSION['upload_success'])): ?>
+  <div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>
+    <?= htmlspecialchars($_SESSION['upload_success']) ?>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+  <?php unset($_SESSION['upload_success']); ?>
+<?php endif; ?>
+
+<?php if (!empty($_SESSION['upload_errors'])): ?>
+  <div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    <strong>Upload Issues:</strong>
+    <ul class="mb-0 mt-2">
+      <?php foreach ($_SESSION['upload_errors'] as $error): ?>
+        <li><?= htmlspecialchars($error) ?></li>
+      <?php endforeach; ?>
+    </ul>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+  <?php unset($_SESSION['upload_errors']); ?>
+<?php endif; ?>
+
 <!-- Product Form Header -->
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>

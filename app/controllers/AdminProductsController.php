@@ -220,7 +220,10 @@ class AdminProductsController extends Controller
         // Update tags
         if (isset($_POST['tags'])) { $this->updateTags($pid, (string)$_POST['tags']); }
         $this->handleUploads($pid);
-        $this->redirect('/admin/products');
+
+        // Redirect to edit page to show any upload errors/success
+        $_SESSION['success'] = 'Product created successfully.';
+        $this->redirect('/admin/products/' . $pid . '/edit');
     }
 
     public function edit(array $params): void
@@ -355,6 +358,12 @@ class AdminProductsController extends Controller
         if (isset($_POST['tags'])) { $this->updateTags((int)$params['id'], (string)$_POST['tags']); }
 
         $this->handleUploads((int)$params['id']);
+
+        // Set success message if no upload errors
+        if (empty($_SESSION['upload_errors'])) {
+            $_SESSION['success'] = 'Product updated successfully.';
+        }
+
         $this->redirect('/admin/products/'.(int)$params['id'].'/edit');
     }
 
@@ -372,33 +381,128 @@ class AdminProductsController extends Controller
 
     private function handleUploads(int $productId): void
     {
-        if (empty($_FILES['images']['name'])) return;
+        if (empty($_FILES['images']['name'][0])) {
+            return;
+        }
+
+        $pdo = DB::pdo();
         $base = BASE_PATH . '/public/uploads/products/' . $productId;
-        if (!is_dir($base)) @mkdir($base, 0775, true);
+        if (!is_dir($base)) {
+            @mkdir($base, 0775, true);
+        }
+
         $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : null;
         $count = count($_FILES['images']['name']);
-        $st = DB::pdo()->prepare('SELECT COALESCE(MAX(sort_order),0)+1 FROM product_images WHERE product_id=?');
-        $st->execute([$productId]); $sort = (int)$st->fetchColumn();
-        for ($i=0; $i<$count; $i++) {
-            if (($_FILES['images']['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
-            $tmp = $_FILES['images']['tmp_name'][$i]; $name = $_FILES['images']['name'][$i]; $size = (int)$_FILES['images']['size'][$i];
-            if ($size > 5*1024*1024) continue;
+        $st = $pdo->prepare('SELECT COALESCE(MAX(sort_order),0)+1 FROM product_images WHERE product_id=?');
+        $st->execute([$productId]);
+        $sort = (int)$st->fetchColumn();
+
+        // Get product info for filename generation
+        $productStmt = $pdo->prepare('SELECT title, fsc FROM products WHERE id = ?');
+        $productStmt->execute([$productId]);
+        $product = $productStmt->fetch();
+
+        // Determine base filename: prefer FSC, fallback to product title, then product ID
+        $baseFilename = '';
+        if (!empty($product['fsc'])) {
+            $baseFilename = $product['fsc'];
+        } elseif (!empty($product['title'])) {
+            $baseFilename = $product['title'];
+        } else {
+            $baseFilename = 'product-' . $productId;
+        }
+
+        // Clean base filename - only keep alphanumeric, hyphens, underscores
+        $baseFilename = preg_replace('/[^a-zA-Z0-9-_]/', '-', $baseFilename);
+        $baseFilename = trim($baseFilename, '-');
+        if (empty($baseFilename)) {
+            $baseFilename = 'product-' . $productId;
+        }
+
+        $uploadedCount = 0;
+        $errors = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            $errorCode = $_FILES['images']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+
+            // Skip if no file
+            if ($errorCode === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+
+            // Handle upload errors
+            if ($errorCode !== UPLOAD_ERR_OK) {
+                $errorMessages = [
+                    UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize directive in php.ini',
+                    UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE directive in HTML form',
+                    UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+                    UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                    UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                    UPLOAD_ERR_EXTENSION => 'A PHP extension stopped the file upload',
+                ];
+                $errors[] = 'Image ' . ($i + 1) . ': ' . ($errorMessages[$errorCode] ?? 'Unknown upload error');
+                continue;
+            }
+
+            $tmp = $_FILES['images']['tmp_name'][$i];
+            $name = $_FILES['images']['name'][$i];
+            $size = (int)$_FILES['images']['size'][$i];
+
+            // Check file size (5MB limit)
+            if ($size > 5 * 1024 * 1024) {
+                $errors[] = 'Image ' . ($i + 1) . ': File too large (max 5MB)';
+                continue;
+            }
+
+            // Check mime type
             $mime = $finfo ? finfo_file($finfo, $tmp) : mime_content_type($tmp);
-            if (!in_array($mime, ['image/jpeg','image/png','image/webp'])) continue;
-            $ext = $mime==='image/png'?'png':($mime==='image/webp'?'webp':'jpg');
-            $safe = preg_replace('/[^a-zA-Z0-9-_\.]/','_', pathinfo($name, PATHINFO_FILENAME));
-            $final = $safe . '-' . uniqid() . '.' . $ext;
+            if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'])) {
+                $errors[] = 'Image ' . ($i + 1) . ': Invalid file type (only JPG, PNG, WEBP, GIF allowed)';
+                continue;
+            }
+
+            $ext = $mime === 'image/png' ? 'png' : ($mime === 'image/webp' ? 'webp' : ($mime === 'image/gif' ? 'gif' : 'jpg'));
+
+            // Generate filename: {baseFilename}-{number}.{ext}
+            // This ensures photos are named after the product/FSC
+            $final = $baseFilename . '-' . ($sort + 1) . '.' . $ext;
+
+            // Handle duplicate filenames by appending a number
+            $counter = 1;
+            $originalFinal = $final;
+            while (file_exists($base . '/' . $final)) {
+                $final = $baseFilename . '-' . ($sort + 1) . '-' . ($counter++) . '.' . $ext;
+            }
+
             $dest = $base . '/' . $final;
+
             if (@move_uploaded_file($tmp, $dest)) {
-                // Optional: create optimized main and thumbnail variants when GD/Imagick available
                 try {
                     $this->makeVariants($dest, $mime);
-                } catch (\Throwable $e) { /* ignore */ }
+                } catch (\Throwable $e) {
+                    // Ignore image processing errors
+                }
                 $url = '/public/uploads/products/' . $productId . '/' . $final;
-                DB::pdo()->prepare('INSERT INTO product_images (product_id,url,sort_order) VALUES (?,?,?)')->execute([$productId,$url,$sort++]);
+                $pdo->prepare('INSERT INTO product_images (product_id,url,sort_order) VALUES (?,?,?)')
+                    ->execute([$productId, $url, $sort++]);
+                $uploadedCount++;
+            } else {
+                $errors[] = 'Image ' . ($i + 1) . ': Failed to move uploaded file';
             }
         }
-        if ($finfo) finfo_close($finfo);
+
+        if ($finfo) {
+            finfo_close($finfo);
+        }
+
+        // Store errors in session for display
+        if (!empty($errors)) {
+            $_SESSION['upload_errors'] = $errors;
+        }
+        if ($uploadedCount > 0) {
+            $_SESSION['upload_success'] = "Successfully uploaded {$uploadedCount} image(s).";
+        }
     }
 
     private function makeVariants(string $path, string $mime): void

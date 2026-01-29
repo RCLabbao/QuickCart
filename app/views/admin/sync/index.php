@@ -54,7 +54,16 @@
                 </div>
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" id="csv_sync_update_images" name="sync_update_images">
-                  <label class="form-check-label" for="csv_sync_update_images">Update images from Image URLs column</label>
+                  <label class="form-check-label" for="csv_sync_update_images">Update images (replaces existing images with Image URLs column content)</label>
+                </div>
+                <div class="alert alert-info mt-2 small">
+                  <strong>Auto-Image Detection:</strong> Images are automatically attached based on FSC matching.
+                  <ul class="mb-0 mt-1">
+                    <li>Name images as: <code>{FSC}.jpg</code>, <code>{FSC}-1.jpg</code>, <code>{FSC}-2.jpg</code>, etc.</li>
+                    <li>Upload to: <code>/public/uploads/products/{FSC}/</code> folder</li>
+                    <li>For variants, first variant's FSC is also checked</li>
+                    <li>Images are auto-attached when CSV is imported (if no images exist)</li>
+                  </ul>
                 </div>
                 <div class="form-text">These rules apply only to this upload. To change defaults, use the SQL Server tab &gt; Connection Settings.</div>
               </div>

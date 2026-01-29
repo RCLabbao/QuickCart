@@ -703,7 +703,12 @@ class AdminSyncController extends Controller
 
     /**
      * Auto-detect images from uploads folder based on FSC
-     * Scans /uploads/products/ folder for files matching the pattern: {FSC}-{random}.{ext}
+     * Scans /uploads/products/ folder for files matching patterns:
+     * - {FSC}-{number}.{ext}
+     * - {FSC}.{ext}
+     * - {FSC}-{random}.{ext}
+     *
+     * For parent products with variants, will also check first variant's FSC
      *
      * @param \PDO $pdo Database connection
      * @param int $productId Product ID
@@ -733,9 +738,64 @@ class AdminSyncController extends Controller
             return $existingImages;
         }
 
-        // Scan for files matching FSC pattern in any product subfolder
-        // Pattern: {FSC}-{random}.{ext}
-        $pattern = '/' . preg_quote($fsc, '/') . '-[^.]+\.(jpg|jpeg|png|gif|webp)/i';
+        // Check if this is a parent product with variants
+        // If so, also look for images matching the first variant's FSC
+        $hasVariantsColumn = false;
+        try {
+            $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) { $hasVariantsColumn = false; }
+
+        $fscList = [$fsc];
+
+        if ($hasVariantsColumn) {
+            // Check if this product is a parent (has variants)
+            $variantStmt = $pdo->prepare('
+                SELECT fsc
+                FROM products
+                WHERE parent_product_id = ?
+                AND fsc IS NOT NULL
+                AND fsc != ""
+                ORDER BY id ASC
+                LIMIT 1
+            ');
+            $variantStmt->execute([$productId]);
+            $firstVariantFsc = $variantStmt->fetchColumn();
+
+            if ($firstVariantFsc) {
+                $fscList[] = $firstVariantFsc;
+            }
+
+            // Also check if this product itself is a variant
+            // If so, get parent product info
+            $parentStmt = $pdo->prepare('
+                SELECT p.fsc
+                FROM products p
+                INNER JOIN products child ON child.parent_product_id = p.id
+                WHERE child.id = ?
+                AND p.fsc IS NOT NULL
+                AND p.fsc != ""
+                LIMIT 1
+            ');
+            $parentStmt->execute([$productId]);
+            $parentFsc = $parentStmt->fetchColumn();
+
+            if ($parentFsc) {
+                $fscList[] = $parentFsc;
+            }
+        }
+
+        // Build flexible patterns to match images
+        // Supports: {FSC}.{ext}, {FSC}-{number}.{ext}, {FSC}-{random}.{ext}
+        $patterns = [];
+        foreach ($fscList as $fscCode) {
+            $escapedFsc = preg_quote($fscCode, '/');
+            // Pattern 1: {FSC}-{number}.{ext} (e.g., ABC123-1.jpg, ABC123-2.jpg)
+            $patterns[] = '/' . $escapedFsc . '-\d+\.(jpg|jpeg|png|gif|webp)/i';
+            // Pattern 2: {FSC}-{random}.{ext} (e.g., ABC123-abc123.jpg)
+            $patterns[] = '/' . $escapedFsc . '-[^.]+\.(jpg|jpeg|png|gif|webp)/i';
+            // Pattern 3: {FSC}.{ext} (e.g., ABC123.jpg)
+            $patterns[] = '/' . $escapedFsc . '\.(jpg|jpeg|png|gif|webp)/i';
+        }
 
         // Recursive directory scan
         $iterator = new \RecursiveIteratorIterator(
@@ -743,25 +803,60 @@ class AdminSyncController extends Controller
             \RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $foundFiles = [];
+
         foreach ($iterator as $file) {
-            if ($file->isFile() && preg_match($pattern, $file->getFilename())) {
-                // Get relative path from public/uploads
-                $relativePath = str_replace(BASE_PATH . '/public/', '', $file->getPathname());
-                $url = '/' . $relativePath;
-                $urls[] = $url;
+            if (!$file->isFile()) {
+                continue;
+            }
 
-                // Ensure the product's upload folder exists
-                $productUploadDir = BASE_PATH . '/public/uploads/products/' . $productId;
-                if (!is_dir($productUploadDir)) {
-                    mkdir($productUploadDir, 0755, true);
-                }
+            $filename = $file->getFilename();
 
-                // Copy image to product's folder for consistency
-                $destPath = $productUploadDir . '/' . $file->getFilename();
-                if (!file_exists($destPath)) {
-                    @copy($file->getPathname(), $destPath);
+            // Check each pattern
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $filename)) {
+                    // Determine sort order based on filename pattern
+                    $sortOrder = 0;
+                    if (preg_match('/-(\d+)\.(jpg|jpeg|png|gif|webp)$/i', $filename, $matches)) {
+                        $sortOrder = (int)$matches[1];
+                    }
+
+                    $foundFiles[] = [
+                        'path' => $file->getPathname(),
+                        'filename' => $filename,
+                        'sort' => $sortOrder,
+                    ];
+                    break; // Found a match, no need to check other patterns
                 }
             }
+        }
+
+        // Sort by sort order
+        usort($foundFiles, function($a, $b) {
+            return $a['sort'] - $b['sort'];
+        });
+
+        // Ensure the product's upload folder exists
+        $productUploadDir = BASE_PATH . '/public/uploads/products/' . $productId;
+        if (!is_dir($productUploadDir)) {
+            @mkdir($productUploadDir, 0755, true);
+        }
+
+        // Copy files to product's folder and create URLs
+        foreach ($foundFiles as $fileInfo) {
+            // Get relative path from public/uploads
+            $relativePath = str_replace(BASE_PATH . '/public/', '', $fileInfo['path']);
+            $url = '/' . $relativePath;
+
+            // Copy image to product's folder for consistency
+            $destPath = $productUploadDir . '/' . $fileInfo['filename'];
+            if (!file_exists($destPath)) {
+                @copy($fileInfo['path'], $destPath);
+            }
+
+            // Use the URL from product's folder for consistency
+            $productUrl = '/public/uploads/products/' . $productId . '/' . $fileInfo['filename'];
+            $urls[] = $productUrl;
         }
 
         return $urls;
