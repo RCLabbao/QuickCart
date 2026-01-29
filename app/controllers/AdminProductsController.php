@@ -181,8 +181,8 @@ class AdminProductsController extends Controller
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/products'); }
         $title = trim($_POST['title'] ?? '');
 
-        // Generate or use provided slug
-        $slug = !empty($_POST['slug']) ? trim($_POST['slug']) : strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
+        // Generate or use provided slug (for new products, parent_product_id would be empty/null)
+        $slug = !empty(trim($_POST['slug'] ?? '')) ? trim($_POST['slug']) : strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
         // Clean up slug: remove leading/trailing hyphens, prevent empty or hyphen-only slugs
         $slug = trim($slug, '-');
         if (empty($slug)) {
@@ -339,9 +339,10 @@ class AdminProductsController extends Controller
         $product = $productStmt->fetch();
         $isVariant = $hasVariants && !empty($product['parent_product_id']);
 
-        // For parent products, use provided slug or generate; for variants, always generate
-        if (!$isVariant && !empty($_POST['slug'])) {
-            $slug = trim($_POST['slug']);
+        // For parent products: use provided slug if not empty, otherwise generate from title
+        // For variants: always generate from title
+        if (!$isVariant) {
+            $slug = !empty(trim($_POST['slug'] ?? '')) ? trim($_POST['slug']) : strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
         } else {
             $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
         }
