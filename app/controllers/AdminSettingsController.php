@@ -92,6 +92,19 @@ class AdminSettingsController extends Controller
                 'hidden_collections' => trim((string)($_POST['hidden_collections'] ?? '')),
                 'hide_zero_price' => isset($_POST['hide_zero_price']) ? '1' : '0',
             ];
+        } elseif ($scope === 'banners') {
+            $pairs = [
+                'banner_desktop_slides' => (int)($_POST['banner_desktop_slides'] ?? 3),
+                'banner_tablet_slides' => (int)($_POST['banner_tablet_slides'] ?? 2),
+                'banner_mobile_slides' => (int)($_POST['banner_mobile_slides'] ?? 1),
+                'banner_desktop_interval' => (int)($_POST['banner_desktop_interval'] ?? 4),
+                'banner_tablet_interval' => (int)($_POST['banner_tablet_interval'] ?? 4),
+                'banner_mobile_interval' => (int)($_POST['banner_mobile_interval'] ?? 5),
+                'banner_desktop_height' => (int)($_POST['banner_desktop_height'] ?? 400),
+                'banner_tablet_height' => (int)($_POST['banner_tablet_height'] ?? 350),
+                'banner_mobile_height' => (int)($_POST['banner_mobile_height'] ?? 300),
+                'banner_autoplay' => isset($_POST['banner_autoplay']) ? '1' : '0',
+            ];
         }
         foreach ($pairs as $k=>$v){
             $stmt = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');

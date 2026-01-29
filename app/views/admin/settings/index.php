@@ -484,104 +484,215 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
 </div>
 
 <div class="tab-pane fade <?= $activeTab==='banners'?'show active':'' ?>" id="tab-banners" role="tabpanel">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <h5 class="mb-1">Homepage Banner Slider</h5>
-      <p class="text-muted mb-0 small">Manage images that appear in the homepage carousel</p>
-    </div>
-    <div class="d-flex gap-2">
-      <a href="/admin/banners/create" class="btn btn-primary">
-        <i class="bi bi-plus-circle me-1"></i>Add Banner
-      </a>
-    </div>
-  </div>
+  <!-- Banner Settings Form -->
+  <form method="post" action="/admin/settings" class="row g-4 mb-4">
+    <?= csrf_field() ?>
+    <input type="hidden" name="scope" value="banners">
 
-  <!-- Quick Stats -->
-  <div class="row g-3 mb-4">
-    <div class="col-md-4">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body text-center">
-          <h4 class="mb-1"><?= number_format($bannerStats['total'] ?? 0) ?></h4>
-          <small class="text-muted">Total Banners</small>
+    <!-- Display Settings -->
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0"><i class="bi bi-display me-2"></i>Carousel Display Settings</h5>
         </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body text-center">
-          <h4 class="mb-1 text-success"><?= number_format($bannerStats['active'] ?? 0) ?></h4>
-          <small class="text-muted">Active (visible on site)</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body text-center">
-          <h4 class="mb-1 text-secondary"><?= number_format($bannerStats['draft'] ?? 0) ?></h4>
-          <small class="text-muted">Draft (hidden)</small>
-        </div>
-      </div>
-    </div>
-  </div>
+        <div class="card-body">
+          <p class="text-muted small mb-4">Configure how many banners are shown at once and how fast they rotate.</p>
 
-  <!-- Banners List -->
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
-      <strong>All Banners</strong>
-      <a href="/admin/banners" class="btn btn-sm btn-outline-primary">
-        <i class="bi bi-gear me-1"></i>Manage Banners
-      </a>
+          <!-- Desktop Settings -->
+          <div class="mb-4 pb-3 border-bottom">
+            <h6 class="fw-semibold mb-3">
+              <i class="bi bi-pc-display me-2"></i>Desktop (Laptop & larger)
+            </h6>
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Slides Visible</label>
+                <select class="form-select" name="banner_desktop_slides">
+                  <option value="1" <?= (isset($settings['banner_desktop_slides']) && (int)$settings['banner_desktop_slides'] === 1) ? 'selected' : '' ?>>1 slide</option>
+                  <option value="2" <?= (isset($settings['banner_desktop_slides']) && (int)$settings['banner_desktop_slides'] === 2) ? 'selected' : '' ?>>2 slides</option>
+                  <option value="3" <?= (isset($settings['banner_desktop_slides']) && (int)$settings['banner_desktop_slides'] === 3) ? 'selected' : (isset($settings['banner_desktop_slides']) ? '' : 'selected') ?>>3 slides</option>
+                  <option value="4" <?= (isset($settings['banner_desktop_slides']) && (int)$settings['banner_desktop_slides'] === 4) ? 'selected' : '' ?>>4 slides</option>
+                </select>
+                <div class="form-text">Number of banners shown at once</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Slide Interval (seconds)</label>
+                <input class="form-control" type="number" name="banner_desktop_interval" value="<?= (int)($settings['banner_desktop_interval'] ?? 4) ?>" min="1" max="60">
+                <div class="form-text">Time before auto-rotation</div>
+              </div>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Banner Height (px)</label>
+                <input class="form-control" type="number" name="banner_desktop_height" value="<?= (int)($settings['banner_desktop_height'] ?? 400) ?>" min="200" max="800">
+                <div class="form-text">Height of each banner (200-800px)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tablet Settings -->
+          <div class="mb-4 pb-3 border-bottom">
+            <h6 class="fw-semibold mb-3">
+              <i class="bi bi-tablet me-2"></i>Tablet
+            </h6>
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Slides Visible</label>
+                <select class="form-select" name="banner_tablet_slides">
+                  <option value="1" <?= (isset($settings['banner_tablet_slides']) && (int)$settings['banner_tablet_slides'] === 1) ? 'selected' : '' ?>>1 slide</option>
+                  <option value="2" <?= (isset($settings['banner_tablet_slides']) && (int)$settings['banner_tablet_slides'] === 2) ? 'selected' : (isset($settings['banner_tablet_slides']) ? '' : 'selected') ?>>2 slides</option>
+                  <option value="3" <?= (isset($settings['banner_tablet_slides']) && (int)$settings['banner_tablet_slides'] === 3) ? 'selected' : '' ?>>3 slides</option>
+                </select>
+                <div class="form-text">Number of banners shown at once</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Slide Interval (seconds)</label>
+                <input class="form-control" type="number" name="banner_tablet_interval" value="<?= (int)($settings['banner_tablet_interval'] ?? 4) ?>" min="1" max="60">
+                <div class="form-text">Time before auto-rotation</div>
+              </div>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Banner Height (px)</label>
+                <input class="form-control" type="number" name="banner_tablet_height" value="<?= (int)($settings['banner_tablet_height'] ?? 350) ?>" min="200" max="800">
+                <div class="form-text">Height of each banner (200-800px)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mobile Settings -->
+          <div class="mb-4">
+            <h6 class="fw-semibold mb-3">
+              <i class="bi bi-phone me-2"></i>Mobile
+            </h6>
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Slides Visible</label>
+                <select class="form-select" name="banner_mobile_slides">
+                  <option value="1" <?= (isset($settings['banner_mobile_slides']) && (int)$settings['banner_mobile_slides'] === 1) ? 'selected' : (isset($settings['banner_mobile_slides']) ? '' : 'selected') ?>>1 slide</option>
+                  <option value="2" <?= (isset($settings['banner_mobile_slides']) && (int)$settings['banner_mobile_slides'] === 2) ? 'selected' : '' ?>>2 slides</option>
+                </select>
+                <div class="form-text">Number of banners shown at once</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Slide Interval (seconds)</label>
+                <input class="form-control" type="number" name="banner_mobile_interval" value="<?= (int)($settings['banner_mobile_interval'] ?? 5) ?>" min="1" max="60">
+                <div class="form-text">Time before auto-rotation</div>
+              </div>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Banner Height (px)</label>
+                <input class="form-control" type="number" name="banner_mobile_height" value="<?= (int)($settings['banner_mobile_height'] ?? 300) ?>" min="200" max="800">
+                <div class="form-text">Height of each banner (200-800px)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Autoplay Toggle -->
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="banner_autoplay" id="banner_autoplay" <?= !empty($settings['banner_autoplay']) && $settings['banner_autoplay'] == '1' ? 'checked' : 'checked' ?>>
+            <label class="form-check-label" for="banner_autoplay">Enable Auto-Rotation</label>
+            <div class="form-text">When enabled, banners will automatically rotate based on the interval settings above</div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="card-body">
-      <?php if (empty($banners ?? [])): ?>
-        <div class="text-center py-5">
-          <i class="bi bi-images display-4 text-muted mb-3"></i>
-          <p class="text-muted mb-3">No banners yet. Create your first banner to display images on the homepage slider.</p>
-          <a href="/admin/banners/create" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-2"></i>Add First Banner
+
+    <!-- Quick Stats & Banner Management -->
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0"><i class="bi bi-pie-chart me-2"></i>Quick Stats</h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-4">
+              <div class="text-center">
+                <h3 class="mb-1"><?= number_format($bannerStats['total'] ?? 0) ?></h3>
+                <small class="text-muted">Total</small>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="text-center">
+                <h3 class="mb-1 text-success"><?= number_format($bannerStats['active'] ?? 0) ?></h3>
+                <small class="text-muted">Active</small>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="text-center">
+                <h3 class="mb-1 text-secondary"><?= number_format($bannerStats['draft'] ?? 0) ?></h3>
+                <small class="text-muted">Draft</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Banner Management -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0"><i class="bi bi-images me-2"></i>Banners</h5>
+          <a href="/admin/banners/create" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Add
           </a>
         </div>
-      <?php else: ?>
-        <div class="row g-3">
-          <?php foreach (($banners ?? []) as $b): ?>
-            <div class="col-12 col-md-6 col-lg-4">
-              <div class="card border shadow-sm">
-                <div class="card-img-top position-relative" style="height: 140px; overflow: hidden; background: #f8f9fa;">
-                  <?php if (!empty($b['image_url'])): ?>
-                    <img src="<?= htmlspecialchars($b['image_url']) ?>" alt="<?= htmlspecialchars($b['alt_text'] ?? $b['title']) ?>"
-                         class="w-100 h-100" style="object-fit: cover;">
-                  <?php else: ?>
-                    <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted">
-                      <i class="bi bi-image" style="font-size: 2rem;"></i>
-                    </div>
-                  <?php endif; ?>
-                  <div class="position-absolute top-0 start-0 m-2">
-                    <span class="badge <?= ($b['status'] ?? 'active') === 'active' ? 'bg-success' : 'bg-secondary' ?>">
-                      <?= ucfirst($b['status'] ?? 'active') ?>
-                    </span>
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <small class="text-muted">Manage your banner images</small>
+            <a href="/admin/banners" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-gear me-1"></i>Manage All
+            </a>
+          </div>
+          <?php if (empty($banners ?? [])): ?>
+            <div class="text-center py-3">
+              <p class="text-muted mb-2 small">No banners yet</p>
+              <a href="/admin/banners/create" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-circle me-1"></i>Create Banner
+              </a>
+            </div>
+          <?php else: ?>
+            <div class="row g-2">
+              <?php foreach (array_slice($banners ?? [], 0, 6) as $b): ?>
+                <div class="col-6">
+                  <div class="border rounded p-2 text-center" style="background: #f8f9fa;">
+                    <?php if (!empty($b['image_url'])): ?>
+                      <img src="<?= htmlspecialchars($b['image_url']) ?>" alt="" style="width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 0.375rem;">
+                    <?php endif; ?>
+                    <small class="d-block text-truncate mt-1"><?= htmlspecialchars($b['title']) ?></small>
                   </div>
-                  <div class="position-absolute top-0 end-0 m-2">
-                    <span class="badge bg-dark">#<?= (int)$b['sort_order'] ?></span>
-                  </div>
-                  <?php if (!empty($b['mobile_image_url'])): ?>
-                    <div class="position-absolute bottom-0 start-0 m-2">
-                      <span class="badge bg-info"><i class="bi bi-phone"></i></span>
-                    </div>
-                  <?php endif; ?>
                 </div>
-                <div class="card-body">
-                  <h6 class="card-title mb-1 text-truncate"><?= htmlspecialchars($b['title']) ?></h6>
-                  <?php if (!empty($b['link_url'])): ?>
-                    <small class="text-muted d-block mb-2 text-truncate">
-                      <i class="bi bi-link-45deg me-1"></i><?= htmlspecialchars($b['link_url']) ?>
-                    </small>
-                  <?php endif; ?>
-                </div>
-                <div class="card-footer bg-white border-top">
-                  <div class="btn-group btn-group-sm w-100">
-                    <a class="btn btn-outline-primary" href="/admin/banners/<?= (int)$b['id'] ?>/edit">
-                      <i class="bi bi-pencil"></i>
-                    </a>
+              <?php endforeach; ?>
+            </div>
+            <?php if (count($banners ?? []) > 6): ?>
+              <div class="text-center mt-2">
+                <a href="/admin/banners" class="btn btn-sm btn-link">View all <?= count($banners) ?> banners</a>
+              </div>
+            <?php endif; ?>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-save me-2"></i>Save Banner Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <!-- Info Box -->
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Display Settings Explained:</strong>
+    <ul class="mb-0 mt-2">
+      <li><strong>Slides Visible:</strong> How many banners appear on screen at once. More slides = more content visible, but individual banners are smaller.</li>
+      <li><strong>Slide Interval:</strong> How many seconds before the carousel automatically moves to the next set of banners.</li>
+      <li>Settings are applied separately for each device type for the best user experience.</li>
+    </ul>
+  </div>
+</div>
                     <form method="post" action="/admin/banners/<?= (int)$b['id'] ?>/delete" onsubmit="return confirm('Delete this banner?');" class="d-inline">
                       <?= csrf_field() ?>
                       <button class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>

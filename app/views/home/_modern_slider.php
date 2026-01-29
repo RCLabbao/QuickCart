@@ -1,4 +1,18 @@
 <!-- Modern Banner Carousel - Each image becomes a slide -->
+<?php
+$bannerSettings = [
+    'desktop_slides' => (int)($settings['banner_desktop_slides'] ?? 3),
+    'tablet_slides' => (int)($settings['banner_tablet_slides'] ?? 2),
+    'mobile_slides' => (int)($settings['banner_mobile_slides'] ?? 1),
+    'desktop_interval' => (int)($settings['banner_desktop_interval'] ?? 4),
+    'tablet_interval' => (int)($settings['banner_tablet_interval'] ?? 4),
+    'mobile_interval' => (int)($settings['banner_mobile_interval'] ?? 5),
+    'desktop_height' => (int)($settings['banner_desktop_height'] ?? 400),
+    'tablet_height' => (int)($settings['banner_tablet_height'] ?? 350),
+    'mobile_height' => (int)($settings['banner_mobile_height'] ?? 300),
+    'autoplay' => !empty($settings['banner_autoplay']) && $settings['banner_autoplay'] == '1',
+];
+?>
 <?php if (!empty($banners ?? [])): ?>
 <section class="banner-carousel-section my-4 my-md-5">
   <div class="banner-carousel" id="modernBannerSlider">
@@ -83,18 +97,18 @@
 /* Individual Slide */
 .carousel-slide {
   flex: 0 0 auto;
-  width: calc(50% - 0.5rem); /* 2 slides visible on desktop */
+  width: calc(50% - 0.5rem); /* Default 2 slides visible */
 }
 
 @media (min-width: 992px) {
   .carousel-slide {
-    width: calc(33.333% - 0.67rem); /* 3 slides visible on large screens */
+    width: calc(33.333% - 0.67rem); /* Default 3 slides visible on large screens */
   }
 }
 
 @media (max-width: 768px) {
   .carousel-slide {
-    width: calc(100% - 0.5rem); /* 1 slide on mobile */
+    width: calc(100% - 0.5rem); /* Default 1 slide on mobile */
   }
 }
 
@@ -102,12 +116,24 @@
 .banner-card {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  height: var(--banner-height, 300px);
   border-radius: 1rem;
   overflow: hidden;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   position: relative;
+}
+
+@media (min-width: 768px) {
+  .banner-card {
+    height: var(--banner-height-tablet, 350px);
+  }
+}
+
+@media (min-width: 1200px) {
+  .banner-card {
+    height: var(--banner-height-desktop, 400px);
+  }
 }
 
 .banner-card-link {
@@ -239,17 +265,46 @@
   const totalSlides = slides.length;
   if (totalSlides === 0) return;
 
+  // Banner settings from PHP
+  const settings = <?= json_encode($bannerSettings) ?>;
+
   // Calculate slides per viewport based on screen width
   function getSlidesPerView() {
-    if (window.innerWidth >= 992) return 3;
-    if (window.innerWidth >= 768) return 2;
-    return 1;
+    if (window.innerWidth >= 1200) return settings.desktop_slides;
+    if (window.innerWidth >= 768) return settings.tablet_slides;
+    return settings.mobile_slides;
+  }
+
+  // Get interval based on screen width
+  function getInterval() {
+    if (window.innerWidth >= 1200) return settings.desktop_interval * 1000;
+    if (window.innerWidth >= 768) return settings.tablet_interval * 1000;
+    return settings.mobile_interval * 1000;
   }
 
   let currentIndex = 0;
   let slidesPerView = getSlidesPerView();
   let autoPlayInterval;
-  const autoPlayDelay = 4000;
+
+  // Set banner height based on settings
+  function updateBannerHeight() {
+    const trackContainer = carousel.querySelector('.carousel-track-container');
+    if (!trackContainer) return;
+
+    let height;
+    if (window.innerWidth >= 1200) {
+      height = settings.desktop_height;
+    } else if (window.innerWidth >= 768) {
+      height = settings.tablet_height;
+    } else {
+      height = settings.mobile_height;
+    }
+
+    trackContainer.style.setProperty('--banner-height', `${height}px`);
+    trackContainer.style.setProperty('--banner-height-mobile', `${settings.mobile_height}px`);
+    trackContainer.style.setProperty('--banner-height-tablet', `${settings.tablet_height}px`);
+    trackContainer.style.setProperty('--banner-height-desktop', `${settings.desktop_height}px`);
+  }
 
   // Create dots
   function createDots() {
@@ -270,6 +325,14 @@
 
       dotsContainer.appendChild(dot);
     }
+  }
+
+  // Update slide widths based on responsive settings
+  function updateSlideWidths() {
+    const spv = getSlidesPerView();
+    slides.forEach(slide => {
+      slide.style.width = `calc(${100/spv}% - ${16 * (spv - 1) / spv}rem)`;
+    });
   }
 
   // Update track position
@@ -323,11 +386,14 @@
 
   // Auto play
   function startAutoPlay() {
-    autoPlayInterval = setInterval(nextSlide, autoPlayDelay);
+    if (!settings.autoplay) return;
+    autoPlayInterval = setInterval(nextSlide, getInterval());
   }
 
   function stopAutoPlay() {
-    clearInterval(autoPlayInterval);
+    if (autoPlayInterval) {
+      clearInterval(autoPlayInterval);
+    }
   }
 
   function resetAutoPlay() {
@@ -385,7 +451,7 @@
     }
   }
 
-  // Handle resize
+  // Handle resize - update responsive settings
   let resizeTimeout;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
@@ -393,9 +459,11 @@
       const newSlidesPerView = getSlidesPerView();
       if (newSlidesPerView !== slidesPerView) {
         slidesPerView = newSlidesPerView;
+        updateSlideWidths();
         createDots();
         currentIndex = 0;
       }
+      updateBannerHeight();
       updateTrack();
     }, 250);
   });
@@ -405,6 +473,8 @@
   carousel.addEventListener('mouseleave', startAutoPlay);
 
   // Initialize
+  updateBannerHeight();
+  updateSlideWidths();
   createDots();
   updateTrack();
   startAutoPlay();

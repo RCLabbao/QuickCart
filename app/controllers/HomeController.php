@@ -7,6 +7,12 @@ class HomeController extends Controller
     public function index(): void
     {
         $pdo = DB::pdo();
+
+        // Get settings for banner carousel
+        $stmt = $pdo->query("SELECT `key`,`value` FROM settings");
+        $settings = [];
+        foreach ($stmt->fetchAll() as $row) { $settings[$row['key']] = $row['value']; }
+
         // Get active banners for slider with their images
         $banners = [];
         try {
