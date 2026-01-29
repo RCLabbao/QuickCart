@@ -101,12 +101,14 @@ class AdminProductsController extends Controller
         $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
         $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
         $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
-        $cols = ['id','title','price','status','COALESCE(stock,0) AS stock','collection_id', '(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url'];
+        $cols = ['id','title','slug','price','status','COALESCE(stock,0) AS stock','collection_id', '(SELECT url FROM product_images WHERE product_id=p.id ORDER BY sort_order LIMIT 1) AS image_url'];
         if ($hasSku) { $cols[] = 'fsc AS sku'; }
         if ($hasBarcode) { $cols[] = 'barcode'; }
         if ($hasVariants) {
             $cols[] = 'parent_product_id';
             $cols[] = 'variant_attributes';
+            // Get parent's slug for variants to link correctly
+            $cols[] = '(SELECT slug FROM products WHERE id=p.parent_product_id) AS parent_slug';
         }
         $sql = 'SELECT '.implode(',', $cols).' FROM products p WHERE ' . implode(' AND ', $where) . ' ORDER BY created_at DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
         $st = $pdo->prepare($sql);
