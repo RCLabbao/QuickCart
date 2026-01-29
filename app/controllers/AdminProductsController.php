@@ -878,6 +878,8 @@ class AdminProductsController extends Controller
         $pdo = DB::pdo();
         $hasSku = $pdo->query("SHOW COLUMNS FROM products LIKE 'fsc'")->rowCount() > 0;
         $hasBarcode = $pdo->query("SHOW COLUMNS FROM products LIKE 'barcode'")->rowCount() > 0;
+        $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+
         $where = [];$params = [];
         if (ctype_digit($q)) { $where[]='p.id=?'; $params[]=(int)$q; }
         $like = '%'.$q.'%';
@@ -886,22 +888,61 @@ class AdminProductsController extends Controller
         elseif ($hasSku) { $where[] = "($titleCond OR p.fsc LIKE ?)"; $params[]=$like; $params[]=$like; }
         elseif ($hasBarcode) { $where[] = "($titleCond OR p.barcode LIKE ?)"; $params[]=$like; $params[]=$like; }
         else { $where[] = $titleCond; $params[]=$like; }
+
+        // Include parent_product_id in columns to check if product is a variant
         $cols = ['p.id','p.title','p.price','COALESCE(p.stock,0) AS stock'];
         if ($hasSku) { $cols[]='p.fsc'; }
         if ($hasBarcode) { $cols[]='p.barcode'; }
+        if ($hasVariants) { $cols[]='p.parent_product_id'; }
+
         $sql = 'SELECT '.implode(',', $cols).' FROM products p WHERE '.implode(' AND ',$where).' ORDER BY p.id DESC LIMIT 20';
         $st=$pdo->prepare($sql); $st->execute($params);
+
+        $processedIds = []; // Track which products we've already added
         $items = [];
+
         while ($r = $st->fetch()) {
-            $items[] = [
-                'id'=>(int)$r['id'],
-                'title'=>$r['title'],
-                'fsc'=>$r['fsc'] ?? '',
-                'sku'=>$r['fsc'] ?? '',
-                'barcode'=>$r['barcode'] ?? '',
-                'price'=>(float)$r['price'],
-                'stock'=>(int)$r['stock']
-            ];
+            $productId = (int)$r['id'];
+            $parentProductId = !empty($r['parent_product_id']) ? (int)$r['parent_product_id'] : null;
+
+            // If this is a variant and we haven't processed its parent yet
+            if ($hasVariants && $parentProductId && !isset($processedIds[$parentProductId])) {
+                // Fetch the parent product instead
+                $parentStmt = $pdo->prepare('SELECT id, title, price, COALESCE(stock,0) AS stock' .
+                    ($hasSku ? ', fsc' : '') .
+                    ($hasBarcode ? ', barcode' : '') .
+                    ' FROM products WHERE id = ?');
+                $parentStmt->execute([$parentProductId]);
+                $parent = $parentStmt->fetch();
+
+                if ($parent) {
+                    $items[] = [
+                        'id' => (int)$parent['id'],
+                        'title' => $parent['title'],
+                        'fsc' => $parent['fsc'] ?? '',
+                        'sku' => $parent['fsc'] ?? '',
+                        'barcode' => $parent['barcode'] ?? '',
+                        'price' => (float)$parent['price'],
+                        'stock' => (int)$parent['stock'],
+                        'matched_via_variant' => true,
+                        'variant_fsc' => $r['fsc'] ?? ''
+                    ];
+                    $processedIds[$parentProductId] = true;
+                }
+            } elseif (!isset($processedIds[$productId])) {
+                // Not a variant, or parent product itself - add normally
+                $items[] = [
+                    'id'=>(int)$r['id'],
+                    'title'=>$r['title'],
+                    'fsc'=>$r['fsc'] ?? '',
+                    'sku'=>$r['fsc'] ?? '',
+                    'barcode'=>$r['barcode'] ?? '',
+                    'price'=>(float)$r['price'],
+                    'stock'=>(int)$r['stock'],
+                    'matched_via_variant' => false
+                ];
+                $processedIds[$productId] = true;
+            }
         }
         echo json_encode(['items'=>$items]);
     }

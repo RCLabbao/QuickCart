@@ -199,10 +199,9 @@
                   <?php if ($index === 0): ?>
                     <span class="position-absolute top-0 start-0 badge bg-primary m-1">Main</span>
                   <?php endif; ?>
-                  <form method="post" action="/admin/products/<?= (int)$product['id'] ?>/images/<?= (int)$img['id'] ?>/delete" class="position-absolute top-0 end-0 m-1">
-                    <?= csrf_field() ?>
-                    <button class="btn btn-sm btn-danger" onclick="return confirm('Delete this image?')">&times;</button>
-                  </form>
+                  <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 delete-image-btn" data-image-id="<?= (int)$img['id'] ?>" data-product-id="<?= (int)$product['id'] ?>">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
                 </div>
               </div>
             <?php endforeach; ?>
@@ -485,6 +484,72 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  // Handle delete image buttons
+  const deleteImageButtons = document.querySelectorAll('.delete-image-btn');
+  deleteImageButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      if (!confirm('Delete this image?')) return;
+
+      const imageId = this.dataset.imageId;
+      const productId = this.dataset.productId;
+      const imageContainer = this.closest('.col-6');
+      const csrfToken = document.querySelector('[name="_token"]').value;
+
+      fetch(`/admin/products/${productId}/images/${imageId}/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `_token=${encodeURIComponent(csrfToken)}`
+      })
+      .then(response => {
+        if (response.redirected) {
+          // Server redirected, which means deletion failed (CSRF or other error)
+          window.location.href = response.url;
+          return;
+        }
+        return response.text().then(text => {
+          // Try to parse as JSON, if fails return text
+          try {
+            return JSON.parse(text);
+          } catch {
+            return { success: true, message: text };
+          }
+        });
+      })
+      .then(data => {
+        if (data && (data.success === true || data.success === false)) {
+          // JSON response
+          if (data.success) {
+            // Remove the image from the UI
+            imageContainer.remove();
+            // Update the "Main" badge if needed
+            const remainingImages = document.querySelectorAll('.position-relative img');
+            if (remainingImages.length > 0) {
+              // Add "Main" badge to the first image if it doesn't have one
+              const firstImageContainer = remainingImages[0].closest('.position-relative');
+              if (!firstImageContainer.querySelector('.badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'position-absolute top-0 start-0 badge bg-primary m-1';
+                badge.textContent = 'Main';
+                firstImageContainer.appendChild(badge);
+              }
+            }
+          } else {
+            alert(data.message || 'Failed to delete image');
+          }
+        } else {
+          // Non-JSON response, assume success if we got here without error
+          imageContainer.remove();
+        }
+      })
+      .catch(err => {
+        console.error('Delete error:', err);
+        alert('Error deleting image: ' + err.message);
+      });
+    });
+  });
 
   // Validate sale price
   const priceInput = document.querySelector('input[name="price"]');
