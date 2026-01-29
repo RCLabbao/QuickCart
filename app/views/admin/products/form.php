@@ -73,6 +73,32 @@
             <label class="form-label fw-semibold">Product Title</label>
             <input class="form-control" name="title" value="<?= htmlspecialchars($product['title'] ?? '') ?>" required placeholder="Enter product name">
           </div>
+          <?php
+          // Check if this is a parent product (editable slug) or variant (auto-generated)
+          $isParentProduct = empty($product['parent_product_id']);
+          ?>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">
+              Slug
+              <?php if ($isParentProduct): ?>
+                <span class="badge bg-info ms-1">Editable</span>
+              <?php else: ?>
+                <span class="badge bg-secondary ms-1">Auto-generated</span>
+              <?php endif; ?>
+            </label>
+            <?php if ($isParentProduct): ?>
+              <input class="form-control" type="text" name="slug" value="<?= htmlspecialchars($product['slug'] ?? '') ?>" placeholder="auto-generated from title">
+              <div class="form-text">Leave empty to auto-generate from title. Used in URL: /products/<strong>slug</strong></div>
+            <?php else: ?>
+              <input class="form-control" type="text" value="<?= htmlspecialchars($product['slug'] ?? '') ?>" readonly style="background-color: #f8f9fa;">
+              <div class="form-text text-muted">This variant uses the parent product's slug.</div>
+            <?php endif; ?>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Product URL</label>
+            <input class="form-control" type="text" value="<?= (isset($_SERVER['REQUEST_SCHEME']) ? $_SERVER['REQUEST_SCHEME'] : 'http') ?>://<?= $_SERVER['HTTP_HOST'] ?? 'localhost' ?>/products/<?= htmlspecialchars($product['slug'] ?? 'slug') ?>" readonly style="background-color: #f8f9fa;">
+            <div class="form-text">Preview of the product page URL</div>
+          </div>
           <div class="col-12">
             <label class="form-label fw-semibold">Description</label>
             <textarea class="form-control" name="description" rows="4" placeholder="Describe your product..."><?= htmlspecialchars($product['description'] ?? '') ?></textarea>

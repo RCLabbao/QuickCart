@@ -341,7 +341,7 @@ $draftProducts = $stats['draft_products'] ?? 0;
                   <a class="btn btn-outline-primary" href="/admin/products/<?= (int)$p['id'] ?>/edit" title="Edit">
                     <i class="bi bi-pencil"></i>
                   </a>
-                  <a class="btn btn-outline-info" href="/products/<?= (int)$p['id'] ?>" target="_blank" title="View">
+                  <a class="btn btn-outline-info" href="/products/<?= !empty($p['parent_product_id']) ? (int)$p['parent_product_id'] : (int)$p['id'] ?>" target="_blank" title="View">
                     <i class="bi bi-eye"></i>
                   </a>
                   <form action="/admin/products/<?= (int)$p['id'] ?>/delete" method="post" class="d-inline">

@@ -179,7 +179,16 @@ class AdminProductsController extends Controller
     public function store(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/products'); }
-        $title = trim($_POST['title'] ?? ''); $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
+        $title = trim($_POST['title'] ?? '');
+
+        // Generate or use provided slug
+        $slug = !empty($_POST['slug']) ? trim($_POST['slug']) : strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
+        // Clean up slug: remove leading/trailing hyphens, prevent empty or hyphen-only slugs
+        $slug = trim($slug, '-');
+        if (empty($slug)) {
+            $slug = 'product-' . time();
+        }
+
         $price = (float)($_POST['price'] ?? 0); $status = $_POST['status'] ?? 'active';
         $stock = max(0, (int)($_POST['stock'] ?? 0));
         $collection_id = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
@@ -320,7 +329,29 @@ class AdminProductsController extends Controller
     public function update(array $params): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/products'); }
-        $title = trim($_POST['title'] ?? ''); $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
+        $title = trim($_POST['title'] ?? '');
+
+        // Check if this is a variant product
+        $pdo = DB::pdo();
+        $hasVariants = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        $productStmt = $pdo->prepare('SELECT parent_product_id FROM products WHERE id=?');
+        $productStmt->execute([(int)$params['id']]);
+        $product = $productStmt->fetch();
+        $isVariant = $hasVariants && !empty($product['parent_product_id']);
+
+        // For parent products, use provided slug or generate; for variants, always generate
+        if (!$isVariant && !empty($_POST['slug'])) {
+            $slug = trim($_POST['slug']);
+        } else {
+            $slug = strtolower(preg_replace('/[^a-z0-9]+/','-', $title));
+        }
+
+        // Clean up slug: remove leading/trailing hyphens, prevent empty or hyphen-only slugs
+        $slug = trim($slug, '-');
+        if (empty($slug)) {
+            $slug = 'product-' . (int)$params['id'];
+        }
+
         $price = (float)($_POST['price'] ?? 0); $status = $_POST['status'] ?? 'active';
         $stock = max(0, (int)($_POST['stock'] ?? 0));
         $collection_id = !empty($_POST['collection_id']) ? (int)$_POST['collection_id'] : null;
