@@ -381,14 +381,21 @@ class AdminProductsController extends Controller
 
     private function handleUploads(int $productId): void
     {
+        // Debug: Log if we're entering handleUploads
+        error_log("handleUploads called for product ID: $productId");
+
         if (empty($_FILES['images']['name'][0])) {
+            error_log("No files selected for upload");
             return;
         }
+
+        error_log("Files detected: " . count($_FILES['images']['name']));
 
         $pdo = DB::pdo();
         $base = BASE_PATH . '/public/uploads/products/' . $productId;
         if (!is_dir($base)) {
             @mkdir($base, 0775, true);
+            error_log("Created upload directory: $base");
         }
 
         $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : null;
@@ -401,6 +408,8 @@ class AdminProductsController extends Controller
         $productStmt = $pdo->prepare('SELECT title, fsc FROM products WHERE id = ?');
         $productStmt->execute([$productId]);
         $product = $productStmt->fetch();
+
+        error_log("Product info: " . json_encode($product));
 
         // Determine base filename: prefer FSC, fallback to product title, then product ID
         $baseFilename = '';
@@ -418,6 +427,8 @@ class AdminProductsController extends Controller
         if (empty($baseFilename)) {
             $baseFilename = 'product-' . $productId;
         }
+
+        error_log("Base filename for images: $baseFilename");
 
         $uploadedCount = 0;
         $errors = [];
@@ -496,9 +507,12 @@ class AdminProductsController extends Controller
             finfo_close($finfo);
         }
 
+        error_log("Upload complete: $uploadedCount files uploaded, " . count($errors) . " errors");
+
         // Store errors in session for display
         if (!empty($errors)) {
             $_SESSION['upload_errors'] = $errors;
+            error_log("Upload errors: " . implode('; ', $errors));
         }
         if ($uploadedCount > 0) {
             $_SESSION['upload_success'] = "Successfully uploaded {$uploadedCount} image(s).";

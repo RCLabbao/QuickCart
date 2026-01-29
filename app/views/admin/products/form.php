@@ -226,7 +226,8 @@
       </div>
     </div>
   </div>
-  
+  </form>
+
   <?php if ($hasVariants && empty($product['parent_product_id'])): ?>
   <!-- Product Variants Section -->
   <div class="col-lg-12">
@@ -393,7 +394,7 @@
     <div class="modal-dialog">
       <div class="modal-content">
         <form method="post" action="/admin/products/<?= (int)$product['id'] ?>/variants" id="addVariantForm">
-          <?= csrf_field() ?>
+          <input type="hidden" name="_token" value="<?= htmlspecialchars($_SESSION['_token'] ?? '') ?>">
           <div class="modal-header">
             <h5 class="modal-title">Add New Variant</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -401,11 +402,11 @@
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label">Variant Attribute <span class="text-danger">*</span></label>
-              <input type="text" class="form-control" name="variant_attributes" required placeholder="e.g., 38A, 36B, Small">
+              <input type="text" class="form-control" name="variant_attributes" placeholder="e.g., 38A, 36B, Small">
             </div>
             <div class="mb-3">
               <label class="form-label">FSC <span class="text-danger">*</span></label>
-              <input type="text" class="form-control" name="fsc" placeholder="Enter unique FSC code for this variant" required>
+              <input type="text" class="form-control" name="fsc" placeholder="Enter unique FSC code for this variant">
               <div class="form-text">Each variant should have its own unique FSC code from the CSV/import.</div>
             </div>
             <div class="mb-3">
@@ -461,15 +462,29 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  // Add loading state to form submission
-  const form = document.querySelector('form');
-  form.addEventListener('submit', function() {
-    const submitButton = this.querySelector('button[type="submit"]');
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Saving...';
-    }
-  });
+  // Add loading state to form submission (only for main product form)
+  const mainForm = document.querySelector('form[action*="/admin/products"]');
+  if (mainForm) {
+    mainForm.addEventListener('submit', function(e) {
+      // Don't prevent default - let the form submit normally
+      const submitButton = this.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Saving...';
+      }
+    });
+  }
+
+  // Debug file input changes
+  const fileInput = document.querySelector('input[type="file"][name="images[]"]');
+  if (fileInput) {
+    fileInput.addEventListener('change', function() {
+      console.log('Files selected:', this.files.length);
+      for (let i = 0; i < this.files.length; i++) {
+        console.log('File ' + i + ':', this.files[i].name, this.files[i].size, this.files[i].type);
+      }
+    });
+  }
 
   // Validate sale price
   const priceInput = document.querySelector('input[name="price"]');
@@ -496,6 +511,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addVariantForm) {
       addVariantForm.addEventListener('submit', function(e) {
         e.preventDefault();
+
+        // Manual validation for modal form
+        const variantAttr = addVariantForm.querySelector('[name="variant_attributes"]');
+        const fsc = addVariantForm.querySelector('[name="fsc"]');
+
+        if (!variantAttr.value.trim()) {
+          alert('Variant Attribute is required');
+          variantAttr.focus();
+          return;
+        }
+
+        if (!fsc.value.trim()) {
+          alert('FSC is required');
+          fsc.focus();
+          return;
+        }
+
         const formData = new FormData(this);
 
         fetch(this.action, {
@@ -530,7 +562,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/admin/products/${productId}/variants/${variantId}/delete`, {
           method: 'POST',
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          body: '_token=' + document.querySelector('[name="_token"]').value
+          body: '_token=' + (addVariantForm ? addVariantForm.querySelector('[name="_token"]').value : document.querySelector('[name="_token"]').value)
         })
         .then(r => r.json())
         .then(data => {
