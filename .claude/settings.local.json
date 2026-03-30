@@ -7,7 +7,9 @@
       "Bash(php:*)",
       "Bash(git checkout:*)",
       "mcp__web-search-prime__webSearchPrime",
-      "Bash(mysql:*)"
+      "Bash(mysql:*)",
+      "Bash(find app:*)",
+      "Bash(2)"
     ]
   }
 }

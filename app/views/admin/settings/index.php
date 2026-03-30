@@ -683,39 +683,13 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
   </form>
 
   <!-- Info Box -->
-  <div class="alert alert-info">
-    <i class="bi bi-info-circle me-2"></i>
-    <strong>Display Settings Explained:</strong>
-    <ul class="mb-0 mt-2">
-      <li><strong>Slides Visible:</strong> How many banners appear on screen at once. More slides = more content visible, but individual banners are smaller.</li>
-      <li><strong>Slide Interval:</strong> How many seconds before the carousel automatically moves to the next set of banners.</li>
-      <li>Settings are applied separately for each device type for the best user experience.</li>
-    </ul>
-  </div>
-</div>
-                    <form method="post" action="/admin/banners/<?= (int)$b['id'] ?>/delete" onsubmit="return confirm('Delete this banner?');" class="d-inline">
-                      <?= csrf_field() ?>
-                      <button class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-    </div>
-  </div>
-
-  <!-- Info Box -->
   <div class="alert alert-info mt-3 mb-0">
     <i class="bi bi-info-circle me-2"></i>
     <strong>Banner Slider Tips:</strong>
     <ul class="mb-0 mt-2">
-      <li>Banners are displayed on the homepage in a carousel/slider</li>
-      <li>Only banners with <strong>Active</strong> status are visible to customers</li>
-      <li>Drag and drop banners on the <a href="/admin/banners" target="_blank">Banners page</a> to reorder them</li>
-      <li>Recommended image size: 1920x600px for desktop, 800x1000px for mobile</li>
+      <li><strong>Slides Visible:</strong> How many banners appear on screen at once. More slides = more content visible, but individual banners are smaller.</li>
+      <li><strong>Slide Interval:</strong> How many seconds before the carousel automatically moves to the next set of banners.</li>
+      <li>Settings are applied separately for each device type for the best user experience.</li>
     </ul>
   </div>
 </div>
