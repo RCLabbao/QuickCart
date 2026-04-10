@@ -9,7 +9,8 @@
       "mcp__web-search-prime__webSearchPrime",
       "Bash(mysql:*)",
       "Bash(find app:*)",
-      "Bash(2)"
+      "Bash(2)",
+      "mcp__web-search-prime__web_search_prime"
     ]
   }
 }

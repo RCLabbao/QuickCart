@@ -393,51 +393,52 @@ class AdminSyncController extends Controller
                     $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
                 } catch (\Throwable $e) { $hasVariantsColumn = false; }
 
-                // DISABLED: Don't create placeholder parents during CSV import
-                // This causes new products to be created instead of linking existing ones
-                // Import all products as-is, then use "Bulk Detect Variants" to link them
-                /*
+                // Auto-detect variants during CSV import using the shared helper functions
                 if ($hasVariantsColumn) {
-                    // First, check if ProductType column contains variant info (e.g., "Size: M, Color: Red")
-                    if ($ptype !== '' && strtoupper($ptype) !== strtoupper($title)) {
-                        $variantAttributes = $ptype;
-                        // Keep parent as current title since ProductType is separate
-                    } else {
-                        // ProductType is empty or same as title - try to extract variant from the title itself
-                        $extracted = $this->extractVariantFromTitle($title);
-                        if ($extracted['variant'] !== '') {
-                            $variantAttributes = $extracted['variant'];
-                            $parentTitle = $extracted['base_title'];
+                    // First, try extracting variant from the title using shared function (handles sizes AND colors)
+                    $extracted = \App\Core\qc_extract_variant_attribute($title);
+                    if ($extracted !== '') {
+                        $variantAttributes = $extracted;
+                        $parentTitle = \App\Core\qc_extract_base_title($title);
+                    } elseif ($ptype !== '' && strtoupper($ptype) !== strtoupper($title)) {
+                        // Only use ProductType column if title-based extraction found nothing
+                        // AND the ptype is different from the title
+                        // Validate that ptype looks like a variant (not a generic product category)
+                        $ptypeUpper = strtoupper(trim($ptype));
+                        $genericTypes = ['BRIEF','BRA','PANTY','PANTIES','PANT','SHIRT','DRESS','SKIRT',
+                            'UNDERWEAR','LINGERIE','SOCKS','HOSE','TOP','BOTTOM','SWIMWEAR','SWIMSUIT',
+                            'TOWEL','BLANKET','SHEET','PILLOW','ROBE','GOWN','CAMISOLE','CORSET',
+                            'GIRDLE','BODYSUIT','SLIP','PETTICOAT','NEGIGEE','PAJAMA','SHORTS','CAPRI'];
+                        if (!in_array($ptypeUpper, $genericTypes) && strlen($ptypeUpper) <= 10) {
+                            $variantAttributes = $ptype;
                         }
                     }
 
-                    // If we have a variant, check if parent product exists or create it
-                    if ($variantAttributes !== '' && !$dryRun) {
+                    // If we have a variant, look up or create the parent product
+                    if ($variantAttributes !== '' && $variantAttributes !== null && !$dryRun) {
                         $parentCheck = $pdo->prepare('SELECT id FROM products WHERE title=? AND (parent_product_id IS NULL OR parent_product_id=0) LIMIT 1');
                         $parentCheck->execute([$parentTitle]);
                         $existingParent = $parentCheck->fetchColumn();
                         if ($existingParent) {
                             $parentProductId = (int)$existingParent;
                         } else {
-                            // Create parent product as placeholder
+                            // Create parent product
                             $parentSlug = preg_replace('/[^a-z0-9]+/','-', strtolower((string)$parentTitle));
                             $parentSlug = trim($parentSlug, '-');
                             if ($parentSlug === '') {
                                 $parentSlug = 'product-'.substr(md5($parentTitle . microtime(true)), 0, 6);
                             }
-                            // Ensure unique slug for parent
                             $baseSlug = $parentSlug; $suffix = 1;
                             while ((int)$pdo->query('SELECT COUNT(*) FROM products WHERE slug='.$pdo->quote($parentSlug))->fetchColumn() > 0) {
                                 $parentSlug = $baseSlug.'-'.$suffix++;
                                 if ($suffix > 1000) break;
                             }
-                            $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'draft\',0,?, NULL, NULL, NOW())')
+                            $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'active\',0,?, NULL, NULL, NOW())')
                                 ->execute([$parentTitle,$parentSlug,null,0,0,$collectionId]);
                             $parentProductId = (int)$pdo->lastInsertId();
                         }
                     }
                 }
-                */
                 // Find product by FSC
                 $pst = $pdo->prepare('SELECT id, title, price, stock, collection_id FROM products WHERE fsc=?');
                 $pst->execute([$fsc]);
@@ -511,11 +512,10 @@ class AdminSyncController extends Controller
                     }
                     // Map brochure price to sale_price field
                     $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;
-                    // Build INSERT - ALWAYS import as standalone product (parent_product_id = NULL)
-                    // Variant linking is done separately via "Bulk Detect Variants"
+                    // Build INSERT - use detected parent_product_id and variant_attributes if found
                     if ($hasVariantsColumn) {
-                        $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NULL, NULL, NOW())')
-                            ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId]);
+                        $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,parent_product_id,variant_attributes,created_at) VALUES (?,?,?,?,?,\'active\',?,?,?,?, NOW())')
+                            ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId,$parentProductId,$variantAttributes]);
                     } else {
                         $pdo->prepare('INSERT INTO products (title,slug,fsc,price,sale_price,status,stock,collection_id,created_at) VALUES (?,?,?,?,?,\'active\',?, ?, NOW())')
                             ->execute([$title,$slugTitle,$fsc,$price,$salePrice,$stock,$collectionId]);
@@ -552,6 +552,20 @@ class AdminSyncController extends Controller
                     $fields[] = 'fsc = ?';
                     $vals[] = $fsc;
                     if ($updatePrice) { $fields[] = 'price = ?'; $vals[] = $price; }
+                    // Link variant to parent if variant was detected and product doesn't already have one
+                    // IMPORTANT: Never link a product to itself as its own parent
+                    if ($hasVariantsColumn && $parentProductId && $variantAttributes !== '' && $variantAttributes !== null
+                        && (int)$p['id'] !== $parentProductId) {
+                        $existingParentStmt = $pdo->prepare('SELECT parent_product_id FROM products WHERE id=?');
+                        $existingParentStmt->execute([(int)$p['id']]);
+                        $existingParent = $existingParentStmt->fetchColumn();
+                        if (empty($existingParent) || $existingParent == 0) {
+                            $fields[] = 'parent_product_id = ?';
+                            $vals[] = $parentProductId;
+                            $fields[] = 'variant_attributes = ?';
+                            $vals[] = $variantAttributes;
+                        }
+                    }
                     // Always update sale price from brochure price in CSV
                     $salePrice = !empty($row['BrochurePrice']) ? (float)$row['BrochurePrice'] : 0;
 
@@ -905,70 +919,7 @@ class AdminSyncController extends Controller
         return $rows;
     }
 
-    /**
-     * Extract variant information from a product title
-     * Returns array with 'base_title' (parent product title) and 'variant' (variant attribute)
-     * Examples:
-     *   "EDWARD 5IN1 HI CUT BPK SMALL" → ["base_title" => "EDWARD 5IN1 HI CUT BPK", "variant" => "SMALL"]
-     *   "EDWARD 5IN1 HI CUT BPK MEDIUM" → ["base_title" => "EDWARD 5IN1 HI CUT BPK", "variant" => "MEDIUM"]
-     *   "BEVERLY UW FULL CUP LACE 38A" → ["base_title" => "BEVERLY UW FULL CUP LACE", "variant" => "38A"]
-     *   "BEVERLY UW FULL CUP LACE 36B" → ["base_title" => "BEVERLY UW FULL CUP LACE", "variant" => "36B"]
-     */
-    private function extractVariantFromTitle(string $title): array
-    {
-        $title = trim($title);
-        if ($title === '') {
-            return ['base_title' => '', 'variant' => ''];
-        }
-
-        // Common variant patterns to look for at the end of titles
-        // ORDER MATTERS: More specific patterns must come first
-        // Use (?:\s+) to ensure we only match after a space, not mid-word
-        $sizePatterns = [
-            // Bra sizes: 38A, 36B, 34C, 32DD, 40DD, etc. (must come FIRST - most specific)
-            '(?:\s+)(\d{2,3}[A-Z]{1,3})\s*$',
-            // Decimal sizes: 28.5, 29.5, etc.
-            '(?:\s+)(\d{1,2}\.\d{1,2})\s*$',
-            // Extra sizes with numbers: 2XL, 3XL, 4XL, 5XL, 2XS, 3XS, etc.
-            '(?:\s+)(\d+(?:XL|XS|L|M|S))\s*$',
-            // Extra sizes: EXTRA LARGE, EXTRA SMALL, EXTRA LONG, EXTRA SHORT, XXL, XXXL, XXXXL, XXXXXL
-            '(?:\s+)(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT|XXXXL|XXXXXL|2XL|3XL|4XL|5XL|2XS|3XS)\s*$',
-            // Standard sizes: XL, XS
-            '(?:\s+)(XL|XS)\s*$',
-            // Word sizes: LARGE, MEDIUM, SMALL
-            '(?:\s+)(LARGE|MEDIUM|SMALL)\s*$',
-            // PACK sizes: PACK L, PACK M, PACK S (for bikini briefs - must come before single letter)
-            '(?:\s+)(PACK\s+[LMS])\s*$',
-            // Single letter sizes: L, M, S
-            '(?:\s+)([LMS])\s*$',
-            // Numeric sizes: 36, 37, 38, etc. (standalone numbers at end)
-            '(?:\s+)(\d{1,2})\s*$',
-        ];
-
-        $colorPatterns = [
-            '(?:\s+)(RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY)\s*$',
-            '(?:\s+)(MULTICOLOR|MULTI-COLOR|MULTI COLOUR|MULTI COLOUR|MULTICOLOUR)\s*$',
-        ];
-
-        $allPatterns = array_merge($sizePatterns, $colorPatterns);
-
-        // Try to match each pattern
-        foreach ($allPatterns as $pattern) {
-            if (preg_match('/' . $pattern . '/i', $title, $matches)) {
-                $variant = strtoupper(trim($matches[1]));
-                $baseTitle = preg_replace('/' . $pattern . '/i', '', $title);
-                $baseTitle = trim($baseTitle);
-
-                // Only return if base title is still meaningful
-                if (strlen($baseTitle) >= 5) {
-                    return ['base_title' => $baseTitle, 'variant' => $variant];
-                }
-            }
-        }
-
-        // No variant found - return original title
-        return ['base_title' => $title, 'variant' => ''];
-    }
-
 }
+
+
 
