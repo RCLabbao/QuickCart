@@ -69,12 +69,19 @@
   </div>
   <div class="card-body p-0">
     <div class="accordion" id="variantGroupsAccordion">
-      <?php $groupNum = 0; foreach ($variantGroups as $baseTitle => $products): $groupNum++; ?>
+      <?php $groupNum = 0; foreach ($variantGroups as $baseTitle => $products): $groupNum++;
+        $existingParent = $products['_existing_parent'] ?? null;
+        $actualProducts = array_filter($products, fn($k) => $k !== '_existing_parent', ARRAY_FILTER_USE_KEY);
+        $displayCount = count($actualProducts) + ($existingParent ? 1 : 0);
+      ?>
       <div class="accordion-item">
         <h2 class="accordion-header" id="heading<?= $groupNum ?>">
           <button class="accordion-button <?= $groupNum > 1 ? 'collapsed' : '' ?>" type="button" data-bs-toggle="collapse" data-bs-target="#collapse<?= $groupNum ?>">
-            <span class="badge bg-primary me-2"><?= count($products) ?> items</span>
+            <span class="badge bg-primary me-2"><?= $displayCount ?> item<?= $displayCount !== 1 ? 's' : '' ?></span>
             <?= htmlspecialchars($baseTitle) ?>
+            <?php if ($existingParent): ?>
+              <span class="badge bg-info ms-2">Links to existing parent #<?= (int)$existingParent['id'] ?></span>
+            <?php endif; ?>
           </button>
         </h2>
         <div id="collapse<?= $groupNum ?>" class="accordion-collapse collapse <?= $groupNum === 1 ? 'show' : '' ?>" data-bs-parent="#variantGroupsAccordion">
@@ -93,17 +100,30 @@
                   </tr>
                 </thead>
                 <tbody>
+                  <?php if ($existingParent): ?>
+                  <tr class="table-active">
+                    <td><i class="bi bi-star-fill text-warning"></i></td>
+                    <td>
+                      <?= htmlspecialchars($existingParent['title']) ?>
+                      <span class="badge bg-info ms-2">Existing Parent</span>
+                    </td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td><span class="badge bg-success">Active</span></td>
+                    <td><span class="text-muted">Parent (already exists)</span></td>
+                  </tr>
+                  <?php endif; ?>
                   <?php
-                  $isFirst = true;
-                  foreach ($products as $product):
-                    $variantAttr = trim(substr($product['title'], strlen($baseTitle)));
+                  foreach ($actualProducts as $product):
+                    $variantAttr = \App\Core\qc_extract_variant_attribute($product['title']);
                     if ($variantAttr === '') {
-                        $variantAttr = 'Parent';
+                        $variantAttr = trim(substr($product['title'], strlen($baseTitle)));
                     }
                   ?>
                   <tr>
                     <td>
-                      <?php if ($isFirst): ?>
+                      <?php if (!$existingParent): ?>
                         <i class="bi bi-star-fill text-warning"></i>
                       <?php else: ?>
                         <i class="bi bi-circle text-muted"></i>
@@ -111,7 +131,7 @@
                     </td>
                     <td>
                       <?= htmlspecialchars($product['title']) ?>
-                      <?php if ($isFirst): ?>
+                      <?php if (!$existingParent): ?>
                         <span class="badge bg-info ms-2">Oldest (Parent)</span>
                       <?php endif; ?>
                     </td>
@@ -124,14 +144,14 @@
                       </span>
                     </td>
                     <td>
-                      <?php if ($isFirst): ?>
+                      <?php if (!$existingParent && isset($isFirst) && $isFirst): ?>
                         <span class="text-muted">Parent Product</span>
                       <?php else: ?>
                         <span class="badge bg-warning">Variant: <?= htmlspecialchars($variantAttr) ?></span>
                       <?php endif; ?>
                     </td>
                   </tr>
-                  <?php $isFirst = false; endforeach; ?>
+                  <?php endforeach; ?>
                 </tbody>
               </table>
             </div>

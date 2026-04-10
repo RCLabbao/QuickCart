@@ -1275,10 +1275,27 @@ class AdminProductsController extends Controller
             }
         }
 
-        // Filter to only show groups with multiple products
-        $variantGroups = array_filter($groups, function($group) {
-            return count($group) > 1;
-        });
+        // Include groups with multiple products OR single-product groups that match an existing parent
+        $variantGroups = [];
+        foreach ($groups as $baseTitle => $groupProducts) {
+            if (count($groupProducts) > 1) {
+                $variantGroups[$baseTitle] = $groupProducts;
+            } elseif (count($groupProducts) === 1) {
+                // Single product — check if an existing product matches the base title
+                $existingParent = $pdo->prepare('
+                    SELECT id, title FROM products
+                    WHERE title = ? AND id != ? AND (parent_product_id IS NULL OR parent_product_id = 0)
+                    LIMIT 1
+                ');
+                $existingParent->execute([$baseTitle, $groupProducts[0]['id']]);
+                $parent = $existingParent->fetch();
+                if ($parent) {
+                    // Mark the parent so the view can display it
+                    $groupProducts['_existing_parent'] = $parent;
+                    $variantGroups[$baseTitle] = $groupProducts;
+                }
+            }
+        }
 
         // Sort by group name
         ksort($variantGroups);

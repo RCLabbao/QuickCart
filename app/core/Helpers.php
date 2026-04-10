@@ -547,14 +547,44 @@ function qc_auto_merge_variants(\PDO $pdo): array {
         $allProductsInGroup = $groupProducts;
 
         if (count($allProductsInGroup) <= 1) {
-            // Only 1 product in group - can't form variants, just activate it if draft
-            foreach ($allProductsInGroup as $p) {
-                if ($p['status'] === 'draft') {
+            // Single product in group — check if an existing parent product matches the base title
+            $singleProduct = $allProductsInGroup[0];
+            $existingParentId = null;
+            try {
+                $parentStmt = $pdo->prepare('
+                    SELECT id FROM products
+                    WHERE title = ? AND id != ? AND (parent_product_id IS NULL OR parent_product_id = 0)
+                    LIMIT 1
+                ');
+                $parentStmt->execute([$baseTitle, $singleProduct['id']]);
+                $existingParentId = (int)$parentStmt->fetchColumn();
+            } catch (\Throwable $e) {}
+
+            if ($existingParentId > 0) {
+                // Found an existing parent — link this product as a variant
+                $attr = qc_extract_variant_attribute($singleProduct['original_title']);
+                try {
+                    $pdo->prepare('UPDATE products SET parent_product_id = ?, variant_attributes = ?, status = "active" WHERE id = ?')
+                        ->execute([$existingParentId, $attr, $singleProduct['id']]);
+                    $result['merged_groups']++;
+                    $result['merged_products']++;
+                    $result['debug']["linked_single_{$singleProduct['id']}"] = [
+                        'product_id' => $singleProduct['id'],
+                        'parent_id' => $existingParentId,
+                        'variant_attr' => $attr,
+                        'base_title' => $baseTitle
+                    ];
+                } catch (\Throwable $e) {
+                    $result['errors'][] = "Could not link product {$singleProduct['id']} to parent {$existingParentId}: " . $e->getMessage();
+                }
+            } else {
+                // No parent found — just activate if draft
+                if ($singleProduct['status'] === 'draft') {
                     try {
                         $pdo->prepare('UPDATE products SET status = "active" WHERE id = ?')
-                            ->execute([$p['id']]);
+                            ->execute([$singleProduct['id']]);
                     } catch (\Throwable $e) {
-                        $result['errors'][] = "Could not activate product ID {$p['id']}: " . $e->getMessage();
+                        $result['errors'][] = "Could not activate product ID {$singleProduct['id']}: " . $e->getMessage();
                     }
                 }
             }
