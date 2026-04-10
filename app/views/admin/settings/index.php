@@ -1,5 +1,6 @@
 <?php
 use function App\Core\csrf_field;
+use function App\Core\qc_parse_custom_colors;
 $activeTab = isset($activeTab) ? $activeTab : (isset($_GET['tab']) ? $_GET['tab'] : 'general');
 $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
 ?>
@@ -491,34 +492,67 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
           <strong>Custom Colors</strong>
-          <span class="badge bg-secondary" id="colorCount"><?= count(array_filter(array_map('trim', preg_split('/[\n,]+/', $settings['custom_colors'] ?? '')))) ?> colors</span>
+          <span class="badge bg-secondary" id="colorCount"><?php
+            $parsedColors = qc_parse_custom_colors();
+            echo count($parsedColors) . ' color' . (count($parsedColors) !== 1 ? 's' : '');
+          ?></span>
         </div>
         <div class="card-body">
-          <div id="colorChips" class="d-flex flex-wrap gap-2 mb-3" style="min-height:36px;">
-            <?php
-              $colorsRaw = trim((string)($settings['custom_colors'] ?? ''));
-              $colorsList = array_filter(array_map('trim', preg_split('/[\n,]+/', $colorsRaw)));
-              foreach ($colorsList as $color):
-            ?>
-              <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-1 py-2 px-3 color-chip" data-color="<?= htmlspecialchars($color) ?>">
-                <?= htmlspecialchars($color) ?>
-                <button type="button" class="btn-close btn-close-sm ms-1 color-remove" aria-label="Remove" style="font-size:0.6em;"></button>
-              </span>
-            <?php endforeach; ?>
-            <?php if (empty($colorsList)): ?>
-              <span class="text-muted small" id="noColorsMsg">No custom colors added yet. Add colors below or upload a CSV/TXT file.</span>
-            <?php endif; ?>
+          <?php if (!empty($parsedColors)): ?>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" id="colorTable">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:40px;">Color</th>
+                  <th>Name</th>
+                  <th style="width:100px;">Hex</th>
+                  <th style="width:60px;">Pick</th>
+                  <th style="width:40px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($parsedColors as $cName => $cHex): ?>
+                <tr class="color-row" data-name="<?= htmlspecialchars($cName) ?>" data-hex="<?= htmlspecialchars($cHex) ?>">
+                  <td>
+                    <span class="d-inline-block rounded-circle border" style="width:24px;height:24px;background:<?= htmlspecialchars($cHex) ?>;flex-shrink:0;"></span>
+                  </td>
+                  <td class="fw-medium"><?= htmlspecialchars($cName) ?></td>
+                  <td><code class="small"><?= htmlspecialchars($cHex) ?></code></td>
+                  <td>
+                    <input type="color" class="form-control form-control-color color-picker"
+                           value="<?= htmlspecialchars($cHex) ?>"
+                           data-name="<?= htmlspecialchars($cName) ?>"
+                           style="width:36px;height:30px;padding:2px;">
+                  </td>
+                  <td class="text-end">
+                    <button type="button" class="btn btn-sm btn-outline-danger color-remove" title="Remove">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
           </div>
+          <?php else: ?>
+            <p class="text-muted small mb-0" id="noColorsMsg">No custom colors added yet. Add colors below or upload a CSV/TXT file.</p>
+          <?php endif; ?>
 
           <!-- Add single color -->
-          <div class="input-group input-group-sm mb-3" style="max-width:400px;">
-            <input type="text" class="form-control" id="newColorInput" placeholder="e.g. RTY LSTR, WST GLOW" maxlength="100">
-            <button type="button" class="btn btn-outline-primary" id="addColorBtn">+ Add</button>
+          <div class="border-top pt-3 mt-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <input type="text" class="form-control form-control-sm" id="newColorInput" placeholder="e.g. RTY LSTR" maxlength="100" style="max-width:200px;">
+              <input type="color" class="form-control form-control-color form-control-sm" id="newColorPicker" value="#FF69B4" style="width:36px;height:30px;padding:2px;" title="Pick a color">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="addColorBtn">
+                <i class="bi bi-plus-circle me-1"></i>Add
+              </button>
+            </div>
+            <small class="text-muted d-block mt-1">Enter a color name and pick its visual color. Separate multiple names with commas.</small>
           </div>
 
           <!-- Upload CSV/TXT -->
-          <div class="border-top pt-3 mt-2">
-            <small class="text-muted d-block mb-2"><strong>Upload colors from file</strong> — CSV or TXT, one color per line or comma-separated</small>
+          <div class="border-top pt-3 mt-3">
+            <small class="text-muted d-block mb-2"><strong>Bulk upload</strong> — CSV or TXT, one color name per line or comma-separated. Colors auto-assigned (editable after).</small>
             <form method="post" action="/admin/settings/upload-colors" enctype="multipart/form-data" class="d-flex align-items-center gap-2" id="uploadColorsForm">
               <?= csrf_field() ?>
               <input type="file" class="form-control form-control-sm" name="color_file" accept=".csv,.txt" style="max-width:280px;" required>
@@ -528,13 +562,14 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
             </form>
           </div>
 
-          <!-- Hidden field to store colors for form submission -->
-          <input type="hidden" name="custom_colors" id="customColorsHidden" value="<?= htmlspecialchars($settings['custom_colors'] ?? '') ?>">
+          <!-- Hidden field stores JSON: {"NAME":"#hex"} -->
+          <input type="hidden" name="custom_colors" id="customColorsHidden" value="<?= htmlspecialchars($settings['custom_colors'] ?? '{}') ?>">
 
           <div class="mt-3 p-2 bg-light rounded">
             <small class="text-muted">
               <strong>Tip:</strong> Colors are automatically detected as variant suffixes during import and bulk merge.
-              They work at the end of titles (<code>AUC LIP GLS 7ML RTY LSTR</code>) and also before sizes (<code>UC PH LIP STN & BLM PINK MIRAGE 1.2G</code>).
+              They appear as colored pills on the product page. Works at the end of titles (<code>AUC LIP GLS 7ML RTY LSTR</code>)
+              and also before sizes (<code>UC PH LIP STN & BLM PINK MIRAGE 1.2G</code>).
             </small>
           </div>
         </div>
@@ -556,59 +591,108 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
       boxes.forEach(b=>b.addEventListener('change', syncFromBoxes));
     })();
 
-    // ── Custom Colors Tag Chips ──
+    // ── Custom Colors with Color Pickers ──
     (function(){
-      const chipsContainer = document.getElementById('colorChips');
+      const tableBody = document.querySelector('#colorTable tbody');
       const hiddenInput = document.getElementById('customColorsHidden');
       const addInput = document.getElementById('newColorInput');
+      const addPicker = document.getElementById('newColorPicker');
       const addBtn = document.getElementById('addColorBtn');
       const countBadge = document.getElementById('colorCount');
       const noMsg = document.getElementById('noColorsMsg');
+      const table = document.getElementById('colorTable');
 
-      function getColors(){
-        const raw = hiddenInput.value.trim();
-        return raw ? raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean) : [];
+      function getMap(){
+        try { const o = JSON.parse(hiddenInput.value); return (o && typeof o === 'object') ? o : {}; }
+        catch(e) { return {}; }
       }
-      function setColors(arr){
-        hiddenInput.value = arr.join(', ');
-        countBadge.textContent = arr.length + ' color' + (arr.length!==1?'s':'');
-      }
-      function renderChip(color){
-        const span = document.createElement('span');
-        span.className = 'badge bg-light text-dark border d-inline-flex align-items-center gap-1 py-2 px-3 color-chip';
-        span.dataset.color = color;
-        span.innerHTML = color + ' <button type="button" class="btn-close btn-close-sm ms-1 color-remove" aria-label="Remove" style="font-size:0.6em;"></button>';
-        return span;
-      }
-      function refreshChips(){
-        const colors = getColors();
-        chipsContainer.querySelectorAll('.color-chip').forEach(c=>c.remove());
-        if(noMsg) noMsg.style.display = colors.length ? 'none' : '';
-        colors.forEach(c=>chipsContainer.appendChild(renderChip(c)));
+      function setMap(map){
+        hiddenInput.value = JSON.stringify(map);
+        const count = Object.keys(map).length;
+        countBadge.textContent = count + ' color' + (count !== 1 ? 's' : '');
+        if(noMsg) noMsg.style.display = count ? 'none' : '';
+        if(table) table.style.display = count ? '' : 'none';
       }
 
-      chipsContainer.addEventListener('click', function(e){
-        if(e.target.classList.contains('color-remove')){
-          const chip = e.target.closest('.color-chip');
-          const removed = chip.dataset.color;
-          const colors = getColors().filter(c=>c!==removed);
-          setColors(colors);
-          refreshChips();
+      // Generate a default hex from name (matches PHP qc_generate_color_hex)
+      function defaultHex(name){
+        let hash = 0;
+        for(let i = 0; i < name.length; i++) hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        const hue = Math.abs(hash % 360);
+        // Simplified HSL→hex
+        const s = 0.55, l = 0.72;
+        const c = (1 - Math.abs(2*l - 1)) * s;
+        const x = c * (1 - Math.abs((hue/60) % 2 - 1));
+        const m = l - c/2;
+        let r,g,b;
+        if(hue<60){r=c;g=x;b=0;}else if(hue<120){r=x;g=c;b=0;}else if(hue<180){r=0;g=c;b=x;}
+        else if(hue<240){r=0;g=x;b=c;}else if(hue<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}
+        const toHex = v => Math.round((v+m)*255).toString(16).padStart(2,'0');
+        return '#' + toHex(r) + toHex(g) + toHex(b);
+      }
+
+      function makeRow(name, hex){
+        const tr = document.createElement('tr');
+        tr.className = 'color-row';
+        tr.dataset.name = name;
+        tr.dataset.hex = hex;
+        tr.innerHTML =
+          '<td><span class="d-inline-block rounded-circle border" style="width:24px;height:24px;background:'+hex+';flex-shrink:0;"></span></td>' +
+          '<td class="fw-medium">'+name+'</td>' +
+          '<td><code class="small hex-code">'+hex+'</code></td>' +
+          '<td><input type="color" class="form-control form-control-color color-picker" value="'+hex+'" data-name="'+name+'" style="width:36px;height:30px;padding:2px;"></td>' +
+          '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger color-remove" title="Remove"><i class="bi bi-trash"></i></button></td>';
+        return tr;
+      }
+
+      // Color picker change — update hex in map and row
+      document.addEventListener('input', function(e){
+        if(!e.target.classList.contains('color-picker')) return;
+        const name = e.target.dataset.name;
+        const hex = e.target.value;
+        const row = e.target.closest('.color-row');
+        if(row){
+          row.dataset.hex = hex;
+          row.querySelector('.hex-code').textContent = hex;
+          row.querySelector('.rounded-circle').style.background = hex;
         }
+        const map = getMap();
+        map[name] = hex;
+        setMap(map);
       });
 
-      function addColors(text){
-        const newOnes = text.split(/[\n,]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
-        if(!newOnes.length) return;
-        const existing = getColors();
-        const merged = [...new Set([...existing, ...newOnes])];
-        setColors(merged);
-        refreshChips();
+      // Remove color
+      document.addEventListener('click', function(e){
+        const btn = e.target.closest('.color-remove');
+        if(!btn) return;
+        const row = btn.closest('.color-row');
+        const name = row.dataset.name;
+        row.remove();
+        const map = getMap();
+        delete map[name];
+        setMap(map);
+      });
+
+      // Add color(s)
+      function addColors(){
+        const text = addInput.value.trim();
+        if(!text) return;
+        const hex = addPicker.value;
+        const names = text.split(/[\n,]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+        if(!names.length) return;
+        const map = getMap();
+        names.forEach(n => { map[n] = hex; });
+        setMap(map);
+        // Rebuild table rows
+        tableBody.innerHTML = '';
+        Object.entries(map).forEach(([n,h]) => tableBody.appendChild(makeRow(n, h)));
         addInput.value = '';
+        // Shift to a new default color for next add
+        addPicker.value = defaultHex(Date.now().toString());
       }
 
-      addBtn.addEventListener('click', function(){ addColors(addInput.value); });
-      addInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){e.preventDefault(); addColors(addInput.value);} });
+      addBtn.addEventListener('click', addColors);
+      addInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){e.preventDefault(); addColors();} });
     })();
   </script>
 </div>

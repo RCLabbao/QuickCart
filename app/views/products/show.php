@@ -1,4 +1,5 @@
 <?php use function App\Core\price; use function App\Core\e; use function App\Core\is_on_sale; use function App\Core\effective_price; ?>
+<?php use function App\Core\qc_is_color_variant; use function App\Core\qc_variant_color_hex; ?>
 <div class="row g-4">
   <div class="col-md-6">
     <?php if (is_on_sale($product)): ?>
@@ -163,11 +164,70 @@
     <?php if (!empty($variants) && $hasVariants): ?>
     <!-- Variant Selector -->
     <div class="mb-4">
+      <?php
+      // Detect if we have color variants to split the selector
+      $colorVariants = [];
+      $sizeVariants = [];
+      foreach ($variants as $v) {
+        $attr = strtoupper(trim($v['variant_attributes'] ?? ''));
+        if (qc_is_color_variant($attr)) {
+          $colorVariants[] = $v;
+        } else {
+          $sizeVariants[] = $v;
+        }
+      }
+      $hasColors = !empty($colorVariants);
+      $hasSizes = !empty($sizeVariants);
+      ?>
+
+      <?php if ($hasColors): ?>
       <h6 class="text-muted mb-3 text-uppercase fw-bold" style="font-size: 0.75rem; letter-spacing: 0.5px;">
-        Select Option
+        Select Color
+      </h6>
+      <div class="d-flex flex-wrap gap-2 mb-3" id="colorSelector">
+        <?php foreach ($colorVariants as $v): ?>
+          <?php
+          $isSelected = (int)$v['id'] === (int)$product['id'];
+          $variantId = (int)$v['id'];
+          $variantAttr = htmlspecialchars($v['variant_attributes'] ?? '');
+          $variantAttrUpper = strtoupper(trim($v['variant_attributes'] ?? ''));
+          $variantPrice = (float)$v['price'];
+          $variantStock = (int)$v['stock'];
+          $outOfStock = $variantStock <= 0;
+          $hasSale = !empty($v['sale_price']) && (float)$v['sale_price'] > 0 && (float)$v['sale_price'] < (float)$v['price'];
+          $colorHex = qc_variant_color_hex($variantAttrUpper);
+          $isWhite = in_array($variantAttrUpper, ['WHITE', 'CREAM', 'IVORY']);
+          ?>
+          <button class="color-pill position-relative <?= $isSelected ? 'selected' : '' ?><?= $outOfStock ? ' out-of-stock' : '' ?>"
+                  style="--pill-color: <?= $colorHex ?>"
+                  data-variant-id="<?= $variantId ?>"
+                  data-variant-price="<?= $variantPrice ?>"
+                  data-variant-sale-price="<?= $hasSale ? (float)$v['sale_price'] : '' ?>"
+                  data-variant-stock="<?= $variantStock ?>"
+                  data-variant-fsc="<?= htmlspecialchars($v['fsc'] ?? '') ?>"
+                  data-variant-title="<?= htmlspecialchars($v['title']) ?>"
+                  data-variant-attr="<?= $variantAttr ?>"
+                  data-is-color="true"
+                  <?= $outOfStock ? 'disabled' : '' ?>>
+            <span class="color-circle <?= $isWhite ? 'border' : '' ?>" style="background: <?= $colorHex ?>"></span>
+            <span class="color-label"><?= $variantAttr ?></span>
+            <?php if ($outOfStock): ?>
+              <span class="stock-badge">Sold Out</span>
+            <?php endif; ?>
+            <?php if ($isSelected): ?>
+              <i class="bi bi-check2"></i>
+            <?php endif; ?>
+          </button>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($hasSizes): ?>
+      <h6 class="text-muted mb-3 text-uppercase fw-bold" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+        <?= $hasColors ? 'Select Size' : 'Select Option' ?>
       </h6>
       <div class="d-flex flex-wrap gap-2" id="variantSelector">
-        <?php foreach ($variants as $v): ?>
+        <?php foreach ($sizeVariants as $v): ?>
           <?php
           $isSelected = (int)$v['id'] === (int)$product['id'];
           $variantId = (int)$v['id'];
@@ -184,6 +244,8 @@
                   data-variant-stock="<?= $variantStock ?>"
                   data-variant-fsc="<?= htmlspecialchars($v['fsc'] ?? '') ?>"
                   data-variant-title="<?= htmlspecialchars($v['title']) ?>"
+                  data-variant-attr="<?= $variantAttr ?>"
+                  data-is-color="false"
                   <?= $outOfStock ? 'disabled' : '' ?>>
             <?= $variantAttr ?>
             <?php if ($outOfStock): ?>
@@ -195,6 +257,7 @@
           </button>
         <?php endforeach; ?>
       </div>
+      <?php endif; ?>
     </div>
     <?php endif; ?>
     <form id="pdpAddToCartForm" class="addToCart mb-3" method="post" action="/cart/add">
@@ -310,6 +373,52 @@
   text-align: center;
 }
 
+/* Color Pills */
+#colorSelector {
+  gap: 0.5rem;
+}
+
+.color-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 999px;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.color-pill .color-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.color-pill .color-circle.border {
+  border: 1px solid #d1d5db;
+}
+
+.color-pill:hover:not(:disabled) {
+  border-color: #3182ce;
+  background: #ebf8ff;
+  transform: translateY(-1px);
+}
+
+.color-pill.selected {
+  border-color: #3182ce;
+  background: #ebf8ff;
+  color: #2d3748;
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.25);
+}
+
 .variant-btn:hover:not(:disabled) {
   border-color: #3182ce;
   color: #3182ce;
@@ -324,7 +433,8 @@
   box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
 }
 
-.variant-btn.selected i {
+.variant-btn.selected i,
+.color-pill.selected i {
   position: absolute;
   top: -4px;
   right: -4px;
@@ -340,14 +450,16 @@
   border: 2px solid #fff;
 }
 
-.variant-btn.out-of-stock {
+.variant-btn.out-of-stock,
+.color-pill.out-of-stock {
   background: #f7fafc;
   border-color: #e2e8f0;
   color: #a0aec0;
   cursor: not-allowed;
 }
 
-.variant-btn .stock-badge {
+.variant-btn .stock-badge,
+.color-pill .stock-badge {
   position: absolute;
   bottom: -6px;
   left: 50%;
@@ -460,8 +572,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Variant Selection
-  const variantBtns = document.querySelectorAll('.variant-btn');
+  // Variant Selection (handles both color pills and size buttons)
+  const variantBtns = document.querySelectorAll('.variant-btn, .color-pill');
   console.log('Found variant buttons:', variantBtns.length);
 
   variantBtns.forEach(btn => {
@@ -475,20 +587,18 @@ document.addEventListener('DOMContentLoaded', function() {
       const variantStock = parseInt(this.dataset.variantStock);
       const variantFsc = this.dataset.variantFsc;
       const variantTitle = this.dataset.variantTitle;
-      const variantAttr = this.textContent.trim();
+      const variantAttr = this.dataset.variantAttr || this.textContent.trim();
 
       console.log('Variant clicked:', { variantId, variantTitle, variantAttr, variantPrice, variantStock });
 
-      // Update selected button style
+      // Update selected button style — clear all, then select this one
       variantBtns.forEach(b => {
         b.classList.remove('selected');
-        // Remove checkmark from all buttons
-        const checkmark = b.querySelector('i');
+        const checkmark = b.querySelector('i.bi-check2');
         if (checkmark) checkmark.remove();
       });
       this.classList.add('selected');
-      // Add checkmark to selected button
-      if (!this.querySelector('i')) {
+      if (!this.querySelector('i.bi-check2')) {
         const checkmark = document.createElement('i');
         checkmark.className = 'bi bi-check2';
         this.appendChild(checkmark);

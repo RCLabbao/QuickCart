@@ -272,10 +272,10 @@ class AdminSyncController extends Controller
 
         // Load custom variant patterns from settings (comma or newline separated)
         $customVariantsRaw = trim((string)\App\Core\setting('custom_variants', ''));
-        $customColorsRaw = trim((string)\App\Core\setting('custom_colors', ''));
         $customVariants = array_filter(array_map('trim', preg_split('/[\s,]+/', $customVariantsRaw)));
-        $customColors = array_filter(array_map('trim', preg_split('/[\s,]+/', $customColorsRaw)));
-        $allCustomVariants = array_values(array_unique(array_merge($customVariants, $customColors)));
+        // custom_colors is now JSON {"NAME":"#hex"} — extract just the names
+        $customColorNames = array_keys(\App\Core\qc_parse_custom_colors());
+        $allCustomVariants = array_values(array_unique(array_merge($customVariants, $customColorNames)));
 
         $updatePrice = array_key_exists('update_price', $overrides)
             ? (bool)$overrides['update_price']

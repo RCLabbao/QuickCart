@@ -174,29 +174,48 @@ class AdminSettingsController extends Controller
 
         // Read file contents
         $content = file_get_contents($tmpPath);
-        // Handle UTF-8 BOM
         if (str_starts_with($content, "\xEF\xBB\xBF")) {
             $content = substr($content, 3);
         }
-        // Parse: split by newlines and commas, trim each entry
-        $newColors = array_filter(array_map('trim', preg_split('/[\n\r,]+/', $content)));
-        $newColors = array_filter($newColors, fn($c) => $c !== '');
+        $newNames = array_filter(array_map('trim', preg_split('/[\n\r,]+/', $content)));
+        $newNames = array_filter($newNames, fn($c) => $c !== '');
 
-        if (empty($newColors)) {
+        if (empty($newNames)) {
             $_SESSION['settings_flash'] = 'No color names found in the uploaded file.';
             $this->redirect('/admin/settings?tab=catalog');
         }
 
-        // Merge with existing colors
+        // Load existing colors as name→hex map
         $pdo = DB::pdo();
         $stmt = $pdo->prepare("SELECT `value` FROM settings WHERE `key` = ?");
         $stmt->execute(['custom_colors']);
         $existing = trim((string)$stmt->fetchColumn());
-        $existingColors = $existing !== '' ? array_filter(array_map('trim', preg_split('/[\n,]+/', $existing))) : [];
 
-        $merged = array_values(array_unique(array_merge($existingColors, $newColors)));
-        $mergedValue = implode(", ", $merged);
+        // Parse existing (handles both JSON and legacy comma-separated)
+        $colorMap = [];
+        if ($existing !== '') {
+            $decoded = json_decode($existing, true);
+            if (is_array($decoded)) {
+                $colorMap = $decoded;
+            } else {
+                // Legacy: convert comma-separated names to map with generated colors
+                foreach (array_filter(array_map('trim', preg_split('/[\n,]+/', $existing))) as $name) {
+                    $colorMap[strtoupper($name)] = \App\Core\qc_generate_color_hex($name);
+                }
+            }
+        }
 
+        // Merge new names with auto-generated hex
+        $added = 0;
+        foreach ($newNames as $name) {
+            $upper = strtoupper(trim($name));
+            if ($upper !== '' && !isset($colorMap[$upper])) {
+                $colorMap[$upper] = \App\Core\qc_generate_color_hex($upper);
+                $added++;
+            }
+        }
+
+        $mergedValue = json_encode($colorMap);
         $stmt = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
         $stmt->execute(['custom_colors', $mergedValue]);
 
@@ -204,7 +223,7 @@ class AdminSettingsController extends Controller
         if (function_exists('apcu_delete')) { @apcu_delete('settings'); }
         try { \App\Core\fresh_settings(); } catch (\Throwable $e) {}
 
-        $_SESSION['settings_flash'] = count($newColors) . ' color(s) imported. Total: ' . count($merged) . ' colors.';
+        $_SESSION['settings_flash'] = $added . ' new color(s) imported. Total: ' . count($colorMap) . ' colors. You can adjust the visual colors using the color pickers.';
         $this->redirect('/admin/settings?tab=catalog');
     }
 }

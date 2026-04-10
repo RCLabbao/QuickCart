@@ -174,15 +174,159 @@ function qc_load_custom_variants(): array {
     if ($cache !== null) return $cache;
 
     $merged = [];
-    foreach (['custom_variants', 'custom_colors'] as $key) {
-        $raw = trim((string)setting($key, ''));
-        if ($raw !== '') {
-            $items = array_filter(array_map('trim', preg_split('/[\n,]+/', $raw)));
-            $merged = array_merge($merged, $items);
-        }
+
+    // custom_variants: simple comma-separated names
+    $variantsRaw = trim((string)setting('custom_variants', ''));
+    if ($variantsRaw !== '') {
+        $items = array_filter(array_map('trim', preg_split('/[\n,]+/', $variantsRaw)));
+        $merged = array_merge($merged, $items);
     }
+
+    // custom_colors: JSON {"NAME":"#hex"} — extract just the names
+    $colorMap = qc_parse_custom_colors();
+    $merged = array_merge($merged, array_keys($colorMap));
+
     $cache = array_values(array_unique($merged));
     return $cache;
+}
+
+/**
+ * Parse the custom_colors setting into a name→hex map
+ * Handles both formats:
+ *   - JSON: {"RTY LSTR":"#FF69B4","WST GLOW":"#FFD700"}
+ *   - Legacy comma-separated: "RTY LSTR, WST GLOW" (auto-generates hex)
+ *
+ * @return array<string, string> Uppercase name => hex color
+ */
+function qc_parse_custom_colors(): array {
+    static $cache = null;
+    if ($cache !== null) return $cache;
+
+    $raw = trim((string)setting('custom_colors', ''));
+    if ($raw === '') { $cache = []; return []; }
+
+    // Try JSON first
+    $decoded = json_decode($raw, true);
+    if (is_array($decoded) && !empty($decoded)) {
+        $cache = [];
+        foreach ($decoded as $name => $hex) {
+            $name = strtoupper(trim((string)$name));
+            $hex = trim((string)$hex);
+            if ($name !== '') {
+                $cache[$name] = $hex !== '' ? $hex : qc_generate_color_hex($name);
+            }
+        }
+        return $cache;
+    }
+
+    // Legacy format: comma-separated names
+    $names = array_filter(array_map('trim', preg_split('/[\n,]+/', $raw)));
+    $cache = [];
+    foreach ($names as $name) {
+        $upper = strtoupper($name);
+        if ($upper !== '') {
+            $cache[$upper] = qc_generate_color_hex($upper);
+        }
+    }
+    return $cache;
+}
+
+/**
+ * Generate a deterministic default hex color from a name
+ *
+ * @param string $name Color name
+ * @return string Hex color code
+ */
+function qc_generate_color_hex(string $name): string {
+    $hash = crc32(strtoupper($name));
+    $hue = abs($hash % 360);
+    // Convert HSL(hue, 55%, 72%) to hex
+    $h = $hue / 360;
+    $s = 0.55;
+    $l = 0.72;
+    if ($s == 0) { $r = $g = $b = $l; }
+    else {
+        $hue2rgb = function($p, $q, $t) {
+            if ($t < 0) $t += 1;
+            if ($t > 1) $t -= 1;
+            if ($t < 1/6) return $p + ($q - $p) * 6 * $t;
+            if ($t < 1/2) return $q;
+            if ($t < 2/3) return $p + ($q - $p) * (2/3 - $t) * 6;
+            return $p;
+        };
+        $q = $l < 0.5 ? $l * (1 + $s) : $l + $s - $l * $s;
+        $p = 2 * $l - $q;
+        $r = $hue2rgb($p, $q, $h + 1/3);
+        $g = $hue2rgb($p, $q, $h);
+        $b = $hue2rgb($p, $q, $h - 1/3);
+    }
+    return sprintf('#%02x%02x%02x', (int)round($r*255), (int)round($g*255), (int)round($b*255));
+}
+
+/**
+ * Map of standard color names to hex codes
+ */
+function qc_color_hex_map(): array {
+    return [
+        'RED' => '#EF4444', 'BLUE' => '#3B82F6', 'GREEN' => '#22C55E',
+        'YELLOW' => '#EAB308', 'BLACK' => '#1F2937', 'WHITE' => '#F9FAFB',
+        'GRAY' => '#9CA3AF', 'GREY' => '#9CA3AF', 'PINK' => '#EC4899',
+        'PURPLE' => '#A855F7', 'ORANGE' => '#F97316', 'BROWN' => '#92400E',
+        'BEIGE' => '#D2B48C', 'CREAM' => '#FFFDD0', 'GOLD' => '#D4A017',
+        'SILVER' => '#C0C0C0', 'NAVY' => '#1E3A5F', 'CORAL' => '#FF7F50',
+        'TEAL' => '#14B8A6', 'BURGUNDY' => '#800020', 'IVORY' => '#FFFFF0',
+        'KHAKI' => '#C3B091', 'LAVENDER' => '#B57EDC', 'MINT' => '#98FB98',
+        'OLIVE' => '#808000', 'PEACH' => '#FFCBA4', 'RUST' => '#B7410E',
+        'SAGE' => '#BCB88A', 'TAN' => '#D2B48C', 'TURQUOISE' => '#40E0D0',
+        'MULTICOLOR' => '#C084FC', 'MULTI-COLOR' => '#C084FC',
+        'MULTICOLOUR' => '#C084FC', 'MULTI COLOUR' => '#C084FC',
+    ];
+}
+
+/**
+ * Check if a variant attribute string is a known color (standard or custom)
+ *
+ * @param string $attr The variant_attributes value (e.g., "RED", "RTY LSTR")
+ * @return bool True if the attribute is a recognized color
+ */
+function qc_is_color_variant(string $attr): bool {
+    $attr = strtoupper(trim($attr));
+    if ($attr === '') return false;
+
+    // Check standard colors
+    $standardColors = [
+        'RED','BLUE','GREEN','YELLOW','BLACK','WHITE','GRAY','GREY','PINK',
+        'PURPLE','ORANGE','BROWN','BEIGE','CREAM','GOLD','SILVER','NAVY',
+        'CORAL','TEAL','BURGUNDY','IVORY','KHAKI','LAVENDER','MINT','OLIVE',
+        'PEACH','RUST','SAGE','TAN','TURQUOISE','MULTICOLOR','MULTI-COLOR',
+        'MULTICOLOUR','MULTI COLOUR',
+    ];
+    if (in_array($attr, $standardColors, true)) return true;
+
+    // Check custom colors from settings
+    $customColors = qc_parse_custom_colors();
+    return isset($customColors[$attr]);
+}
+
+/**
+ * Get hex color for a variant attribute
+ * Returns hex for standard colors, the admin-chosen hex for custom colors, or null for non-colors
+ *
+ * @param string $attr The variant_attributes value
+ * @return string|null Hex color code or null if not a color
+ */
+function qc_variant_color_hex(string $attr): ?string {
+    if (!qc_is_color_variant($attr)) return null;
+
+    $upper = strtoupper(trim($attr));
+
+    // Standard colors have exact hex mappings
+    $map = qc_color_hex_map();
+    if (isset($map[$upper])) return $map[$upper];
+
+    // Custom colors: use the admin-chosen hex from settings
+    $customColors = qc_parse_custom_colors();
+    return $customColors[$upper] ?? qc_generate_color_hex($upper);
 }
 
 /**
