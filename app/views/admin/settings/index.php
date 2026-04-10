@@ -467,6 +467,81 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
     </div>
 
     <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom"><strong>Custom Variant Patterns</strong></div>
+        <div class="card-body">
+          <label class="form-label fw-semibold">Custom Color / Shade Names</label>
+          <textarea class="form-control" name="custom_variants" rows="5" placeholder="RTY LSTR, WST GLOW, CHRY PCK&#10;PINK MIRAGE&#10;NR TO BERRY"><?php echo htmlspecialchars($settings['custom_variants'] ?? ''); ?></textarea>
+          <small class="text-muted d-block mt-2">
+            Enter custom color or shade names that appear in product titles. These will be detected as variant attributes during CSV import and bulk variant detection.
+            Separate entries with commas or new lines. <strong>Example:</strong> <code>RTY LSTR, WST GLOW, CHRY PCK, PINK MIRAGE, NR TO BERRY</code>
+          </small>
+          <div class="mt-3 p-2 bg-light rounded">
+            <small class="text-muted">
+              <strong>How it works:</strong> If products are titled "AUC LIP GLS 7ML RTY LSTR" and "AUC LIP GLS 7ML WST GLOW",
+              adding "RTY LSTR" and "WST GLOW" here will merge them under one parent product "AUC LIP GLS 7ML".<br>
+              Also handles colors before sizes: "UC PH LIP STN & BLM PINK MIRAGE 1.2G" with "PINK MIRAGE" added here will extract base "UC PH LIP STN & BLM".
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+          <strong>Custom Colors</strong>
+          <span class="badge bg-secondary" id="colorCount"><?= count(array_filter(array_map('trim', preg_split('/[\n,]+/', $settings['custom_colors'] ?? '')))) ?> colors</span>
+        </div>
+        <div class="card-body">
+          <div id="colorChips" class="d-flex flex-wrap gap-2 mb-3" style="min-height:36px;">
+            <?php
+              $colorsRaw = trim((string)($settings['custom_colors'] ?? ''));
+              $colorsList = array_filter(array_map('trim', preg_split('/[\n,]+/', $colorsRaw)));
+              foreach ($colorsList as $color):
+            ?>
+              <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-1 py-2 px-3 color-chip" data-color="<?= htmlspecialchars($color) ?>">
+                <?= htmlspecialchars($color) ?>
+                <button type="button" class="btn-close btn-close-sm ms-1 color-remove" aria-label="Remove" style="font-size:0.6em;"></button>
+              </span>
+            <?php endforeach; ?>
+            <?php if (empty($colorsList)): ?>
+              <span class="text-muted small" id="noColorsMsg">No custom colors added yet. Add colors below or upload a CSV/TXT file.</span>
+            <?php endif; ?>
+          </div>
+
+          <!-- Add single color -->
+          <div class="input-group input-group-sm mb-3" style="max-width:400px;">
+            <input type="text" class="form-control" id="newColorInput" placeholder="e.g. RTY LSTR, WST GLOW" maxlength="100">
+            <button type="button" class="btn btn-outline-primary" id="addColorBtn">+ Add</button>
+          </div>
+
+          <!-- Upload CSV/TXT -->
+          <div class="border-top pt-3 mt-2">
+            <small class="text-muted d-block mb-2"><strong>Upload colors from file</strong> — CSV or TXT, one color per line or comma-separated</small>
+            <form method="post" action="/admin/settings/upload-colors" enctype="multipart/form-data" class="d-flex align-items-center gap-2" id="uploadColorsForm">
+              <?= csrf_field() ?>
+              <input type="file" class="form-control form-control-sm" name="color_file" accept=".csv,.txt" style="max-width:280px;" required>
+              <button type="submit" class="btn btn-sm btn-outline-success">
+                <i class="bi bi-upload me-1"></i>Upload &amp; Merge
+              </button>
+            </form>
+          </div>
+
+          <!-- Hidden field to store colors for form submission -->
+          <input type="hidden" name="custom_colors" id="customColorsHidden" value="<?= htmlspecialchars($settings['custom_colors'] ?? '') ?>">
+
+          <div class="mt-3 p-2 bg-light rounded">
+            <small class="text-muted">
+              <strong>Tip:</strong> Colors are automatically detected as variant suffixes during import and bulk merge.
+              They work at the end of titles (<code>AUC LIP GLS 7ML RTY LSTR</code>) and also before sizes (<code>UC PH LIP STN & BLM PINK MIRAGE 1.2G</code>).
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
       <button class="btn btn-primary">Save Catalog Settings</button>
     </div>
   </form>
@@ -479,6 +554,61 @@ $brand = htmlspecialchars($settings['brand_color'] ?? '#212529');
         textarea.value = slugs.join(', ');
       }
       boxes.forEach(b=>b.addEventListener('change', syncFromBoxes));
+    })();
+
+    // ── Custom Colors Tag Chips ──
+    (function(){
+      const chipsContainer = document.getElementById('colorChips');
+      const hiddenInput = document.getElementById('customColorsHidden');
+      const addInput = document.getElementById('newColorInput');
+      const addBtn = document.getElementById('addColorBtn');
+      const countBadge = document.getElementById('colorCount');
+      const noMsg = document.getElementById('noColorsMsg');
+
+      function getColors(){
+        const raw = hiddenInput.value.trim();
+        return raw ? raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean) : [];
+      }
+      function setColors(arr){
+        hiddenInput.value = arr.join(', ');
+        countBadge.textContent = arr.length + ' color' + (arr.length!==1?'s':'');
+      }
+      function renderChip(color){
+        const span = document.createElement('span');
+        span.className = 'badge bg-light text-dark border d-inline-flex align-items-center gap-1 py-2 px-3 color-chip';
+        span.dataset.color = color;
+        span.innerHTML = color + ' <button type="button" class="btn-close btn-close-sm ms-1 color-remove" aria-label="Remove" style="font-size:0.6em;"></button>';
+        return span;
+      }
+      function refreshChips(){
+        const colors = getColors();
+        chipsContainer.querySelectorAll('.color-chip').forEach(c=>c.remove());
+        if(noMsg) noMsg.style.display = colors.length ? 'none' : '';
+        colors.forEach(c=>chipsContainer.appendChild(renderChip(c)));
+      }
+
+      chipsContainer.addEventListener('click', function(e){
+        if(e.target.classList.contains('color-remove')){
+          const chip = e.target.closest('.color-chip');
+          const removed = chip.dataset.color;
+          const colors = getColors().filter(c=>c!==removed);
+          setColors(colors);
+          refreshChips();
+        }
+      });
+
+      function addColors(text){
+        const newOnes = text.split(/[\n,]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+        if(!newOnes.length) return;
+        const existing = getColors();
+        const merged = [...new Set([...existing, ...newOnes])];
+        setColors(merged);
+        refreshChips();
+        addInput.value = '';
+      }
+
+      addBtn.addEventListener('click', function(){ addColors(addInput.value); });
+      addInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){e.preventDefault(); addColors(addInput.value);} });
     })();
   </script>
 </div>

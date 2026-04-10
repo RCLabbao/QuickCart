@@ -164,10 +164,35 @@ function qc_ensure_permissions(array $slugs): void {
 }
 
 /**
+ * Load custom variant patterns from settings (merges custom_variants + custom_colors)
+ * Used by extraction functions to auto-load patterns when none are explicitly passed
+ *
+ * @return array List of custom variant/color strings
+ */
+function qc_load_custom_variants(): array {
+    static $cache = null;
+    if ($cache !== null) return $cache;
+
+    $merged = [];
+    foreach (['custom_variants', 'custom_colors'] as $key) {
+        $raw = trim((string)setting($key, ''));
+        if ($raw !== '') {
+            $items = array_filter(array_map('trim', preg_split('/[\n,]+/', $raw)));
+            $merged = array_merge($merged, $items);
+        }
+    }
+    $cache = array_values(array_unique($merged));
+    return $cache;
+}
+
+/**
  * Extract base title by removing variant patterns from the end
  * This is the SINGLE source of truth for variant detection
+ *
+ * @param string $title Product title
+ * @param array $customVariants Optional custom variant patterns from settings (e.g. ['RTY LSTR', 'WST GLOW'])
  */
-function qc_extract_base_title(string $title): string {
+function qc_extract_base_title(string $title, array $customVariants = []): string {
     $title = trim($title);
     if ($title === '') return '';
 
@@ -175,11 +200,13 @@ function qc_extract_base_title(string $title): string {
     // IMPORTANT: Keep in sync with qc_extract_variant_attribute() capture patterns below
     // Uses [\s\-]+ instead of \s+ to match both "PRODUCT XL" and "PRODUCT-XL"
     $patterns = [
+        '/[\s\-]+\d+(?:\.\d+)?(?:ML|KG|MG|OZ)\s*$/i',  // Weight/volume: 7ML, 150ML (multi-letter units only)
+        '/[\s\-]+\d+\.\d+G\s*$/i',                     // Weight in grams: 1.2G, 30.5G (decimal required to avoid "10G" false positive)
         '/[\s\-]+\d{2,3}(?:A|AA|B|BB|C|CC|D|DD|DDD|E|EE|F|FF|G|GG)\s*$/i', // Bra sizes: 38A, 36B, 34C, 32DD, 40DDD
         '/[\s\-]+\d{1,2}\.\d{1,2}\s*$/i',       // Decimal: 28.5, 29.5
-        '/[\s\-]+(?:2|3|4|5|6)(?:XL|XS)\s*$/i', // 2XL, 3XL, 4XL, 5XL, 2XS, 3XS
+        '/[\s\-]+(?:6XL|6XS|5XL|5XS|4XL|4XS|3XL|3XS|2XL|2XS)\s*$/i', // Numeric prefix: 2XL–6XL, 2XS–6XS
         '/[\s\-]+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
-        '/[\s\-]+(?:XXXXL|XXXXXL)\s*$/i',
+        '/[\s\-]+(?:XXXXXL|XXXXL|XXXL|XXL|XXXS|XXS)\s*$/i', // X-prefix: XXL=2XL, XXXL=3XL, XXXXL=4XL, XXXXXL=5XL, and S variants
         '/[\s\-]+(?:XL|XS)\s*$/i',
         '/[\s\-]+(?:LARGE|MEDIUM|SMALL)\s*$/i',
         '/[\s\-]+PACK\s+[LMS]\s*$/i',           // PACK L, PACK M, PACK S (for bikini briefs)
@@ -189,40 +216,60 @@ function qc_extract_base_title(string $title): string {
         '/[\s\-]+(?:MULTICOLOR|MULTI\-COLOR|MULTICOLOUR|MULTI COLOUR)\s*$/i',
     ];
 
-    $originalTitle = $title;
-    foreach ($patterns as $pattern) {
-        $newTitle = preg_replace($pattern, '', $title);
-        if ($newTitle === null) continue; // preg_replace failed
-        $newTitle = trim($newTitle);
+    // Append custom variant patterns from settings (auto-load if not passed)
+    $effectiveVariants = !empty($customVariants) ? $customVariants : qc_load_custom_variants();
+    foreach ($effectiveVariants as $cv) {
+        $cv = trim($cv);
+        if ($cv !== '') {
+            $patterns[] = '/[\s\-]+' . preg_quote($cv, '/') . '\s*$/i';
+        }
+    }
 
-        // Only accept if we removed something AND result is meaningful
-        if ($newTitle !== $title && strlen($newTitle) >= 5) {
-            // Verify we haven't removed too much (base title should have at least 2 words)
-            $wordCount = count(preg_split('/\s+/', $newTitle));
-            if ($wordCount >= 2) {
-                return $newTitle;
+    $originalTitle = $title;
+    // Iterate: keep stripping patterns until no more match
+    // This handles layered variants like "BASE COLOR 1.2G" → strip "1.2G" → "BASE COLOR" → strip "COLOR"
+    $changed = true;
+    while ($changed) {
+        $changed = false;
+        foreach ($patterns as $pattern) {
+            $newTitle = preg_replace($pattern, '', $title);
+            if ($newTitle === null) continue;
+            $newTitle = trim($newTitle);
+
+            if ($newTitle !== $title && strlen($newTitle) >= 5) {
+                $wordCount = count(preg_split('/\s+/', $newTitle));
+                if ($wordCount >= 2) {
+                    $title = $newTitle;
+                    $changed = true;
+                    break; // Restart loop with new title
+                }
             }
         }
     }
 
-    return $originalTitle; // Return original if no pattern matched
+    return $title;
 }
 
 /**
  * Extract variant attribute from title (e.g., "38A" from "Product 38A")
+ *
+ * @param string $title Product title
+ * @param array $customVariants Optional custom variant patterns from settings (e.g. ['RTY LSTR', 'WST GLOW'])
  */
-function qc_extract_variant_attribute(string $title): string {
+function qc_extract_variant_attribute(string $title, array $customVariants = []): string {
     $title = trim($title);
     if ($title === '') return '';
 
     // Variant patterns - must match the same ones used in qc_extract_base_title
     // Uses [\s\-]+ instead of \s+ to match both "PRODUCT XL" and "PRODUCT-XL"
     $patterns = [
+        '/[\s\-]+(\d+(?:\.\d+)?(?:ML|KG|MG|OZ))\s*$/i' => 1, // Weight/volume: 7ML, 150ML
+        '/[\s\-]+(\d+\.\d+G)\s*$/i' => 1,                     // Weight in grams: 1.2G (decimal required)
         '/[\s\-]+(\d{2,3}(?:A|AA|B|BB|C|CC|D|DD|DDD|E|EE|F|FF|G|GG))\s*$/i' => 1, // Bra sizes: 38A, 36B, 32DD
         '/[\s\-]+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal: 28.5
-        '/[\s\-]+((?:2|3|4|5|6)(?:XL|XS))\s*$/i' => 1, // 2XL, 3XL, 4XL, 5XL, 2XS, 3XS
+        '/[\s\-]+(6XL|6XS|5XL|5XS|4XL|4XS|3XL|3XS|2XL|2XS)\s*$/i' => 1, // Numeric prefix: 2XL–6XL, 2XS–6XS
         '/[\s\-]+(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i' => 1,
-        '/[\s\-]+(XXXXL|XXXXXL)\s*$/i' => 1,
+        '/[\s\-]+(XXXXXL|XXXXL|XXXL|XXL|XXXS|XXS)\s*$/i' => 1, // X-prefix: XXL=2XL, XXXL=3XL, etc.
         '/[\s\-]+(XL|XS)\s*$/i'                  => 1,
         '/[\s\-]+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
         '/[\s\-]+(PACK\s+[LMS])\s*$/i'           => 1, // PACK L, PACK M, PACK S (must come before single letter)
@@ -232,22 +279,40 @@ function qc_extract_variant_attribute(string $title): string {
         '/[\s\-]+(MULTICOLOR|MULTI\-COLOR|MULTICOLOUR|MULTI COLOUR)\s*$/i' => 1,
     ];
 
-    foreach ($patterns as $pattern => $groupIndex) {
-        if (preg_match($pattern, $title, $matches)) {
-            $variant = strtoupper(trim($matches[$groupIndex]));
-            // Validate: the base title must be different from the original
-            // and must pass the same guards as qc_extract_base_title()
-            $baseTitle = trim(preg_replace($pattern, '', $title));
-            if ($baseTitle !== $title && strlen($baseTitle) >= 5) {
-                $wordCount = count(preg_split('/\s+/', $baseTitle));
-                if ($wordCount >= 2) {
-                    return $variant;
+    // Append custom variant patterns from settings (auto-load if not passed)
+    $effectiveVariants = !empty($customVariants) ? $customVariants : qc_load_custom_variants();
+    foreach ($effectiveVariants as $cv) {
+        $cv = trim($cv);
+        if ($cv !== '') {
+            $patterns['/[\s\-]+(' . preg_quote($cv, '/') . ')\s*$/i'] = 1;
+        }
+    }
+
+    // Collect all matched variants by iterating (handles layered variants like color + weight)
+    $foundVariants = [];
+    $current = $title;
+    $changed = true;
+    while ($changed) {
+        $changed = false;
+        foreach ($patterns as $pattern => $groupIndex) {
+            if (preg_match($pattern, $current, $matches)) {
+                $variant = strtoupper(trim($matches[$groupIndex]));
+                $remaining = trim(preg_replace($pattern, '', $current));
+                if ($remaining !== $current && strlen($remaining) >= 5) {
+                    $wordCount = count(preg_split('/\s+/', $remaining));
+                    if ($wordCount >= 2) {
+                        $foundVariants[] = $variant;
+                        $current = $remaining;
+                        $changed = true;
+                        break;
+                    }
                 }
             }
         }
     }
 
-    return '';
+    // Return all variants joined, or empty if nothing found
+    return implode(' ', $foundVariants);
 }
 
 /**

@@ -269,6 +269,14 @@ class AdminSyncController extends Controller
     private function processRows(array $rows, bool $dryRun, array $overrides = []): array
     {
         $pdo = DB::pdo();
+
+        // Load custom variant patterns from settings (comma or newline separated)
+        $customVariantsRaw = trim((string)\App\Core\setting('custom_variants', ''));
+        $customColorsRaw = trim((string)\App\Core\setting('custom_colors', ''));
+        $customVariants = array_filter(array_map('trim', preg_split('/[\s,]+/', $customVariantsRaw)));
+        $customColors = array_filter(array_map('trim', preg_split('/[\s,]+/', $customColorsRaw)));
+        $allCustomVariants = array_values(array_unique(array_merge($customVariants, $customColors)));
+
         $updatePrice = array_key_exists('update_price', $overrides)
             ? (bool)$overrides['update_price']
             : ((string)\App\Core\setting('sync_update_price','1') === '1');
@@ -396,10 +404,10 @@ class AdminSyncController extends Controller
                 // Auto-detect variants during CSV import using the shared helper functions
                 if ($hasVariantsColumn) {
                     // First, try extracting variant from the title using shared function (handles sizes AND colors)
-                    $extracted = \App\Core\qc_extract_variant_attribute($title);
+                    $extracted = \App\Core\qc_extract_variant_attribute($title, $allCustomVariants);
                     if ($extracted !== '') {
                         $variantAttributes = $extracted;
-                        $parentTitle = \App\Core\qc_extract_base_title($title);
+                        $parentTitle = \App\Core\qc_extract_base_title($title, $allCustomVariants);
                     } elseif ($ptype !== '' && strtoupper($ptype) !== strtoupper($title)) {
                         // Only use ProductType column if title-based extraction found nothing
                         // AND the ptype is different from the title

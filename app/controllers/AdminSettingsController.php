@@ -91,6 +91,8 @@ class AdminSettingsController extends Controller
             $pairs = [
                 'hidden_collections' => trim((string)($_POST['hidden_collections'] ?? '')),
                 'hide_zero_price' => isset($_POST['hide_zero_price']) ? '1' : '0',
+                'custom_variants' => trim((string)($_POST['custom_variants'] ?? '')),
+                'custom_colors' => trim((string)($_POST['custom_colors'] ?? '')),
             ];
         } elseif ($scope === 'banners') {
             $pairs = [
@@ -150,6 +152,60 @@ class AdminSettingsController extends Controller
         }
         $_SESSION['settings_flash'] = 'City fee deleted.';
         $this->redirect('/admin/settings?tab=shipping');
+    }
+
+    /**
+     * Upload custom colors from CSV/TXT file and merge into existing colors
+     */
+    public function uploadColors(): void
+    {
+        if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/settings?tab=catalog'); }
+        if (empty($_FILES['color_file']['tmp_name']) || $_FILES['color_file']['error'] !== UPLOAD_ERR_OK) {
+            $_SESSION['settings_flash'] = 'Please select a valid file to upload.';
+            $this->redirect('/admin/settings?tab=catalog');
+        }
+
+        $tmpPath = $_FILES['color_file']['tmp_name'];
+        $ext = strtolower(pathinfo($_FILES['color_file']['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'txt'], true)) {
+            $_SESSION['settings_flash'] = 'Only .csv and .txt files are accepted.';
+            $this->redirect('/admin/settings?tab=catalog');
+        }
+
+        // Read file contents
+        $content = file_get_contents($tmpPath);
+        // Handle UTF-8 BOM
+        if (str_starts_with($content, "\xEF\xBB\xBF")) {
+            $content = substr($content, 3);
+        }
+        // Parse: split by newlines and commas, trim each entry
+        $newColors = array_filter(array_map('trim', preg_split('/[\n\r,]+/', $content)));
+        $newColors = array_filter($newColors, fn($c) => $c !== '');
+
+        if (empty($newColors)) {
+            $_SESSION['settings_flash'] = 'No color names found in the uploaded file.';
+            $this->redirect('/admin/settings?tab=catalog');
+        }
+
+        // Merge with existing colors
+        $pdo = DB::pdo();
+        $stmt = $pdo->prepare("SELECT `value` FROM settings WHERE `key` = ?");
+        $stmt->execute(['custom_colors']);
+        $existing = trim((string)$stmt->fetchColumn());
+        $existingColors = $existing !== '' ? array_filter(array_map('trim', preg_split('/[\n,]+/', $existing))) : [];
+
+        $merged = array_values(array_unique(array_merge($existingColors, $newColors)));
+        $mergedValue = implode(", ", $merged);
+
+        $stmt = $pdo->prepare('INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)');
+        $stmt->execute(['custom_colors', $mergedValue]);
+
+        // Clear caches
+        if (function_exists('apcu_delete')) { @apcu_delete('settings'); }
+        try { \App\Core\fresh_settings(); } catch (\Throwable $e) {}
+
+        $_SESSION['settings_flash'] = count($newColors) . ' color(s) imported. Total: ' . count($merged) . ' colors.';
+        $this->redirect('/admin/settings?tab=catalog');
     }
 }
 
