@@ -173,19 +173,20 @@ function qc_extract_base_title(string $title): string {
 
     // Variant patterns to remove - ordered from most specific to least specific
     // IMPORTANT: Keep in sync with qc_extract_variant_attribute() capture patterns below
+    // Uses [\s\-]+ instead of \s+ to match both "PRODUCT XL" and "PRODUCT-XL"
     $patterns = [
-        '/\s+\d{2,3}(?:A|AA|B|BB|C|CC|D|DD|DDD|E|EE|F|FF|G|GG)\s*$/i', // Bra sizes: 38A, 36B, 34C, 32DD, 40DDD
-        '/\s+\d{1,2}\.\d{1,2}\s*$/i',       // Decimal: 28.5, 29.5
-        '/\s+(?:2|3|4|5|6)(?:XL|XS)\s*$/i', // 2XL, 3XL, 4XL, 5XL, 2XS, 3XS
-        '/\s+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
-        '/\s+(?:XXXXL|XXXXXL)\s*$/i',
-        '/\s+(?:XL|XS)\s*$/i',
-        '/\s+(?:LARGE|MEDIUM|SMALL)\s*$/i',
-        '/\s+PACK\s+[LMS]\s*$/i',           // PACK L, PACK M, PACK S (for bikini briefs)
-        '/\s+[LMS]\s*$/i',                  // Single letter sizes
-        '/\s+\d{2}\s*$/',                   // Two-digit standalone: 36, 38 (clothing sizes only)
-        '/\s+(?:RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY|CORAL|TEAL|BURGUNDY|IVORY|KHAKI|LAVENDER|MINT|OLIVE|PEACH|RUST|SAGE|TAN|TURQUOISE)\s*$/i',
-        '/\s+(?:MULTICOLOR|MULTI-COLOR|MULTICOLOUR|MULTI COLOUR)\s*$/i',
+        '/[\s\-]+\d{2,3}(?:A|AA|B|BB|C|CC|D|DD|DDD|E|EE|F|FF|G|GG)\s*$/i', // Bra sizes: 38A, 36B, 34C, 32DD, 40DDD
+        '/[\s\-]+\d{1,2}\.\d{1,2}\s*$/i',       // Decimal: 28.5, 29.5
+        '/[\s\-]+(?:2|3|4|5|6)(?:XL|XS)\s*$/i', // 2XL, 3XL, 4XL, 5XL, 2XS, 3XS
+        '/[\s\-]+(?:EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i',
+        '/[\s\-]+(?:XXXXL|XXXXXL)\s*$/i',
+        '/[\s\-]+(?:XL|XS)\s*$/i',
+        '/[\s\-]+(?:LARGE|MEDIUM|SMALL)\s*$/i',
+        '/[\s\-]+PACK\s+[LMS]\s*$/i',           // PACK L, PACK M, PACK S (for bikini briefs)
+        '/[\s\-]+[LMS]\s*$/i',                  // Single letter sizes
+        '/[\s\-]+\d{2}\s*$/',                   // Two-digit standalone: 36, 38 (clothing sizes only)
+        '/[\s\-]+(?:RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY|CORAL|TEAL|BURGUNDY|IVORY|KHAKI|LAVENDER|MINT|OLIVE|PEACH|RUST|SAGE|TAN|TURQUOISE)\s*$/i',
+        '/[\s\-]+(?:MULTICOLOR|MULTI\-COLOR|MULTICOLOUR|MULTI COLOUR)\s*$/i',
     ];
 
     $originalTitle = $title;
@@ -215,19 +216,20 @@ function qc_extract_variant_attribute(string $title): string {
     if ($title === '') return '';
 
     // Variant patterns - must match the same ones used in qc_extract_base_title
+    // Uses [\s\-]+ instead of \s+ to match both "PRODUCT XL" and "PRODUCT-XL"
     $patterns = [
-        '/\s+(\d{2,3}(?:A|AA|B|BB|C|CC|D|DD|DDD|E|EE|F|FF|G|GG))\s*$/i' => 1, // Bra sizes: 38A, 36B, 32DD
-        '/\s+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal: 28.5
-        '/\s+((?:2|3|4|5|6)(?:XL|XS))\s*$/i' => 1, // 2XL, 3XL, 4XL, 5XL, 2XS, 3XS
-        '/\s+(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i' => 1,
-        '/\s+(XXXXL|XXXXXL)\s*$/i' => 1,
-        '/\s+(XL|XS)\s*$/i'                  => 1,
-        '/\s+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
-        '/\s+(PACK\s+[LMS])\s*$/i'           => 1, // PACK L, PACK M, PACK S (must come before single letter)
-        '/\s+([LMS])\s*$/i'                  => 1, // Single letter
-        '/\s+(\d{2})\s*$/'                   => 1, // Two-digit numbers (clothing sizes: 36, 38)
-        '/\s+(RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY|CORAL|TEAL|BURGUNDY|IVORY|KHAKI|LAVENDER|MINT|OLIVE|PEACH|RUST|SAGE|TAN|TURQUOISE)\s*$/i' => 1,
-        '/\s+(MULTICOLOR|MULTI-COLOR|MULTICOLOUR|MULTI COLOUR)\s*$/i' => 1,
+        '/[\s\-]+(\d{2,3}(?:A|AA|B|BB|C|CC|D|DD|DDD|E|EE|F|FF|G|GG))\s*$/i' => 1, // Bra sizes: 38A, 36B, 32DD
+        '/[\s\-]+(\d{1,2}\.\d{1,2})\s*$/i'       => 1, // Decimal: 28.5
+        '/[\s\-]+((?:2|3|4|5|6)(?:XL|XS))\s*$/i' => 1, // 2XL, 3XL, 4XL, 5XL, 2XS, 3XS
+        '/[\s\-]+(EXTRA LARGE|EXTRA SMALL|EXTRA LONG|EXTRA SHORT)\s*$/i' => 1,
+        '/[\s\-]+(XXXXL|XXXXXL)\s*$/i' => 1,
+        '/[\s\-]+(XL|XS)\s*$/i'                  => 1,
+        '/[\s\-]+(LARGE|MEDIUM|SMALL)\s*$/i'     => 1,
+        '/[\s\-]+(PACK\s+[LMS])\s*$/i'           => 1, // PACK L, PACK M, PACK S (must come before single letter)
+        '/[\s\-]+([LMS])\s*$/i'                  => 1, // Single letter
+        '/[\s\-]+(\d{2})\s*$/'                   => 1, // Two-digit numbers (clothing sizes: 36, 38)
+        '/[\s\-]+(RED|BLUE|GREEN|YELLOW|BLACK|WHITE|GRAY|GREY|PINK|PURPLE|ORANGE|BROWN|BEIGE|CREAM|GOLD|SILVER|NAVY|CORAL|TEAL|BURGUNDY|IVORY|KHAKI|LAVENDER|MINT|OLIVE|PEACH|RUST|SAGE|TAN|TURQUOISE)\s*$/i' => 1,
+        '/[\s\-]+(MULTICOLOR|MULTI\-COLOR|MULTICOLOUR|MULTI COLOUR)\s*$/i' => 1,
     ];
 
     foreach ($patterns as $pattern => $groupIndex) {
