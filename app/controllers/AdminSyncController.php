@@ -59,6 +59,9 @@ class AdminSyncController extends Controller
     public function run(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/sync'); }
+        // SQL Server syncs can process many rows and exceed PHP's default 30s limit.
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
         $s = fn($k,$d='') => (string)\App\Core\setting($k,$d);
         $dateFrom = trim((string)($_POST['date_from'] ?? date('Y-m-01')));
         $dateTo   = trim((string)($_POST['date_to'] ?? date('Y-m-t')));
@@ -83,6 +86,10 @@ class AdminSyncController extends Controller
     public function uploadCsv(): void
     {
         if (!CSRF::check($_POST['_token'] ?? '')) { $this->redirect('/admin/sync'); }
+        // CSV/XLSX imports can be large and exceed PHP's default 30s limit.
+        // Remove the per-request time limit and bump memory for this request only.
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
         if (empty($_FILES['csv']['tmp_name'])) { $_SESSION['error'] = 'No file uploaded.'; $this->redirect('/admin/sync'); return; }
         $dryRun = isset($_POST['dry_run']);
         $rows = [];
