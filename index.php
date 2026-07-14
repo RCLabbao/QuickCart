@@ -217,6 +217,7 @@ $router->post('/admin/sync/save', 'AdminSyncController@save', ['perm' => 'sync.m
 $router->post('/admin/sync/test', 'AdminSyncController@test', ['perm' => 'sync.run']);
 $router->post('/admin/sync/run', 'AdminSyncController@run', ['perm' => 'sync.run']);
 $router->post('/admin/sync/upload', 'AdminSyncController@uploadCsv', ['perm' => 'sync.run']);
+$router->post('/admin/sync/upload-chunk', 'AdminSyncController@uploadChunk', ['perm' => 'sync.run']);
 $router->post('/admin/products/(?P<id>\d+)/images/sort', 'AdminProductsController@sortImages', ['perm' => 'products.write']);
 $router->post('/admin/products/quick-update', 'AdminProductsController@quickUpdate', ['perm' => 'products.write']);
 $router->post('/admin/products/adjust-prices', 'AdminProductsController@adjustPrices', ['perm' => 'products.write']);

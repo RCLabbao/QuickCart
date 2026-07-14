@@ -23,7 +23,7 @@
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-bottom"><h5 class="mb-0">CSV/XLSX Import</h5></div>
           <div class="card-body">
-            <form method="post" action="/admin/sync/upload" enctype="multipart/form-data">
+            <form method="post" action="/admin/sync/upload" enctype="multipart/form-data" id="csvImportForm">
               <?= csrf_field() ?>
               <div class="mb-2">
                 <label class="form-label">Upload CSV or XLSX</label>
@@ -69,7 +69,19 @@
               </div>
 
               <div class="mt-3">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-2"></i>Import File</button>
+                <button class="btn btn-primary" type="submit" id="csvImportBtn"><i class="bi bi-upload me-2"></i>Import File</button>
+              </div>
+
+              <div id="csvProgress" class="mt-3" hidden>
+                <div class="progress" role="progressbar" aria-label="Import progress" aria-valuemin="0" aria-valuemax="100">
+                  <div id="csvProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+                </div>
+                <div id="csvProgressText" class="form-text mt-1">Starting…</div>
+                <div id="csvSummary" class="alert alert-success mt-2 mb-0" hidden></div>
+                <div id="csvErrorBox" class="alert alert-danger mt-2 mb-0" hidden>
+                  <div id="csvErrorText"></div>
+                  <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="csvRetryBtn" hidden>Retry last chunk</button>
+                </div>
               </div>
             </form>
           </div>
@@ -193,4 +205,133 @@
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  const form = document.getElementById('csvImportForm');
+  if (!form) return;
+
+  const progressBox = document.getElementById('csvProgress');
+  const bar = document.getElementById('csvProgressBar');
+  const progressText = document.getElementById('csvProgressText');
+  const summaryBox = document.getElementById('csvSummary');
+  const errorBox = document.getElementById('csvErrorBox');
+  const errorText = document.getElementById('csvErrorText');
+  const retryBtn = document.getElementById('csvRetryBtn');
+  const submitBtn = document.getElementById('csvImportBtn');
+  const fileInput = form.querySelector('input[name=csv]');
+  const tokenInput = form.querySelector('input[name="_token"]');
+
+  // One state object so retry can resume from the last failed offset.
+  const state = { token: null, total: 0, offset: 0, running: { seen:0, created:0, updated:0, errors:0 } };
+
+  const getToken = () => tokenInput ? tokenInput.value : '';
+  const isDryOrDebug = () => form.querySelector('#csv_dry_run')?.checked || form.querySelector('#csv_debug')?.checked;
+  const setBusy = (busy) => { submitBtn.disabled = busy; fileInput.disabled = busy; };
+
+  function showProgress(pct, text) {
+    progressBox.hidden = false;
+    bar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+    if (text) progressText.textContent = text;
+  }
+  function showError(msg, withRetry) {
+    errorBox.hidden = false; errorText.textContent = msg; retryBtn.hidden = !withRetry;
+  }
+  function clearError() { errorBox.hidden = true; errorText.textContent = ''; retryBtn.hidden = true; }
+
+  async function postJSON(body) {
+    const resp = await fetch('/admin/sync/upload-chunk', { method: 'POST', body });
+    const data = await resp.json().catch(() => ({ ok:false, error:'Non-JSON response (server error).' }));
+    if (!resp.ok || !data.ok) {
+      const err = new Error(data.error || ('HTTP ' + resp.status));
+      err.data = data; err.status = resp.status;
+      throw err;
+    }
+    return data;
+  }
+
+  function overridesFromForm() {
+    return {
+      sync_update_price:     form.querySelector('#csv_sync_update_price')?.checked ? '1' : '',
+      sync_update_title:     form.querySelector('#csv_sync_update_title')?.checked ? '1' : '',
+      sync_update_collection:form.querySelector('#csv_sync_update_collection')?.checked ? '1' : '',
+      sync_update_images:   form.querySelector('input[name="sync_update_images"]')?.checked ? '1' : '',
+    };
+  }
+
+  function finishOk() {
+    setBusy(false);
+    bar.style.width = '100%';
+    progressText.textContent = 'Import complete.';
+    const r = state.running;
+    summaryBox.innerHTML = `<strong>Done.</strong> Products matched: ${r.seen}, created: ${r.created}, updated: ${r.updated}, errors: ${r.errors}.`;
+    summaryBox.hidden = false;
+  }
+
+  // Process chunks from state.offset until done or a hard failure.
+  async function processLoop() {
+    clearError();
+    while (true) {
+      try {
+        const fd = new FormData();
+        fd.append('token', state.token);
+        fd.append('offset', String(state.offset));
+        fd.append('_token', getToken());
+        const d = await postJSON(fd);
+        state.offset = d.offset;
+        state.running = { seen:d.seen, created:d.created, updated:d.updated, errors:d.errors };
+        const pct = state.total > 0 ? Math.round((state.offset / state.total) * 100) : 100;
+        showProgress(pct, `Processed ${Math.min(state.offset, state.total)} / ${state.total} rows — created ${state.running.created}, updated ${state.running.updated}, errors ${state.running.errors}`);
+        if (d.done || !d.continue) { finishOk(); return; }
+      } catch (e) {
+        // Network/5xx: rows already committed are safe (FSC idempotent), so offer retry from state.offset.
+        showError('Chunk failed at row ' + state.offset + ': ' + e.message + '. Already-saved rows will not duplicate on retry.', true);
+        setBusy(false);
+        return;
+      }
+    }
+  }
+
+  async function startImport() {
+    if (!fileInput.files[0]) return;
+    clearError();
+    summaryBox.hidden = true;
+    setBusy(true);
+    showProgress(0, 'Uploading & parsing file…');
+
+    let initData;
+    try {
+      const fd = new FormData();
+      fd.append('init', '1');
+      fd.append('_token', getToken());
+      fd.append('csv', fileInput.files[0]);
+      Object.entries(overridesFromForm()).forEach(([k,v]) => fd.append(k, v));
+      initData = await postJSON(fd);
+    } catch (e) {
+      // Server says use the normal single-shot path (dry-run/debug, or other fallback).
+      if (e.data && e.data.fallback) { setBusy(false); form.submit(); return; }
+      showError('Upload failed: ' + e.message, false);
+      setBusy(false); return;
+    }
+    if (initData.fallback) { setBusy(false); form.submit(); return; }
+
+    state.token = initData.token;
+    state.total = initData.total;
+    state.offset = 0;
+    state.running = { seen:0, created:0, updated:0, errors:0 };
+    await processLoop();
+  }
+
+  form.addEventListener('submit', async function (e) {
+    if (isDryOrDebug()) return;            // let the normal POST handle dry-run/debug
+    e.preventDefault();
+    await startImport();
+  });
+
+  retryBtn.addEventListener('click', async function () {
+    setBusy(true);
+    await processLoop();                    // resumes from state.offset
+  });
+})();
+</script>
 

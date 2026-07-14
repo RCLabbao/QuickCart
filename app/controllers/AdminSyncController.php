@@ -4,6 +4,14 @@ use App\Core\Controller; use App\Core\DB; use App\Core\CSRF; use App\Core\SQLSer
 
 class AdminSyncController extends Controller
 {
+    /** Rows processed per chunked-import HTTP request — kept small so each
+     *  request finishes well under the web-server/FastCGI timeout. */
+    public const CHUNK_ROWS = 200;
+
+    /** Lifetime (seconds) of temp import files in sys_get_temp_dir(); older
+     *  ones are garbage-collected at the start of the next init request. */
+    public const IMPORT_TTL = 3600;
+
     public function index(): void
     {
         $pdo = DB::pdo();
@@ -92,9 +100,237 @@ class AdminSyncController extends Controller
         @ini_set('memory_limit', '512M');
         if (empty($_FILES['csv']['tmp_name'])) { $_SESSION['error'] = 'No file uploaded.'; $this->redirect('/admin/sync'); return; }
         $dryRun = isset($_POST['dry_run']);
-        $rows = [];
         $tmp = $_FILES['csv']['tmp_name'];
         $ext = strtolower(pathinfo($_FILES['csv']['name'] ?? '', PATHINFO_EXTENSION));
+        $debugInfo = [];
+        try {
+            [$rows, $debugInfo] = $this->parseFile($tmp, $ext, isset($_POST['debug']));
+        } catch (\Throwable $e) {
+            $_SESSION['error'] = $e->getMessage();
+            $this->redirect('/admin/sync'); return;
+        }
+        try {
+            $overrides = [
+                'update_price' => isset($_POST['sync_update_price']),
+                'update_title' => isset($_POST['sync_update_title']),
+                'update_collection' => isset($_POST['sync_update_collection']),
+            ];
+            if ($dryRun) { $overrides['collect_preview'] = true; }
+            if (isset($_POST['debug'])) { $overrides['collect_debug'] = true; }
+            $result = $this->processRows($rows, $dryRun, $overrides);
+            if (!empty($debugInfo)) { $result['debug'] = $result['debug'] ?? []; $result['debug']['info'] = $debugInfo; }
+            if (($dryRun && !empty($result['preview'])) || (!empty($overrides['collect_debug']))) {
+                $this->adminView('admin/sync/preview', [
+                    'title' => $dryRun ? 'CSV/XLSX Dry-run Preview' : 'CSV/XLSX Import Debugger',
+                    'result' => $result,
+                    'overrides' => $overrides,
+                ]);
+                return;
+            }
+            $_SESSION['success'] = 'File processed. Products matched: ' . $result['seen'] . ', created: ' . $result['created'] . ', updated: ' . $result['updated'] . ', errors: ' . $result['errors'];
+        } catch (\Throwable $e) {
+            $_SESSION['error'] = 'Import failed: '.$e->getMessage();
+        }
+        $this->redirect('/admin/sync');
+    }
+
+    /**
+     * Chunked CSV/XLSX import endpoint (JSON). Processes a large file across
+     * many short HTTP requests so no single request approaches the web-server
+     * timeout. Two modes:
+     *
+     *  - init:   POST with init=1 + the file. Parses it, stores rows in a temp
+     *            JSON file keyed by a random token, returns {token, total, chunkSize}.
+     *  - chunk:  POST with token + offset. Processes CHUNK_ROWS rows at that
+     *            offset via processRows() (which commits its own transaction per
+     *            chunk), accumulates counts, returns progress + a `continue` flag.
+     *
+     * Dry-run/debug are NOT supported here — those render an aggregated preview
+     * page that can't be split across requests; the front-end falls back to the
+     * single-shot /admin/sync/upload form for those modes.
+     */
+    public function uploadChunk(): void
+    {
+        header('Content-Type: application/json');
+        if (!CSRF::check($_POST['_token'] ?? '')) { http_response_code(403); echo json_encode(['ok'=>false,'error'=>'Invalid session token']); return; }
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
+
+        try {
+            if (($_POST['init'] ?? '0') === '1') {
+                $resp = $this->chunkInit();
+            } else {
+                $resp = $this->chunkStep();
+            }
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+            return;
+        }
+        echo json_encode($resp);
+    }
+
+    private function chunkInit(): array
+    {
+        if (empty($_FILES['csv']['tmp_name'])) { throw new \RuntimeException('No file uploaded.'); }
+        // Dry-run/debug need the aggregated preview page — tell the browser to
+        // fall back to the normal single-shot form.
+        if (isset($_POST['dry_run']) || isset($_POST['debug'])) {
+            return ['ok'=>true, 'fallback'=>true];
+        }
+
+        $this->gcImportTemp();
+
+        $tmp = $_FILES['csv']['tmp_name'];
+        $ext = strtolower(pathinfo($_FILES['csv']['name'] ?? '', PATHINFO_EXTENSION));
+        [$rows] = $this->parseFile($tmp, $ext, false);
+        if (empty($rows)) { throw new \RuntimeException('No rows found in file.'); }
+
+        $token = bin2hex(random_bytes(16));
+        $rowsPath = $this->importRowsPath($token);
+        $metaPath = $this->importMetaPath($token);
+
+        // Persist parsed rows so chunk requests don't re-parse the file.
+        $written = file_put_contents($rowsPath, json_encode($rows), LOCK_EX);
+        if ($written === false) { throw new \RuntimeException('Could not store parsed rows in temp dir.'); }
+
+        $overrides = [
+            'update_price' => isset($_POST['sync_update_price']),
+            'update_title' => isset($_POST['sync_update_title']),
+            'update_collection' => isset($_POST['sync_update_collection']),
+            'update_images' => isset($_POST['sync_update_images']),
+        ];
+        $meta = [
+            'total' => count($rows),
+            'dryRun' => false,
+            'overrides' => $overrides,
+            'seen' => 0, 'created' => 0, 'updated' => 0, 'errors' => 0,
+            'created_at' => time(),
+        ];
+        file_put_contents($metaPath, json_encode($meta), LOCK_EX);
+
+        return [
+            'ok' => true,
+            'token' => $token,
+            'total' => $meta['total'],
+            'chunkSize' => self::CHUNK_ROWS,
+        ];
+    }
+
+    private function chunkStep(): array
+    {
+        $token = (string)($_POST['token'] ?? '');
+        if (!preg_match('/^[0-9a-f]{32}$/', $token)) { throw new \RuntimeException('Invalid token.'); }
+        $offset = max(0, (int)($_POST['offset'] ?? 0));
+
+        $rowsPath = $this->importRowsPath($token);
+        $metaPath = $this->importMetaPath($token);
+        if (!is_file($rowsPath) || !is_file($metaPath)) { throw new \RuntimeException('Import session expired. Please re-upload the file.'); }
+
+        $meta = json_decode((string)file_get_contents($metaPath), true);
+        if (!is_array($meta)) { throw new \RuntimeException('Corrupt import session.'); }
+        $total = (int)($meta['total'] ?? 0);
+
+        $rows = json_decode((string)file_get_contents($rowsPath), true);
+        if (!is_array($rows)) { throw new \RuntimeException('Corrupt import rows.'); }
+
+        $slice = array_slice($rows, $offset, self::CHUNK_ROWS);
+        $res = $this->processRows($slice, (bool)($meta['dryRun'] ?? false), $meta['overrides'] ?? []);
+
+        // Accumulate this chunk's counts into the manifest so a final summary survives.
+        foreach (['seen','created','updated','errors'] as $k) {
+            $meta[$k] = ($meta[$k] ?? 0) + (int)($res[$k] ?? 0);
+        }
+        $newOffset = $offset + self::CHUNK_ROWS;
+        $done = $newOffset >= $total;
+
+        if ($done) {
+            // Persist final tallies before cleanup is pointless (file's going away),
+            // but we return them from the in-memory $meta so the browser has the totals.
+            @unlink($rowsPath);
+            @unlink($metaPath);
+        } else {
+            file_put_contents($metaPath, json_encode($meta), LOCK_EX);
+        }
+
+        $continue = $this->shouldContinueAfterChunk($res);
+
+        return [
+            'ok' => true,
+            'offset' => $newOffset,
+            'total' => $total,
+            'done' => $done,
+            'continue' => $continue,
+            'seen' => (int)$meta['seen'],
+            'created' => (int)$meta['created'],
+            'updated' => (int)$meta['updated'],
+            'errors' => (int)$meta['errors'],
+        ];
+    }
+
+    /**
+     * Decide whether to keep processing subsequent chunks after this one finishes.
+     * Called once per chunk with that chunk's processRows() result.
+     *
+     * Trade-offs to consider:
+     *  - Always continue: import completes even if some rows error; you get the
+     *    full summary and can fix bad rows later. Best when FSC idempotency makes
+     *    re-runs safe (each chunk already committed, rows are INSERT/UPDATE-by-FSC).
+     *  - Abort on first chunk with errors: stops early to surface data problems,
+     *    but rows from earlier chunks are already committed.
+     *  - Abort only on hard failure (server down / 5xx): network blips shouldn't
+     *    lose work; row-level errors are reported in the summary regardless, and
+     *    the browser already offers a retry button on network failure.
+     *
+     * Return true to continue, false to stop the loop (browser stops and shows the
+     * summary so far).
+     *
+     * @param array $chunkResult  processRows() result for the chunk just processed
+     */
+    private function shouldContinueAfterChunk(array $chunkResult): bool
+    {
+        // TODO(user): implement your policy here. Default = always continue.
+        return true;
+    }
+
+    private function importRowsPath(string $token): string
+    {
+        return sys_get_temp_dir() . '/qc_import_' . $token . '.json';
+    }
+
+    private function importMetaPath(string $token): string
+    {
+        return sys_get_temp_dir() . '/qc_import_' . $token . '.meta.json';
+    }
+
+    /** Remove stale import temp files older than IMPORT_TTL. */
+    private function gcImportTemp(): void
+    {
+        $dir = sys_get_temp_dir();
+        $cutoff = time() - self::IMPORT_TTL;
+        foreach ((glob($dir . '/qc_import_*.json') ?: []) as $f) {
+            if (is_file($f) && @filemtime($f) < $cutoff) { @unlink($f); }
+        }
+        foreach ((glob($dir . '/qc_import_*.meta.json') ?: []) as $f) {
+            if (is_file($f) && @filemtime($f) < $cutoff) { @unlink($f); }
+        }
+    }
+
+    /**
+     * Parse an uploaded CSV/XLSX file into the normalized row shape used by
+     * processRows(). Shared by the single-shot uploadCsv() and the chunked
+     * uploadChunk() paths so header-mapping logic lives in one place.
+     *
+     * @param string $tmp      Uploaded file path ($_FILES['...']['tmp_name'])
+     * @param string $ext      Lowercase extension: 'xlsx' or anything else => CSV
+     * @param bool   $collectDebug  Build the parser debug info block (CSV only)
+     * @return array{0:array,1:array}  [$rows, $debugInfo] — $debugInfo may be empty
+     * @throws \RuntimeException  On empty/unsupported files (caller surfaces to user)
+     */
+    private function parseFile(string $tmp, string $ext, bool $collectDebug = false): array
+    {
+        $rows = [];
+        $debugInfo = [];
         if ($ext === 'xlsx') {
             // Support XLSX via PhpSpreadsheet if available, otherwise try lightweight Zip/XML fallback
             if (class_exists('PhpOffice\\PhpSpreadsheet\\IOFactory')) {
@@ -141,8 +377,7 @@ class AdminSyncController extends Controller
                         ];
                     }
                 } catch (\Throwable $e) {
-                    $_SESSION['error'] = 'XLSX import failed: '.$e->getMessage();
-                    $this->redirect('/admin/sync'); return;
+                    throw new \RuntimeException('XLSX import failed: '.$e->getMessage(), 0, $e);
                 }
             } else {
                 // Lightweight fallback using ZipArchive and SimpleXML (handles simple sheets)
@@ -181,15 +416,14 @@ class AdminSyncController extends Controller
                         ];
                     }
                 } catch (\Throwable $e) {
-                    $_SESSION['error'] = 'XLSX not supported on this server. Please upload CSV instead. Details: '.$e->getMessage();
-                    $this->redirect('/admin/sync'); return;
+                    throw new \RuntimeException('XLSX not supported on this server. Please upload CSV instead. Details: '.$e->getMessage(), 0, $e);
                 }
             }
         } else {
             // CSV path (default) with delimiter auto-detection and BOM handling
             if (($h = fopen($tmp, 'r')) !== false) {
                 $firstLine = fgets($h);
-                if ($firstLine === false) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
+                if ($firstLine === false) { throw new \RuntimeException('Empty CSV.'); }
                 // Pick the most likely delimiter
                 $candidates = [",", "\t", ";", "|"];
                 $bestDelim = ","; $bestCount = -1;
@@ -197,7 +431,7 @@ class AdminSyncController extends Controller
                 // Rewind and parse header with chosen delimiter
                 rewind($h);
                 $header = fgetcsv($h, 0, $bestDelim);
-                if (!$header) { $_SESSION['error'] = 'Empty CSV.'; $this->redirect('/admin/sync'); return; }
+                if (!$header) { throw new \RuntimeException('Empty CSV.'); }
                 // Remove UTF-8 BOM if present on first cell
                 if (isset($header[0])) { $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$header[0]); }
                 // Clean up headers: remove newlines, extra spaces, and normalize
@@ -235,7 +469,7 @@ class AdminSyncController extends Controller
                 }
                 fclose($h);
                 // Build parser debug info for CSV
-                if (isset($_POST['debug'])) {
+                if ($collectDebug) {
                     $debugInfo = [
                         'source' => 'csv',
                         'delimiter' => $bestDelim,
@@ -248,29 +482,7 @@ class AdminSyncController extends Controller
                 }
             }
         }
-        try {
-            $overrides = [
-                'update_price' => isset($_POST['sync_update_price']),
-                'update_title' => isset($_POST['sync_update_title']),
-                'update_collection' => isset($_POST['sync_update_collection']),
-            ];
-            if ($dryRun) { $overrides['collect_preview'] = true; }
-            if (isset($_POST['debug'])) { $overrides['collect_debug'] = true; }
-            $result = $this->processRows($rows, $dryRun, $overrides);
-            if (!empty($debugInfo)) { $result['debug'] = $result['debug'] ?? []; $result['debug']['info'] = $debugInfo; }
-            if (($dryRun && !empty($result['preview'])) || (!empty($overrides['collect_debug']))) {
-                $this->adminView('admin/sync/preview', [
-                    'title' => $dryRun ? 'CSV/XLSX Dry-run Preview' : 'CSV/XLSX Import Debugger',
-                    'result' => $result,
-                    'overrides' => $overrides,
-                ]);
-                return;
-            }
-            $_SESSION['success'] = 'File processed. Products matched: ' . $result['seen'] . ', created: ' . $result['created'] . ', updated: ' . $result['updated'] . ', errors: ' . $result['errors'];
-        } catch (\Throwable $e) {
-            $_SESSION['error'] = 'Import failed: '.$e->getMessage();
-        }
-        $this->redirect('/admin/sync');
+        return [$rows, $debugInfo];
     }
 
     private function processRows(array $rows, bool $dryRun, array $overrides = []): array
@@ -310,6 +522,15 @@ class AdminSyncController extends Controller
         try {
             $hasCategoryCode = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'collections' AND COLUMN_NAME = 'category_code'")->fetchColumn() > 0;
         } catch (\Throwable $e) { $hasCategoryCode = false; }
+
+        // Detect if products has a parent_product_id column (variants support).
+        // This is a schema fact — constant for the whole request — so detect it
+        // ONCE here, not inside the per-row loop (a SHOW COLUMNS per row is a major
+        // cause of import timeouts on large CSVs).
+        $hasVariantsColumn = false;
+        try {
+            $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
+        } catch (\Throwable $e) { $hasVariantsColumn = false; }
 
         $seen=0; $created=0; $updated=0; $errors=0;
         $preview = [];
@@ -403,10 +624,6 @@ class AdminSyncController extends Controller
                 $variantAttributes = null;
                 $parentProductId = null;
                 $parentTitle = $title; // Default: use current title as parent
-                $hasVariantsColumn = false;
-                try {
-                    $hasVariantsColumn = $pdo->query("SHOW COLUMNS FROM products LIKE 'parent_product_id'")->rowCount() > 0;
-                } catch (\Throwable $e) { $hasVariantsColumn = false; }
 
                 // Auto-detect variants during CSV import using the shared helper functions
                 if ($hasVariantsColumn) {
@@ -826,20 +1043,31 @@ class AdminSyncController extends Controller
             $patterns[] = '/' . $escapedFsc . '\.(jpg|jpeg|png|gif|webp)/i';
         }
 
-        // Recursive directory scan
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($uploadsDir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
-        );
+        // Walk the uploads tree ONCE per request and reuse the flat path list.
+        // Re-scanning the whole directory for every CSV row is O(rows x files)
+        // and is the dominant cause of import timeouts on large catalogs. The
+        // filesystem layout is fixed for the duration of the import, so we cache
+        // it in a static variable; only the cheap per-FSC regex matching repeats.
+        static $fileList = null;
+        if ($fileList === null) {
+            $fileList = [];
+            if (is_dir($uploadsDir)) {
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($uploadsDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                    \RecursiveIteratorIterator::LEAVES_ONLY
+                );
+                foreach ($iterator as $file) {
+                    if ($file->isFile()) {
+                        $fileList[] = $file->getPathname();
+                    }
+                }
+            }
+        }
 
         $foundFiles = [];
 
-        foreach ($iterator as $file) {
-            if (!$file->isFile()) {
-                continue;
-            }
-
-            $filename = $file->getFilename();
+        foreach ($fileList as $pathname) {
+            $filename = basename($pathname);
 
             // Check each pattern
             foreach ($patterns as $pattern) {
@@ -851,7 +1079,7 @@ class AdminSyncController extends Controller
                     }
 
                     $foundFiles[] = [
-                        'path' => $file->getPathname(),
+                        'path' => $pathname,
                         'filename' => $filename,
                         'sort' => $sortOrder,
                     ];
