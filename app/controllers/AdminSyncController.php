@@ -190,8 +190,13 @@ class AdminSyncController extends Controller
         $rowsPath = $this->importRowsPath($token);
         $metaPath = $this->importMetaPath($token);
 
-        // Persist parsed rows so chunk requests don't re-parse the file.
-        $written = file_put_contents($rowsPath, json_encode($rows), LOCK_EX);
+        // Persist parsed rows so chunk requests don't re-parse the file. Use
+        // JSON_INVALID_UTF8_SUBSTITUTE as a safety net so a stray non-UTF-8 byte
+        // can never make json_encode return false (which would write an empty
+        // file and surface as "Corrupt import rows" on the first chunk).
+        $json = json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json === false) { throw new \RuntimeException('Failed to encode parsed rows: '.json_last_error_msg()); }
+        $written = file_put_contents($rowsPath, $json, LOCK_EX);
         if ($written === false) { throw new \RuntimeException('Could not store parsed rows in temp dir.'); }
 
         $overrides = [
@@ -232,7 +237,7 @@ class AdminSyncController extends Controller
         $total = (int)($meta['total'] ?? 0);
 
         $rows = json_decode((string)file_get_contents($rowsPath), true);
-        if (!is_array($rows)) { throw new \RuntimeException('Corrupt import rows.'); }
+        if (!is_array($rows)) { throw new \RuntimeException('Corrupt import rows (' . json_last_error_msg() . ', ' . filesize($rowsPath) . ' bytes). Please re-upload the file.'); }
 
         $slice = array_slice($rows, $offset, self::CHUNK_ROWS);
         $res = $this->processRows($slice, (bool)($meta['dryRun'] ?? false), $meta['overrides'] ?? []);
@@ -482,7 +487,33 @@ class AdminSyncController extends Controller
                 }
             }
         }
-        return [$rows, $debugInfo];
+        return [$this->sanitizeUtf8Rows($rows), $debugInfo];
+    }
+
+    /**
+     * Normalize cell strings to valid UTF-8. Excel on Windows often exports
+     * Windows-1252/Latin-1 rather than UTF-8; json_encode() (used by the chunked
+     * import path) returns false on non-UTF-8 bytes, which previously wrote an
+     * empty temp file and surfaced as "Corrupt import rows" on the first chunk.
+     *
+     * mb-safe: if the mbstring extension is absent (common on stripped Windows
+     * PHP builds), fall back to a preg_match('//u') validity check and the
+     * always-available utf8_encode() (ISO-8859-1 -> UTF-8).
+     */
+    private function sanitizeUtf8Rows(array $rows): array
+    {
+        $hasMb = function_exists('mb_check_encoding') && function_exists('mb_convert_encoding');
+        foreach ($rows as &$row) {
+            foreach ($row as $k => $v) {
+                if (!is_string($v) || $v === '') continue;
+                $isUtf8 = $hasMb ? mb_check_encoding($v, 'UTF-8') : (@preg_match('//u', $v) === 1);
+                if (!$isUtf8) {
+                    $row[$k] = $hasMb ? mb_convert_encoding($v, 'UTF-8', 'Windows-1252') : @utf8_encode($v);
+                }
+            }
+        }
+        unset($row);
+        return $rows;
     }
 
     private function processRows(array $rows, bool $dryRun, array $overrides = []): array
